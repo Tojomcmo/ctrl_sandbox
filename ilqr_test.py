@@ -1,6 +1,7 @@
 import scipy
 import jax.numpy as jnp
 import ilqr_funcs as ilqr
+import time
 from pprint import PrettyPrinter as pp
 
 
@@ -8,29 +9,34 @@ from pprint import PrettyPrinter as pp
 
 #ilqr.calculate_backwards_pass()
 
-Ac = jnp.array([[1,1,1],[1,1,1],[0,0,1]])
-Bc = jnp.array([[1,1],[0,1],[0,0]])
-Cc = jnp.array([[1,0,1]])
-Dc = jnp.array([[0,0]])
+A = jnp.array([[1,1,1],[0,1,1],[0,0,1]])
+B = jnp.array([[1,1],[0,1],[0,0]])
+C = jnp.array([[1,0,1]])
+D = jnp.array([[0,0]])
+ss_c = ilqr.state_space(A,B,C,D)
+
 time_step = 0.1
 
-Ad_Euler,Bd_Euler,Cd_Euler,Dd_Euler = ilqr.discretize_state_space(Ac,Bc,Cc,Dc,time_step,method = 'Euler')
+ss_Euler, func_error_Euler = ilqr.discretize_state_space(ss_c,time_step,method = 'Euler')
 
-Ad_zohC,Bd_zohC,Cd_zohC,Dd_zohC = ilqr.discretize_state_space(Ac,Bc,Cc,Dc,time_step,method = 'zohCombined')
+ss_zohC, func_error_zohC = ilqr.discretize_state_space(ss_c,time_step,method = 'zohCombined')
 
-Ad_zoh,Bd_zoh,Cd_zoh,Dd_zoh = ilqr.discretize_state_space(Ac,Bc,Cc,Dc,time_step,method = 'zoh')
+ss_zoh, func_error_zoh = ilqr.discretize_state_space(ss_c,time_step,method = 'zoh')
 
 print('Ad_Euler = ')
-print(Ad_Euler)
+print(ss_Euler.A)
 print('Bd_Euler = ')
-print(Bd_Euler)
+print(ss_Euler.B)
+print('is Euler error :', func_error_Euler)
 
 print('Ad_zohC = ')
-print(Ad_zohC)
+print(ss_zohC.A)
 print('Bd_zohC = ')
-print(Bd_zohC)
+print(ss_zohC.B)
+print('is zohC error :', func_error_zohC)
 
 print('Ad_zoh = ')
-print(Ad_zoh)
+print(ss_zoh.A)
 print('Bd_zoh = ')
-print(Bd_zoh)
+print(ss_zoh.B)
+print('is zoh error :', func_error_zoh)

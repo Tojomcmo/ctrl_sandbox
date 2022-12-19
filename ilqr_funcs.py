@@ -6,6 +6,7 @@
 import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
+import time
 
 class ilqr_controller(object):
 
@@ -31,8 +32,46 @@ class ilqr_controller(object):
         valid_bool = True
         return valid_bool
         
+class state_space:
+    def __init__(self, A, B, C, D, time_step = float(0)):
+        if(A.shape[0] != A.shape[1]):
+            print('A is not a square matrix')
+            exit()
+        elif(A.shape[0] != B.shape[0]):
+            print('A and B have different state dimensions')
+            exit()
+        elif(A.shape[0] != C.shape[1]):
+            print('A and C have different state dimensions')
+            exit()
+        elif(B.shape[1] != D.shape[1]):
+            print('B and D have dirrenent control dimensions')
+            exit()
+        elif(C.shape[0] != D.shape[0]):
+            print('C and D have different measurement dimensions')
+            exit()
+        else:
+            if(isinstance(time_step,float)):
+                if (time_step==0.0):
+                    self.A = A
+                    self.B = B
+                    self.C = C
+                    self.D = D
+                    self.time_step = time_step
+                    self.type = 'continuous'
+                elif(time_step < 0):
+                    print('negative timestep is invalid')    
+                else:                    
+                    self.A = A
+                    self.B = B
+                    self.C = C
+                    self.D = D
+                    self.time_step = time_step
+                    self.type = 'discrete'
+            else:
+                print('Invalid time step input type')
+                
 
-def initialize_system(t_final, dt):
+def initialize_system(t_final, time_step):
     numt = 0
     return numt
 
@@ -43,19 +82,6 @@ def calculate_forward_pass(dyn_func, control_seq, state_init, time_step):
     cost_seq = 0
     cost_total = 0
     return x_seq, u_seq, cost_seq, cost_total
-
-
-def linearize_dynamics(dyn_func, x, u, time_step):
-# Linearizes the dynamics function about the primals x and u
-# dyn_func  - [in] continuous function of state transition
-# x         - [in] primal state
-# u         - [in] primal control
-# time_step - [in] discrete time step
-# A         - [out] discrete time linearization of dyn_func wrt state eval at x,u
-# B         - [out] discrete time linearization of dyn_func wrt control eval at x,u
-    A = 0
-    B = 0
-    return A, B
 
 
 def taylor_expand_cost(cost_func, x_seq, u_seq):
@@ -95,69 +121,92 @@ def calculate_backwards_pass():
     print("this is the backward pass 2")
     return unew, V
 
+def linearize_dynamics(dyn_func, x_primal, u_primal):
+# Linearizes the dynamics function about the primals x and u
+# dyn_func  - [in] continuous function of state transition
+# x_primal  - [in] primal state linearization point
+# u         - [in] primal control linearization point
+# A_lin     - [out] continuous time linearization of dyn_func wrt state eval at x,u
+# B_lin     - [out] continuous time linearization of dyn_func wrt control eval at x,u
 
-def discretize_state_space(Ac, Bc, Cc, Dc, time_step, method='Euler'):
-#   Ac - (nxn) - continuous state transition matrix
-#   Bc - (nxm) - continuous control matrix
-#   Cc - (pxn) - continuous state measurement matrix
-#   Dc - (pxm) - continuous direct feedthrough matrix
+    A_lin = jax.jacfwd(lambda x: dyn_func(x, u_primal))(x_primal)  
+    B_lin = jax.jacfwd(lambda u: dyn_func(x_primal, u))(u_primal) 
+
+    return A_lin, B_lin
+
+def discretize_state_space(input_state_space, time_step, method='Euler'):
+#   A - (nxn) - continuous state transition matrix
+#   B - (nxm) - continuous control matrix
+#   C - (pxn) - continuous state measurement matrix
+#   D - (pxm) - continuous direct feedthrough matrix
 #   Continuous state space:
-#   xdot(t) = Ac * x(t) + Bc * u(t)
-#   y(t)    = Cc * x(t) + Dc * u(t)
+#   xdot(t) = A * x(t) + B * u(t)
+#   y(t)    = C * x(t) + D * u(t)
 #   transformation for zohCombined:
-#   e^([[Ac, Bc],[0,0]] * time_step) = [[Ad, Bd],[0,I]]
+#   e^([[A, B],[0,0]] * time_step) = [[Ad, Bd],[0,I]]
 #   Discrete state space:   
 #   x[t+timestep] = Ad * x[t] + Bd * u[t]
 #   y[t]          = Cd * x[t] + Dd * u[t]
+    
+    func_error = False
 
-    #  error catching
-    if(Ac.shape[0] != Ac.shape[1]):
-        print('Ac is not a square matrix')
-        exit()
-    elif(Ac.shape[0] != Bc.shape[0]):
-        print('Ac and Bc have different state dimensions')
-        exit()
-    elif(Ac.shape[0] != Cc.shape[1]):
-        print('Ac and Cc have different state dimensions')
-        exit()
-    elif(Bc.shape[1] != Dc.shape[1]):
-        print('Bc and Dc have dirrenent control dimensions')
-        exit()
-    elif(Cc.shape[0] != Dc.shape[0]):
-        print('Cc and Dc have different measurement dimesnions')
-        exit()
-    else:
-        Ad = jnp.zeros(Ac.shape)
-        Bd = jnp.zeros(Bc.shape)
-        Cd = jnp.zeros(Cc.shape)
-        Dd = jnp.zeros(Dc.shape)
-        n  = Ac.shape[0]
-        m  = Bc.shape[1]
-        p  = Cc.shape[0]
+    if(input_state_space.type == 'discrete'):
+        print('state space is already discrete')
+        Ad = input_state_space.A
+        Bd = input_state_space.B
+        Cd = input_state_space.C
+        Dd = input_state_space.D
+        time_step = input_state_space.time_step
+        func_error = True
+
+    else:   
+        Ad = jnp.zeros(input_state_space.A.shape)
+        Bd = jnp.zeros(input_state_space.B.shape)
+        Cd = jnp.zeros(input_state_space.C.shape)
+        Dd = jnp.zeros(input_state_space.D.shape)
+        n  = input_state_space.A.shape[0]
+        m  = input_state_space.B.shape[1]
+        p  = input_state_space.C.shape[0]
 
         if(method=='Euler'):
-            Ad = jnp.eye(n) + (Ac * time_step)
-            Bd = Bc * time_step
-            Cd = Cc
-            Dd = Dc
+            Ad = jnp.eye(n) + (input_state_space.A * time_step)
+            Bd = input_state_space.B * time_step
+            Cd = input_state_space.C
+            Dd = input_state_space.D
+            
         elif(method=='zoh'):
-            if(jscipy.linalg.det(Ac) != 0):
-                Ad = jscipy.linalg.expm(Ac * time_step)
-                Bd = jnp.linalg.inv(Ac) @ (Ad - jnp.eye(n)) @ Bc
-                Cd = Cc
-                Dd = Dc
+            if(jscipy.linalg.det(input_state_space.A) > 10E-8):
+                Ad = jscipy.linalg.expm(input_state_space.A * time_step)
+                Bd = jnp.linalg.inv(input_state_space.A) @ (Ad - jnp.eye(n)) @ input_state_space.B
+                Cd = input_state_space.C
+                Dd = input_state_space.D
             else:
-                print('Ac is non-invertible, simple zoh method is invalid')
+                    print('determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid')
+                    func_error = True
+
         elif(method=='zohCombined'):
-        #   create combined A B matrix e^([[Ac, Bc],[0,0]]
-            ABc  = jnp.concatenate((jnp.concatenate((Ac, Bc),axis=1),jnp.zeros((m,n + m))), axis=0) 
+        #   create combined A B matrix e^([[A, B],[0,0]]
+            ABc  = jnp.concatenate((jnp.concatenate((input_state_space.A, input_state_space.B),axis=1),jnp.zeros((m,n + m))), axis=0) 
             ABd  = jscipy.linalg.expm(ABc * time_step)
             Ad   = ABd[:n,:n]
             Bd   = ABd[:n,n:]
-            Cd   = Cc
-            Dd   = Dc
+            Cd   = input_state_space.C
+            Dd   = input_state_space.D
 
         else:
             print('invalid discretization method')
+            func_error = True
 
-    return Ad, Bd, Cd, Dd
+    d_state_space = state_space(Ad, Bd, Cd, Dd, time_step)        
+
+    return d_state_space, func_error
+
+def calculate_linearized_state_vector(state_seq, control_seq, dyn_func, time_step):
+    # walk through state and control sequences
+    # for each element, linearize the dyn_func dynamics
+    # calculate the discretized dynamics for each linearized element
+    # return a 3d matrix of both state and control transition matrices for each time step
+    A_lin_array = 0
+    B_lin_array = 0
+    
+    return A_lin_array, B_lin_array
