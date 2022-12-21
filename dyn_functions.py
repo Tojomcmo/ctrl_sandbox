@@ -1,7 +1,8 @@
 from jax import numpy as jnp
 
-def pend_dyn_nl(state, control, g = 1.0, l = 1.0, b = 1.0 ):
+def pend_dyn_nl(time, state, control, g = 1.0, l = 1.0, b = 1.0 ):
 # continuous time dynamic equation for simple pendulum 
+# time[in]       - time component, necessary prarmeter for ode integration
 # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
 # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
 # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]

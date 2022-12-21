@@ -5,9 +5,6 @@ import time
 from pprint import PrettyPrinter as pp
 
 
-#controller_obj = ilqr.ilqr_controller(2, 1, 1, 1, 1, 1, 1, 1, 1)
-
-#ilqr.calculate_backwards_pass()
 
 A = jnp.array([[1,1,1],[0,1,1],[0,0,1]])
 B = jnp.array([[1,1],[0,1],[0,0]])
@@ -40,3 +37,5 @@ print(ss_zoh.A)
 print('Bd_zoh = ')
 print(ss_zoh.B)
 print('is zoh error :', func_error_zoh)
+
+

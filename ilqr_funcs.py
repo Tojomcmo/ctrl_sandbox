@@ -6,6 +6,7 @@
 import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
+from scipy.integrate import solve_ivp
 import time
 
 class ilqr_controller(object):
@@ -75,13 +76,61 @@ def initialize_system(t_final, time_step):
     numt = 0
     return numt
 
+def calculate_forward_rollout(dyn_func_with_params, state_init, control_seq, time_step, **kwargs):
+    # simulate forward dynamics
+    # Linearize dynamics at each time step
+    # calculate discretized linearized state space for each time step
+    # return
+    # **kwargs:
+    # - sim_method('Euler', 'solve_ivp_zoh')
+    # - c2d_method('Euler', 'zoh', 'zohCombined')
+    
+    state_seq, time_seq  = simulate_forward_dynamics(dyn_func_with_params, state_init, control_seq, time_step, **kwargs)
+    Ad_seq, Bd_seq       = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs)
+    return Ad_seq, Bd_seq, time_seq
 
-def calculate_forward_pass(dyn_func, control_seq, state_init, time_step):
-    x_seq = 0
-    u_seq = 0
-    cost_seq = 0
-    cost_total = 0
-    return x_seq, u_seq, cost_seq, cost_total
+def calculate_backwards_pass():
+
+#   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
+#   k = - inv(q_uu) * q_u
+#   K = - inv(q_uu) * q_ux
+#   V_N = l(x_N)
+#   Vxx = q_xx -       transpose(K) * q_uu * K
+#   Vx  = q_x  -       transpose(K) * q_uu * k
+#   DV  =      - 1/2 * transpose(k) * q_uu * k
+    unew = 0
+    V = 0
+    print("this is the backward pass 2")
+    return unew, V
+
+
+def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_method = 'Euler', **kwargs):
+    # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
+    # dyn_func[in]     - dynamics function (pre-populated with *params) for integration
+    # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
+    # state_init[in]   - starting state for integration (vector, must match dyn_func state dim)
+    # time_step[in]    - time interval between sequence points (scalar > 0)
+    # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
+    # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
+    int_iter       = len(control_seq)
+    state_seq      = state_init
+    time_seq       = jnp.arange(int_iter + 1) * time_step
+    time_span      = (0, time_step)
+    if(sim_method == 'Euler'):
+        for idx in range(int_iter): 
+            state_dot  = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])  
+            state_next = jnp.array([state_seq[idx] + state_dot * time_step])
+            state_seq  = jnp.append(state_seq, state_next, axis=0)
+    elif(sim_method == 'solve_ivp_zoh'):    
+        for idx in range(int_iter):   
+            dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx]))   
+            result_ivp   = solve_ivp(dyn_func_zoh, time_span, state_seq[idx])  
+            state_next   = jnp.array([result_ivp.y[:,-1]])
+            state_seq    = jnp.append(state_seq, state_next, axis=0)
+    else: 
+        print('invalid simulation method') 
+
+    return state_seq, time_seq
 
 
 def taylor_expand_cost(cost_func, x_seq, u_seq):
@@ -107,34 +156,19 @@ def taylor_expand_pseudo_hamiltonian(cost_func, dyn_func, x_seq, u_seq):
     return q_x, q_u, q_xx, q_ux, q_uu
 
 
-def calculate_backwards_pass():
-
-#   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
-#   k = - inv(q_uu) * q_u
-#   K = - inv(q_uu) * q_ux
-#   V_N = l(x_N)
-#   Vxx = q_xx -       transpose(K) * q_uu * K
-#   Vx  = q_x  -       transpose(K) * q_uu * k
-#   DV  =      - 1/2 * transpose(k) * q_uu * k
-    unew = 0
-    V = 0
-    print("this is the backward pass 2")
-    return unew, V
-
-def linearize_dynamics(dyn_func, x_primal, u_primal):
+def linearize_dynamics(dyn_func, x_primal, u_primal, t_primal='None'):
 # Linearizes the dynamics function about the primals x and u
 # dyn_func  - [in] continuous function of state transition
 # x_primal  - [in] primal state linearization point
 # u         - [in] primal control linearization point
 # A_lin     - [out] continuous time linearization of dyn_func wrt state eval at x,u
 # B_lin     - [out] continuous time linearization of dyn_func wrt control eval at x,u
-
-    A_lin = jax.jacfwd(lambda x: dyn_func(x, u_primal))(x_primal)  
-    B_lin = jax.jacfwd(lambda u: dyn_func(x_primal, u))(u_primal) 
+    A_lin = jax.jacfwd(lambda x: dyn_func(t_primal, x       , u_primal))(x_primal)  
+    B_lin = jax.jacfwd(lambda u: dyn_func(t_primal, x_primal, u       ))(u_primal) 
 
     return A_lin, B_lin
 
-def discretize_state_space(input_state_space, time_step, method='Euler'):
+def discretize_state_space(input_state_space, time_step, c2d_method='Euler', **kwargs):
 #   A - (nxn) - continuous state transition matrix
 #   B - (nxm) - continuous control matrix
 #   C - (pxn) - continuous state measurement matrix
@@ -168,13 +202,13 @@ def discretize_state_space(input_state_space, time_step, method='Euler'):
         m  = input_state_space.B.shape[1]
         p  = input_state_space.C.shape[0]
 
-        if(method=='Euler'):
+        if(c2d_method=='Euler'):
             Ad = jnp.eye(n) + (input_state_space.A * time_step)
             Bd = input_state_space.B * time_step
             Cd = input_state_space.C
             Dd = input_state_space.D
             
-        elif(method=='zoh'):
+        elif(c2d_method=='zoh'):
             if(jscipy.linalg.det(input_state_space.A) > 10E-8):
                 Ad = jscipy.linalg.expm(input_state_space.A * time_step)
                 Bd = jnp.linalg.inv(input_state_space.A) @ (Ad - jnp.eye(n)) @ input_state_space.B
@@ -184,7 +218,7 @@ def discretize_state_space(input_state_space, time_step, method='Euler'):
                     print('determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid')
                     func_error = True
 
-        elif(method=='zohCombined'):
+        elif(c2d_method=='zohCombined'):
         #   create combined A B matrix e^([[A, B],[0,0]]
             ABc  = jnp.concatenate((jnp.concatenate((input_state_space.A, input_state_space.B),axis=1),jnp.zeros((m,n + m))), axis=0) 
             ABd  = jscipy.linalg.expm(ABc * time_step)
@@ -201,12 +235,25 @@ def discretize_state_space(input_state_space, time_step, method='Euler'):
 
     return d_state_space, func_error
 
-def calculate_linearized_state_vector(state_seq, control_seq, dyn_func, time_step):
+def calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs):
     # walk through state and control sequences
     # for each element, linearize the dyn_func dynamics
     # calculate the discretized dynamics for each linearized element
     # return a 3d matrix of both state and control transition matrices for each time step
-    A_lin_array = 0
-    B_lin_array = 0
-    
+    state_dim   = len(state_seq[1,:])
+    control_dim = len(control_seq[1,:])
+    A_lin_array = jnp.zeros((state_dim, state_dim,1))
+    B_lin_array = jnp.zeros((state_dim, control_dim,1))
+    C_mat_dummy = jnp.zeros((1,state_dim))
+    D_mat_dummy = jnp.zeros((1,control_dim))
+    for idx in range(len(control_seq)):
+        A_lin, B_lin             = linearize_dynamics(dyn_func_with_params, state_seq[idx], control_seq[idx])
+        ss_pend_lin_continuous   = state_space(A_lin, B_lin, C_mat_dummy, D_mat_dummy)
+        ss_pend_lin_discrete, fe = discretize_state_space(ss_pend_lin_continuous, time_step, **kwargs)
+        if idx == 0:
+            A_lin_array = jnp.array([ss_pend_lin_discrete.A])
+            B_lin_array = jnp.array([ss_pend_lin_discrete.B])
+        else:
+            A_lin_array = jnp.append(A_lin_array, jnp.array([ss_pend_lin_discrete.A]), axis=0)
+            B_lin_array = jnp.append(B_lin_array, jnp.array([ss_pend_lin_discrete.B]), axis=0)
     return A_lin_array, B_lin_array
