@@ -1,6 +1,5 @@
 import unittest
 import ilqr_funcs as ilqr
-import dyn_functions as dyn
 from jax import numpy as jnp
 
 # for each input
@@ -242,11 +241,21 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
             A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
         self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
 
+class simulate_forward_dynamics(unittest.TestCase):
+
+    def dyn_func(self, t, x, u):
+        y = jnp.array([
+                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
+                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
+                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
+                    ])
+        return y
+
+    def test_simulate_forward_dynamics_accepts_valid_system(self):
+        time_step = 0
 # class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
 
 # class taylor_expand_cost(unittest.TestCase):
-
-# class simulate_forward_dynamics(unittest.TestCase):
 
 # class calculate_backwards_pass(unittest.TestCase):
 

@@ -110,6 +110,14 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
 
     return state_seq, time_seq
 
+def calculate_cost_function(cost_func, state_seq, control_seq):
+    # check state_seq and control_seq are valid lengths
+    # calculate each discrete cost
+    # Calculate total cost 
+
+    total_cost = 0
+    cost_seq = 0
+    return total_cost, cost_seq
 
 def taylor_expand_cost(cost_func, x_seq, u_seq):
 # This function creates a quadratic approximation of the cost function Using taylor expansion
