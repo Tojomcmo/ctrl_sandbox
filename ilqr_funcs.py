@@ -22,59 +22,37 @@ class ilqr_controller(object):
         self.time_step     = time_step
         self.final_time    = final_time
 
-        #health checks
-
-    def _is_valid_control_init(self, control_init, time_step, final_time):
-        # control vector - m x n matrix 
-        # m - number of control dofs, 
-        # n - number of time steps
-        # control vector must be of same m dim as control_dim
-        # control vector must contain N-1 timesteps (final timestep does not have control step)
-        valid_bool = True
-        return valid_bool
         
 class state_space:
-    def __init__(self, A, B, C, D, time_step = float(0)):
+    def __init__(self, A, B, C, D, time_step = None):
         if(A.shape[0] != A.shape[1]):
-            print('A is not a square matrix')
-            exit()
+            raise Exception('A matrix must be square')
         elif(A.shape[0] != B.shape[0]):
-            print('A and B have different state dimensions')
-            exit()
+            raise Exception('A and B matrices must have same n(state) dimension')
         elif(A.shape[0] != C.shape[1]):
-            print('A and C have different state dimensions')
-            exit()
+            raise Exception('A and C matrices must have same m(state) dimension')
         elif(B.shape[1] != D.shape[1]):
-            print('B and D have dirrenent control dimensions')
-            exit()
+            raise Exception('B and D matrices must have the same m(control) dimension')
         elif(C.shape[0] != D.shape[0]):
-            print('C and D have different measurement dimensions')
-            exit()
+            raise Exception('C and D matrices must have the same n(measurement) dimension')
         else:
-            if(isinstance(time_step,float)):
-                if (time_step==0.0):
-                    self.A = A
-                    self.B = B
-                    self.C = C
-                    self.D = D
-                    self.time_step = time_step
-                    self.type = 'continuous'
-                elif(time_step < 0):
-                    print('negative timestep is invalid')    
-                else:                    
-                    self.A = A
-                    self.B = B
-                    self.C = C
-                    self.D = D
-                    self.time_step = time_step
-                    self.type = 'discrete'
+            if (time_step==None):
+                self.A = A
+                self.B = B
+                self.C = C
+                self.D = D
+                self.time_step = time_step
+                self.type = 'continuous'
+            elif(isinstance(time_step, float) and time_step > 0):
+                self.A = A
+                self.B = B
+                self.C = C
+                self.D = D
+                self.time_step = time_step
+                self.type = 'discrete'   
             else:
-                print('Invalid time step input type')
+                raise Exception('invalid time step definition. time_step must be a positive float or None')
                 
-
-def initialize_system(t_final, time_step):
-    numt = 0
-    return numt
 
 def calculate_forward_rollout(dyn_func_with_params, state_init, control_seq, time_step, **kwargs):
     # simulate forward dynamics
@@ -185,13 +163,7 @@ def discretize_state_space(input_state_space, time_step, c2d_method='Euler', **k
     func_error = False
 
     if(input_state_space.type == 'discrete'):
-        print('state space is already discrete')
-        Ad = input_state_space.A
-        Bd = input_state_space.B
-        Cd = input_state_space.C
-        Dd = input_state_space.D
-        time_step = input_state_space.time_step
-        func_error = True
+        raise Exception('input state space is already discrete')
 
     else:   
         Ad = jnp.zeros(input_state_space.A.shape)
@@ -215,8 +187,7 @@ def discretize_state_space(input_state_space, time_step, c2d_method='Euler', **k
                 Cd = input_state_space.C
                 Dd = input_state_space.D
             else:
-                    print('determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid')
-                    func_error = True
+                    raise Exception('determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid')
 
         elif(c2d_method=='zohCombined'):
         #   create combined A B matrix e^([[A, B],[0,0]]
@@ -228,32 +199,38 @@ def discretize_state_space(input_state_space, time_step, c2d_method='Euler', **k
             Dd   = input_state_space.D
 
         else:
-            print('invalid discretization method')
-            func_error = True
+            raise Exception('invalid discretization method')
 
     d_state_space = state_space(Ad, Bd, Cd, Dd, time_step)        
 
-    return d_state_space, func_error
+    return d_state_space 
 
 def calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs):
     # walk through state and control sequences
     # for each element, linearize the dyn_func dynamics
     # calculate the discretized dynamics for each linearized element
     # return a 3d matrix of both state and control transition matrices for each time step
-    state_dim   = len(state_seq[1,:])
-    control_dim = len(control_seq[1,:])
-    A_lin_array = jnp.zeros((state_dim, state_dim,1))
-    B_lin_array = jnp.zeros((state_dim, control_dim,1))
-    C_mat_dummy = jnp.zeros((1,state_dim))
-    D_mat_dummy = jnp.zeros((1,control_dim))
-    for idx in range(len(control_seq)):
-        A_lin, B_lin             = linearize_dynamics(dyn_func_with_params, state_seq[idx], control_seq[idx])
-        ss_pend_lin_continuous   = state_space(A_lin, B_lin, C_mat_dummy, D_mat_dummy)
-        ss_pend_lin_discrete, fe = discretize_state_space(ss_pend_lin_continuous, time_step, **kwargs)
-        if idx == 0:
-            A_lin_array = jnp.array([ss_pend_lin_discrete.A])
-            B_lin_array = jnp.array([ss_pend_lin_discrete.B])
-        else:
-            A_lin_array = jnp.append(A_lin_array, jnp.array([ss_pend_lin_discrete.A]), axis=0)
-            B_lin_array = jnp.append(B_lin_array, jnp.array([ss_pend_lin_discrete.B]), axis=0)
+    if(len(state_seq.shape) != 2 or len(control_seq.shape) != 2):
+        raise Exception('state or control sequence is incorrect array dimension. sequences must be 2d arrays')
+    elif(len(state_seq) != len(control_seq)+1):
+        raise Exception('state and control sequences are incompatible lengths. state seq must be control seq length +1')
+    elif(not isinstance(time_step, float) or not time_step > 0):
+        raise Exception('time_step is invalid. Must be positive float')
+    else:
+        state_dim   = len(state_seq[1,:])
+        control_dim = len(control_seq[1,:])
+        A_lin_array = jnp.zeros((state_dim, state_dim,1))
+        B_lin_array = jnp.zeros((state_dim, control_dim,1))
+        C_mat_dummy = jnp.zeros((1,state_dim))
+        D_mat_dummy = jnp.zeros((1,control_dim))
+        for idx in range(len(control_seq)):
+            A_lin, B_lin             = linearize_dynamics(dyn_func_with_params, state_seq[idx], control_seq[idx])
+            ss_pend_lin_continuous   = state_space(A_lin, B_lin, C_mat_dummy, D_mat_dummy)
+            ss_pend_lin_discrete     = discretize_state_space(ss_pend_lin_continuous, time_step, **kwargs)
+            if idx == 0:
+                A_lin_array = jnp.array([ss_pend_lin_discrete.A])
+                B_lin_array = jnp.array([ss_pend_lin_discrete.B])
+            else:
+                A_lin_array = jnp.append(A_lin_array, jnp.array([ss_pend_lin_discrete.A]), axis=0)
+                B_lin_array = jnp.append(B_lin_array, jnp.array([ss_pend_lin_discrete.B]), axis=0)
     return A_lin_array, B_lin_array

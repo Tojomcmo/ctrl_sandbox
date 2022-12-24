@@ -28,6 +28,7 @@ pend_params = dict(l = 1.0, g = 2.0, b = 1.0)
 # print('is error :', fe)
 
 ########################
+# time_step   = 0.1
 # num_steps   = 20
 # control_seq = jnp.ones((num_steps, 1))
 # state_init  = jnp.array([[0.1, 0.1]])
