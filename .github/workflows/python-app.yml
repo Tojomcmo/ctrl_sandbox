@@ -38,6 +38,12 @@ jobs:
       continue-on-error: true
       run: |
         pytest
-    - name: Dyn Func Test
+    - name: Dyn Functions Test
       run: |
-        python dyn_func_test.py
+        python dyn_functions_test.py
+    - name: Cost Functions Test
+      run: |
+        python cost_functions_test.py
+    - name: ilqr Functions Test
+      run: |
+        python ilqr_funcs_test.py        
