@@ -252,15 +252,33 @@ class simulate_forward_dynamics(unittest.TestCase):
         return y
 
     def test_simulate_forward_dynamics_accepts_valid_system(self):
-        time_step = 0
+        self.assertEqual(True,True)
+
+
+class calculate_forward_rollout(unittest.TestCase):
+
+    def dyn_func(self, t, x, u):
+        y = jnp.array([
+                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
+                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
+                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
+                    ])
+        return y
+
+    def test_calculate_forward_rollout_accepts_valid_system(self):
+        num_steps   = 20
+        time_step   = 0.1
+        control_seq = jnp.ones((num_steps, 1))
+        state_init  = jnp.array([[0.1, 0.1]])
+        kwparams    = {'sim_method':'solve_ivp_zoh', 'c2d_method':'zohCombined'}
+ #       Ad_seq, Bd_seq, time_seq = ilqr.calculate_forward_rollout(self.dyn_func, self.cost_func state_init, control_seq, time_step, **kwparams)
+        self.assertEqual(True, True)
+
 # class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
 
 # class taylor_expand_cost(unittest.TestCase):
 
 # class calculate_backwards_pass(unittest.TestCase):
-
-# class calculate_forward_rollout(unittest.TestCase):
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -54,7 +54,7 @@ class state_space:
                 raise Exception('invalid time step definition. time_step must be a positive float or None')
                 
 
-def calculate_forward_rollout(dyn_func_with_params, state_init, control_seq, time_step, **kwargs):
+def calculate_forward_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs):
     # simulate forward dynamics
     # Linearize dynamics at each time step
     # calculate discretized linearized state space for each time step
@@ -64,9 +64,14 @@ def calculate_forward_rollout(dyn_func_with_params, state_init, control_seq, tim
     # - c2d_method('Euler', 'zoh', 'zohCombined')
     
     state_seq, time_seq  = simulate_forward_dynamics(dyn_func_with_params, state_init, control_seq, time_step, **kwargs)
-    Ad_seq, Bd_seq       = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs)
-    return Ad_seq, Bd_seq, time_seq
+    total_cost, cost_seq = calculate_cost_seq_and_total_cost(cost_func, state_seq, control_seq)
+   
+    return state_seq, time_seq, cost_seq, total_cost
 
+def calculate_initial_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs):
+    state_seq, time_seq, cost_seq, total_cost = calculate_forward_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs)
+    Ad_seq, Bd_seq                            = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs)
+    return Ad_seq, Bd_seq, time_seq
 def calculate_backwards_pass():
 
 #   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
@@ -110,7 +115,7 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
 
     return state_seq, time_seq
 
-def calculate_cost_function(cost_func, state_seq, control_seq):
+def calculate_cost_seq_and_total_cost(cost_func, state_seq, control_seq):
     # check state_seq and control_seq are valid lengths
     # calculate each discrete cost
     # Calculate total cost 

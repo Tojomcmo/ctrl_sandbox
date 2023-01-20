@@ -1,5 +1,5 @@
 import unittest
-import cost_functions as cfuncs
+import dyn_functions as dyn
 from jax import numpy as jnp
 
 

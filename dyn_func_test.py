@@ -38,12 +38,12 @@ pend_params = dict(l = 1.0, g = 2.0, b = 1.0)
 
 ########################
 
-num_steps   = 20
-control_seq = jnp.ones((num_steps, 1))
-state_init  = jnp.array([[0.1, 0.1]])
-kwparams    = {'sim_method':'solve_ivp_zoh', 'c2d_method':'zohCombined'}
-pend_dyn_with_params = (lambda t, x, u: dyn.pend_dyn_nl(t, x, u, **pend_params))
-Ad_seq, Bd_seq, time_seq = ilqr.calculate_forward_rollout(pend_dyn_with_params, state_init, control_seq, time_step, **kwparams)
-print(Ad_seq[-1])
-print(Bd_seq[-1])
-print(time_seq[-1])
+# num_steps   = 20
+# control_seq = jnp.ones((num_steps, 1))
+# state_init  = jnp.array([[0.1, 0.1]])
+# kwparams    = {'sim_method':'solve_ivp_zoh', 'c2d_method':'zohCombined'}
+# pend_dyn_with_params = (lambda t, x, u: dyn.pend_dyn_nl(t, x, u, **pend_params))
+# Ad_seq, Bd_seq, time_seq = ilqr.calculate_forward_rollout(pend_dyn_with_params, state_init, control_seq, time_step, **kwparams)
+# print(Ad_seq[-1])
+# print(Bd_seq[-1])
+# print(time_seq[-1])
