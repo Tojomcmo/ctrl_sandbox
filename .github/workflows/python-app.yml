@@ -40,10 +40,10 @@ jobs:
         pytest
     - name: Dyn Functions Test
       run: |
-        python dyn_functions_test.py
+        python test_dyn_functions.py
     - name: Cost Functions Test
       run: |
-        python cost_functions_test.py
+        python test_cost_functions.py
     - name: ilqr Functions Test
       run: |
-        python ilqr_funcs_test.py        
+        python test_ilqr_funcs.py        
