@@ -1,5 +1,7 @@
 from jax import numpy as jnp
 
+a = 1
+
 def pend_dyn_nl(time, state, control, g = 1.0, l = 1.0, b = 1.0 ):
 # continuous time dynamic equation for simple pendulum 
 # time[in]       - time component, necessary prarmeter for ode integration
