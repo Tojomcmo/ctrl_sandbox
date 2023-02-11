@@ -14,11 +14,11 @@ class state_space_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.state_space(A,B,C,D)
-        self.assertEqual(ss.A.all(), A.all())
-        self.assertEqual(ss.B.all(), B.all())
-        self.assertEqual(ss.C.all(), C.all())
-        self.assertEqual(ss.D.all(), D.all())
+        ss = ilqr.stateSpace(A,B,C,D)
+        self.assertEqual(ss.a.all(), A.all())
+        self.assertEqual(ss.b.all(), B.all())
+        self.assertEqual(ss.c.all(), C.all())
+        self.assertEqual(ss.d.all(), D.all())
         self.assertEqual(ss.type, 'continuous')
         self.assertEqual(ss.time_step, None)
 
@@ -27,11 +27,11 @@ class state_space_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.state_space(A,B,C,D, time_step = 0.1)
-        self.assertEqual(ss.A.all(), A.all())
-        self.assertEqual(ss.B.all(), B.all())
-        self.assertEqual(ss.C.all(), C.all())
-        self.assertEqual(ss.D.all(), D.all())
+        ss = ilqr.stateSpace(A,B,C,D, time_step = 0.1)
+        self.assertEqual(ss.a.all(), A.all())
+        self.assertEqual(ss.b.all(), B.all())
+        self.assertEqual(ss.c.all(), C.all())
+        self.assertEqual(ss.d.all(), D.all())
         self.assertEqual(ss.type, 'discrete')
         self.assertEqual(ss.time_step, 0.1)
 
@@ -41,7 +41,7 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.state_space(A,B,C,D) 
+            ss = ilqr.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A matrix must be square')
 
     def test_state_space_rejects_A_and_B_matrix_n_dim_mismatch(self):
@@ -50,7 +50,7 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.state_space(A,B,C,D) 
+            ss = ilqr.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and B matrices must have same n(state) dimension')        
 
     def test_state_space_rejects_A_and_C_matrix_m_dim_mismatch(self):
@@ -59,7 +59,7 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.state_space(A,B,C,D) 
+            ss = ilqr.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and C matrices must have same m(state) dimension')        
 
     def test_state_space_rejects_B_and_D_matrix_m_dim_mismatch(self):
@@ -68,7 +68,7 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.state_space(A,B,C,D) 
+            ss = ilqr.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'B and D matrices must have the same m(control) dimension')  
  
     def test_state_space_rejects_C_and_D_matrix_n_dim_mismatch(self):
@@ -77,7 +77,7 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,],[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.state_space(A,B,C,D) 
+            ss = ilqr.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'C and D matrices must have the same n(measurement) dimension')  
 
     def test_state_space_rejects_invalid_timestep_input(self):
@@ -86,16 +86,16 @@ class state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,]])
         with self.assertRaises(Exception) as assert_error_negative:
-            ss = ilqr.state_space(A,B,C,D, time_step = -0.1) 
+            ss = ilqr.stateSpace(A,B,C,D, time_step = -0.1) 
         self.assertEqual(str(assert_error_negative.exception), 'invalid time step definition. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_string:
-            ss = ilqr.state_space(A,B,C,D, time_step = 'lettuce') 
+            ss = ilqr.stateSpace(A,B,C,D, time_step = 'lettuce') 
         self.assertEqual(str(assert_error_string.exception), 'invalid time step definition. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_zero:
-            ss = ilqr.state_space(A,B,C,D, time_step = 0) 
+            ss = ilqr.stateSpace(A,B,C,D, time_step = 0) 
         self.assertEqual(str(assert_error_zero.exception), 'invalid time step definition. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_NaN:
-            ss = ilqr.state_space(A,B,C,D, time_step = float("nan")) 
+            ss = ilqr.stateSpace(A,B,C,D, time_step = float("nan")) 
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition. time_step must be a positive float or None')      
 
 
@@ -106,15 +106,15 @@ class discretize_state_space_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss_c = ilqr.state_space(A,B,C,D)
+        ss_c = ilqr.stateSpace(A,B,C,D)
         time_step = 0.1
         c2d_methods = ['Euler', 'zoh', 'zohCombined']
         for c2d_method  in c2d_methods:
             ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method)
-            self.assertEqual(ss.A.shape, A.shape)
-            self.assertEqual(ss.B.shape, B.shape)
-            self.assertEqual(ss.C.shape, C.shape)
-            self.assertEqual(ss.D.shape, D.shape)
+            self.assertEqual(ss.a.shape, A.shape)
+            self.assertEqual(ss.b.shape, B.shape)
+            self.assertEqual(ss.c.shape, C.shape)
+            self.assertEqual(ss.d.shape, D.shape)
             self.assertEqual(ss.time_step, time_step)
             self.assertEqual(ss.type, 'discrete')
 
@@ -124,7 +124,7 @@ class discretize_state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.state_space(A,B,C,D, time_step)
+        ss_d = ilqr.stateSpace(A,B,C,D, time_step)
         with self.assertRaises(Exception) as assert_error_discrete:
             ss = ilqr.discretize_state_space(ss_d,time_step)
         self.assertEqual(str(assert_error_discrete.exception), 'input state space is already discrete')
@@ -135,7 +135,7 @@ class discretize_state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.state_space(A,B,C,D)
+        ss_d = ilqr.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_c2d_method:
             ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
         self.assertEqual(str(assert_error_c2d_method.exception), 'invalid discretization method')
@@ -146,7 +146,7 @@ class discretize_state_space_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.state_space(A,B,C,D)
+        ss_d = ilqr.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_singular_A_zoh:
             ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
         self.assertEqual(str(assert_error_singular_A_zoh.exception), 'determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid'
