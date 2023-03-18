@@ -64,11 +64,11 @@ def calculate_forward_rollout(dyn_func_with_params, cost_func, state_init, contr
     return state_seq, time_seq, cost_seq, total_cost
 
 def calculate_initial_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs):
-    state_seq, time_seq, cost_seq, total_cost = calculate_forward_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs)
-    ad_seq, bd_seq                            = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs)
+    state_seq, time_seq, _, _ = calculate_forward_rollout(dyn_func_with_params, cost_func, state_init, control_seq, time_step, **kwargs)
+    ad_seq, bd_seq            = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step, **kwargs)
     return ad_seq, bd_seq, time_seq
 
-def calculate_backwards_pass():
+def calculate_backwards_pass(state_seq, control_seq, time_seq, ad_seq, bd_seq, Q, R, Qf):
 #   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
 #   k = - inv(q_uu) * q_u
 #   K = - inv(q_uu) * q_ux
@@ -76,6 +76,21 @@ def calculate_backwards_pass():
 #   Vxx = q_xx -       transpose(K) * q_uu * K
 #   Vx  = q_x  -       transpose(K) * q_uu * k
 #   DV  =      - 1/2 * transpose(k) * q_uu * k
+
+#   Requires Cost function defined for final and intermediate steps (either quadratic Q, Qf >= 0 and R > 0, or function that is taylor expandable to 2nd order pos def?)
+#   Requires paired vectors of state and control, along with associated linearized dynamics at each step (x_lin_k, u_lin_k, Ad_k, Bd_k)
+#   Requires paired vectors of desired state and control (x_des, u_des), used to create the relative residuals for each time step:
+#       -- x_bar   = x       -  x_lin_k
+#       -- x_Del_k = x_des_k -  x_lin_k
+#       (x - x_des_k) = (x_bar - x_del_k)   : Residual between the current state and the desired state equals the relative vector create by the difference between
+#                                             the local linearized coordinate and the local description of the state residual
+#   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
+#   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
+#   Calculate final 
+
+#   Can formulate the Value function V_k = min_u{cost_func(x_k, u_k) + V_k+1(f(x_k,u_k))}
+#   
+
     unew = 0
     v = 0
     print("this is the backward pass 2")
