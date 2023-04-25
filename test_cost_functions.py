@@ -1,6 +1,5 @@
 import unittest
 import cost_functions as cfuncs
-import ilqr_funcs as ilqr
 from jax import numpy as jnp
 
 
