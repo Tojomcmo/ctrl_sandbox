@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 import ilqr_funcs as ilqr
 from jax import numpy as jnp
 
@@ -6,7 +7,6 @@ from jax import numpy as jnp
 #   test one known case
 #   if discrete change of behavior (abs value add, check pos and neg)
 #   check edge cases (NaN, overflow, string, divide by zero)
-
 
 class state_space_tests(unittest.TestCase):
     def test_state_space_class_accepts_valid_continuous_system(self):
@@ -87,17 +87,16 @@ class state_space_tests(unittest.TestCase):
         D = jnp.array([[0,0,]])
         with self.assertRaises(Exception) as assert_error_negative:
             ss = ilqr.stateSpace(A,B,C,D, time_step = -0.1) 
-        self.assertEqual(str(assert_error_negative.exception), 'invalid time step definition. time_step must be a positive float or None')
+        self.assertEqual(str(assert_error_negative.exception), 'invalid time step definition -0.1. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_string:
             ss = ilqr.stateSpace(A,B,C,D, time_step = 'lettuce') 
-        self.assertEqual(str(assert_error_string.exception), 'invalid time step definition. time_step must be a positive float or None')
+        self.assertEqual(str(assert_error_string.exception), 'invalid time step definition lettuce. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_zero:
             ss = ilqr.stateSpace(A,B,C,D, time_step = 0) 
-        self.assertEqual(str(assert_error_zero.exception), 'invalid time step definition. time_step must be a positive float or None')
+        self.assertEqual(str(assert_error_zero.exception), 'invalid time step definition 0. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_NaN:
             ss = ilqr.stateSpace(A,B,C,D, time_step = float("nan")) 
-        self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition. time_step must be a positive float or None')      
-
+        self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
 
 class discretize_state_space_tests(unittest.TestCase):
 
@@ -152,7 +151,6 @@ class discretize_state_space_tests(unittest.TestCase):
         self.assertEqual(str(assert_error_singular_A_zoh.exception), 'determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid'
 )
 
-
 class linearize_dynamics_tests(unittest.TestCase):
 
     def test_linearize_dynamics_accepts_valid_case(self):
@@ -183,7 +181,6 @@ class linearize_dynamics_tests(unittest.TestCase):
         print(B_lin_expected)
         self.assertEqual(A_lin.tolist(), A_lin_expected.tolist())
         self.assertEqual(B_lin.tolist(), B_lin_expected.tolist())
-
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
@@ -254,7 +251,6 @@ class simulate_forward_dynamics(unittest.TestCase):
     def test_simulate_forward_dynamics_accepts_valid_system(self):
         self.assertEqual(True,True)
 
-
 class calculate_forward_rollout(unittest.TestCase):
 
     def dyn_func(self, t, x, u):
@@ -274,9 +270,78 @@ class calculate_forward_rollout(unittest.TestCase):
  #       Ad_seq, Bd_seq, time_seq = ilqr.calculate_forward_rollout(self.dyn_func, self.cost_func state_init, control_seq, time_step, **kwparams)
         self.assertEqual(True, True)
 
-# class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
+class taylor_expand_cost(unittest.TestCase):
 
-# class taylor_expand_cost(unittest.TestCase):
+    def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q = cost_func_params['Q']
+        R = cost_func_params['R']
+        Qf = cost_func_params['Qf']
+        # check that dimensions match [TODO]
+        if is_final_bool:
+            cost = (0.5) * (  state_vec   @ Qf @ jnp.transpose(state_vec  ))
+        else:
+            cost = (0.5) * ( (state_vec   @ Q  @ jnp.transpose(state_vec  ))
+                            +(control_vec @ R  @ jnp.transpose(control_vec)))
+        return cost
+
+    def test_taylor_expand_cost_accepts_valid_system(self):
+        func_params = {
+                        'Q'  : jnp.array([[1.,0,0],[0,10.,0],[0,0,1.]]),
+                        'R'  : jnp.array([[1.,0],[0,10.]]),
+                        'Qf' : jnp.array([[1.,0,0],[0,10.,0],[0,0,10.]])
+                      } 
+        x_k = np.array(([1.0,2.0,3.0]))
+        u_k = np.array(([4.0,5.0]))
+        l_x, l_u, l_xx, l_uu, l_ux = ilqr.taylor_expand_cost(self.cost_func_quad_state_and_control,
+                                                            func_params,
+                                                            x_k,
+                                                            u_k)
+        self.assertEqual(l_x.all(), (func_params['Q'] @ x_k).all())
+        self.assertEqual(l_u.all(), (func_params['R'] @ u_k).all())
+        self.assertEqual(l_xx.all(), func_params['Q'].all())
+        self.assertEqual(l_uu.all(), func_params['R'].all())
+        self.assertEqual(l_ux.all(), jnp.zeros([len(u_k),len(x_k)]).all())            
+
+class calculate_final_cost_to_go_approximation(unittest.TestCase):
+    
+    def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q = cost_func_params['Q']
+        R = cost_func_params['R']
+        Qf = cost_func_params['Qf']
+        # check that dimensions match [TODO]
+        if is_final_bool:
+            cost = (0.5) * (  state_vec   @ Qf @ jnp.transpose(state_vec  ))
+        else:
+            cost = (0.5) * ( (state_vec   @ Q  @ jnp.transpose(state_vec  ))
+                            +(control_vec @ R  @ jnp.transpose(control_vec)))
+        return cost
+    
+    def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):
+        func_params = {
+                        'Q'  : jnp.array([[1.,0,0],[0,10.,0],[0,0,1.]]),
+                        'R'  : jnp.array([[1.,0],[0,10.]]),
+                        'Qf' : jnp.array([[1.,0,0],[0,10.,0],[0,0,10.]])
+                      } 
+        x_k = np.array(([1.0,2.0,3.0]))
+        u_k = np.array(([4.0,5.0]))
+        P_N, p_N = ilqr.calculate_final_cost_to_go_approximation(self.cost_func_quad_state_and_control,
+                                                                func_params,
+                                                                x_k,
+                                                                len(u_k))
+        self.assertEqual(p_N.all(), (func_params['Qf'] @ x_k).all())
+        self.assertEqual(P_N.all(), func_params['Qf'].all())
+
+# class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
 
 # class calculate_backwards_pass(unittest.TestCase):
 

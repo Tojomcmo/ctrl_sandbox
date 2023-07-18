@@ -6,22 +6,20 @@
 import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
+import numpy as np
+#import jax import jacfwd
+#from jax.typing import Arraylike
 from scipy.integrate import solve_ivp
 
-class ilqrController:
-    def __init__(self, state_dim, control_dim, state_transition_func, cost_func, time_step, final_time,
-                 max_iter = 100, state_init = None, control_init = None, sim_method = 'Euler', c2d_method = 'Euler'):
-        self.state_dim_int     = state_dim
-        self.control_dim_int   = control_dim
-        self.fx_fn             = state_transition_func
-        self.cost_fn           = cost_func
-        self.sim_method_str    = sim_method
-        self.c2d_method_str    = c2d_method
-        self.state_init_arr    = state_init
-        self.control_init_arr  = control_init
-        self.max_iter_int      = max_iter
-        self.time_step_f32     = time_step
-        self.final_time_f32    = final_time
+class ilqrControllerState:
+    def __init__(self, seed_state = None, seed_contro1 = None, iter_int = 0):
+        self.seed_state_vec    = seed_state
+        self.seed_control_arr  = seed_contro1
+        self.seed_cost_float   = 0
+        self.iter_state_arr    = None
+        self.iter_control_arr  = None
+        self.iter_int          = iter_int
+
 
 class stateSpace:
     def __init__(self, a_mat, b_mat, c_mat, d_mat, time_step = None):
@@ -70,7 +68,7 @@ def calculate_initial_rollout(dyn_func_with_params, cost_func, state_init, contr
     ad_seq, bd_seq            = calculate_linearized_state_space_seq(dyn_func_with_params, state_seq, control_seq, time_step)
     return ad_seq, bd_seq, time_seq
 
-def calculate_backwards_pass(state_seq, control_seq, time_seq, ad_seq, bd_seq, Q, R, Qf):
+def calculate_backwards_pass(ilqr_config, state_seq, control_seq, time_seq, ad_seq, bd_seq):
 #   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
 #   k = - inv(q_uu) * q_u
 #   K = - inv(q_uu) * q_ux
@@ -88,7 +86,6 @@ def calculate_backwards_pass(state_seq, control_seq, time_seq, ad_seq, bd_seq, Q
 #                                             the local linearized coordinate and the local description of the state residual
 #   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
 #   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
-#   Calculate final 
 
 #   Can formulate the Value function V_k = min_u{cost_func(x_k, u_k) + V_k+1(f(x_k,u_k))}
 #   
@@ -135,26 +132,69 @@ def calculate_cost_seq_and_total_cost(Q, R, Qf, state_seq, control_seq):
     cost_seq = 0
     return total_cost, cost_seq
 
-def taylor_expand_cost(cost_func, x_seq, u_seq):
+def taylor_expand_cost(cost_func, cost_func_params, x_k, u_k):
 # This function creates a quadratic approximation of the cost function Using taylor expansion
 # Expansion is approximated about the rolled out trajectory
-    l_x = 0
-    l_u = 0
-    l_xx = 0
-    l_uu = 0
-    l_ux = 0
+    # create concatenated state and control vector of primal points
+    xu_k         = np.concatenate([x_k, u_k])
+    # create lambda function of reduced inputs to only a single vector
+    cost_func_xu = lambda xu_k: cost_func(cost_func_params, xu_k[:len(x_k)], xu_k[len(x_k):])
+    # calculate the concatenated jacobian vector for the cost function at the primal point
+    jac_cat     = jax.jacfwd(cost_func_xu)(xu_k)
+    # calculate the lumped hessian matrix for the cost function at the primal point
+    hessian_cat = jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k)
+    l_x = jac_cat[:len(x_k)]
+    l_u = jac_cat[len(x_k):]
+    l_xx = hessian_cat[:len(x_k),:len(x_k)]
+    l_uu = hessian_cat[len(x_k):,len(x_k):]
+    l_ux = hessian_cat[len(x_k):,:len(x_k)]
+    # print('jac_cat: '       , jac_cat)
+    # print('hessian_cat: '   , hessian_cat)
+    # print('l_x: '           , l_x)
+    # print('l_x check: ', cost_func_params['Q'] @ x_k)
+    # print('l_u: '           , l_u)
+    # print('l_xx: '          , l_xx)
+    # print('l_uu: '          , l_uu)
+    # print('l_ux: '          , l_ux)
     return l_x, l_u, l_xx, l_uu, l_ux
 
-def taylor_expand_pseudo_hamiltonian(cost_func, dyn_func, x_seq, u_seq):
+def taylor_expand_pseudo_hamiltonian(cost_func, cost_func_params, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
-    q_x = 0
-    q_u = 0
-    q_xx = 0
-    q_ux = 0
-    q_uu = 0
+#  https://alkzar.cl/blog/2022-01-13-taylor-approximation-and-jax/
+# q_xx = l_xx + A^T P' A
+# q_uu = l_uu + B^T P' B
+# q_ux = l_ux + B^T P' A
+# q_x  = l_x  + A^T p'
+# q_u  = l_u  + B^T p'
+
+    l_x, l_u, l_xx, l_uu, l_ux = taylor_expand_cost(cost_func, cost_func_params, x_k, u_k)
+    A_lin_k_T = jnp.transpose(A_lin_k)
+    B_lin_k_T = jnp.transpose(B_lin_k)
+
+    q_x  = l_x  + A_lin_k_T @ p_kp1
+    q_u  = l_u  + B_lin_k_T @ p_kp1
+    q_xx = l_xx + A_lin_k_T @ P_kp1 @ A_lin_k
+    q_uu = l_uu + B_lin_k_T @ P_kp1 @ B_lin_k   
+    q_ux = l_ux + B_lin_k_T @ P_kp1 @ A_lin_k
     return q_x, q_u, q_xx, q_ux, q_uu
+
+def calculate_final_cost_to_go_approximation(cost_func, cost_func_params, x_N, len_u):
+    # create concatenated state and control vector of primal points
+    xu_N         = np.concatenate([x_N, jnp.zeros(len_u)])
+    # create lambda function of reduced inputs to only a single vector
+    cost_func_xu = lambda xu_N: cost_func(cost_func_params, xu_N[:len(x_N)], xu_N[len(x_N):], is_final_bool=True)
+    # calculate the concatenated jacobian vector for the cost function at the primal point
+    jac_cat     = jax.jacfwd(cost_func_xu)(xu_N)
+    # calculate the lumped hessian matrix for the cost function at the primal point
+    hessian_cat = jax.jacfwd(jax.jacrev(cost_func_xu))(xu_N)
+    l_x = jac_cat[:len(x_N)]
+    l_xx = hessian_cat[:len(x_N),:len(x_N)]
+    print(hessian_cat)
+    P_N = l_xx
+    p_N = l_x
+    return P_N, p_N
 
 def linearize_dynamics(dyn_func, x_primal, u_primal, t_primal='None'):
 # Linearizes the dynamics function about the primals x and u
