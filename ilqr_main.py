@@ -22,8 +22,9 @@ if __name__ == "__main__":
    control_init_seq = jnp.array([])
 
 
-   controller_state = ilqr.ilqrControllerState(state_init_vec, control_init_seq)
-   controller_state.create_time_sequence(ilqr_config['time_step'])
+   controller_state = ilqr.ilqrControllerState(state_init_vec, control_init_seq, ilqr_config['time_step'])
+
+   controller_output = ilqr.ilqr_controller(ilqr_config, controller_state)
 
    # calculate initial rollout
    # 
