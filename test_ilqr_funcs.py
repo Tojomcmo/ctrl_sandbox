@@ -238,9 +238,9 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
             A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
         self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
 
-class simulate_forward_dynamics(unittest.TestCase):
+class simulate_forward_dynamics_tests(unittest.TestCase):
 
-    def dyn_func(self, t, x, u):
+    def dyn_func(self, x, u, t=None):
         y = jnp.array([
                     x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
                     x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
@@ -251,9 +251,9 @@ class simulate_forward_dynamics(unittest.TestCase):
     def test_simulate_forward_dynamics_accepts_valid_system(self):
         self.assertEqual(True,True)
 
-class calculate_forward_rollout(unittest.TestCase):
+class calculate_forward_rollout_tests(unittest.TestCase):
 
-    def dyn_func(self, t, x, u):
+    def dyn_func(self, x, u, t=None):
         y = jnp.array([
                     x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
                     x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
@@ -270,7 +270,7 @@ class calculate_forward_rollout(unittest.TestCase):
  #       Ad_seq, Bd_seq, time_seq = ilqr.calculate_forward_rollout(self.dyn_func, self.cost_func state_init, control_seq, time_step, **kwparams)
         self.assertEqual(True, True)
 
-class taylor_expand_cost(unittest.TestCase):
+class taylor_expand_cost_tests(unittest.TestCase):
 
     def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
     # This function calculates a quadratic cost wrt state and control
@@ -307,7 +307,7 @@ class taylor_expand_cost(unittest.TestCase):
         self.assertEqual(l_uu.all(), func_params['R'].all())
         self.assertEqual(l_ux.all(), jnp.zeros([len(u_k),len(x_k)]).all())            
 
-class calculate_final_cost_to_go_approximation(unittest.TestCase):
+class calculate_final_cost_to_go_approximation_tests(unittest.TestCase):
     
     def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
     # This function calculates a quadratic cost wrt state and control
@@ -343,7 +343,7 @@ class calculate_final_cost_to_go_approximation(unittest.TestCase):
 
 # class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
 
-# class calculate_backwards_pass(unittest.TestCase):
+# class calculate_backwards_pass_tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
