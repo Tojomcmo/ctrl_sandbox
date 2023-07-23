@@ -15,7 +15,8 @@ if __name__ == "__main__":
                     'c2d_method'                : 'euler',
                     'max_iter'                  : 100,
                     'time_step'                 : 0.01,
-                    'converge_crit'             : 1e-6
+                    'converge_crit'             : 1e-6,
+                    'cost_ratio_bounds'         : [1e-4, 10]
                  }
    
    state_init_vec = jnp.array([])
