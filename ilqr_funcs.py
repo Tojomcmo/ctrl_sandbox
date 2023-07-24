@@ -11,25 +11,43 @@ import numpy as np
 from typing import Optional
 from scipy.integrate import solve_ivp
 
+import ilqr_utils as util
+
 class ilqrControllerState:
-    def __init__(self, seed_state_vec, seed_contro1_seq, time_step):
-        self.seed_state_vec     = seed_state_vec
-        self.seed_control_seq   = seed_contro1_seq
-        self.len_seq            = len(seed_contro1_seq)
-        self.state_seq          = []
-        self.control_seq        = seed_contro1_seq
-        self.cost_float         = 0.0
-        self.prev_cost_float    = 0.0
-        self.K_seq              = []
-        self.d_seq              = []
-        self.Del_V_vec_seq      = []
-        self.iter_int           = 0
-        self.time_step          = time_step
-        self.time_seq           = jnp.arange(len(self.seed_control_seq) +1) * time_step
+    def __init__(self, seed_state_vec, seed_contro1_seq, time_step, state_des_seq = None, control_des_seq = None):
+        self.seed_state_vec        = seed_state_vec
+        self.seed_control_seq      = seed_contro1_seq
+        self.len_seq               = len(seed_contro1_seq)
+        if state_des_seq == None:
+            self.state_des_seq     = jnp.zeros([self.len_seq, self.num_states()])
+        else:
+            self.state_des_seq     = state_des_seq   
+        if control_des_seq == None:
+            self.control_des_seq   = jnp.zeros([self.len_seq, self.num_controls()])
+        else:
+            self.control_des_seq   = control_des_seq 
+        self.state_seq             = []
+        self.control_seq           = seed_contro1_seq
+        self.des_state_diff_seq    = []
+        self.des_control_diff_seq  = []
+        self.state_seq_minus_des   = []
+        self.control_seq_minus_des = []
+        self.cost_float            = 0.0
+        self.prev_cost_float       = 0.0
+        self.K_seq                 = []
+        self.d_seq                 = []
+        self.Del_V_vec_seq         = []
+        self.iter_int              = 0
+        self.time_step             = time_step
+        self.time_seq              = jnp.arange(len(self.seed_control_seq) +1) * time_step
         
     def update_time_sequence(self, new_time_step):
         self.time_step = new_time_step
         self.time_seq  = jnp.arange(len(self.seed_control_seq) +1) * new_time_step
+
+    def update_des_traj_diff_seq(self):  
+            self.des_state_traj_diff_seq   = self.state_des_seq - self.state_seq
+            self.des_control_traj_diff_seq = self.control_des_seq - self.control_seq
 
     def num_states(self):
         return len(self.seed_state_vec)
@@ -38,17 +56,19 @@ class ilqrControllerState:
         return len(self.seed_control_seq[0])
 
 class ilqrConfiguredFuncs:
-    def __init__(self, ilqr_config):
-        self.cost_func               = self.create_curried_cost_func(ilqr_config)
+    def __init__(self, ilqr_config, controller_state:ilqrControllerState):
+        self.cost_func               = self.create_curried_cost_func(ilqr_config, controller_state)
         self.state_trans_func        = self.create_curried_state_trans_func(ilqr_config)
         self.simulate_dyn_func       = self.create_curried_simulate_dyn_func(ilqr_config)
         self.c2d_ss_func             = self.create_curried_c2d_ss_func(ilqr_config)
-        self.analyze_cost_dec_func   = self.create_curried_analze_cost_dec_func(ilqr_config)
+        self.analyze_cost_dec_func   = self.create_curried_analyze_cost_dec_func(ilqr_config)
 
-    def create_curried_cost_func(self, ilqr_config):
+    def create_curried_cost_func(self, ilqr_config, controller_state):
         cost_func         = ilqr_config['cost_func']
         cost_func_params  = ilqr_config['cost_func_params']
-        cost_func_curried = lambda x, u, is_final_bool=False: cost_func(cost_func_params, x, u, is_final_bool)
+        state_des_seq     = controller_state.state_des_seq
+        control_des_seq   = controller_state.control_des_seq
+        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, state_des_seq, control_des_seq, is_final_bool)
         return cost_func_curried 
     
     def create_curried_state_trans_func(self, ilqr_config):
@@ -58,18 +78,18 @@ class ilqrConfiguredFuncs:
         return state_trans_func_curried
     
     def create_curried_simulate_dyn_func(self, ilqr_config):
-        sim_method  = ilqr_config['cost_func_params']
-        time_step   = ilqr_config['time_step']
+        sim_method       = ilqr_config['cost_func_params']
+        time_step        = ilqr_config['time_step']
         sim_func_curried = lambda x_init, u_seq: simulate_forward_dynamics(self.state_trans_func, x_init, u_seq, time_step, sim_method)
         return sim_func_curried 
     
     def create_curried_c2d_ss_func(self, ilqr_config):
-        c2d_method = ilqr_config['c2d_method']
-        time_step  = ilqr_config['time_step']
-        descritize_func_curried  = lambda state_space: discretize_state_space(state_space, time_step, c2d_method)
+        c2d_method              = ilqr_config['c2d_method']
+        time_step               = ilqr_config['time_step']
+        descritize_func_curried = lambda state_space: discretize_state_space(state_space, time_step, c2d_method)
         return descritize_func_curried
     
-    def create_curried_analze_cost_dec_func(self, ilqr_config):
+    def create_curried_analyze_cost_dec_func(self, ilqr_config):
         cost_ratio_bounds = ilqr_config['cost_ratio_bounds']
         analyze_cost_dec_func_curried  = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds)
         return analyze_cost_dec_func_curried
@@ -107,14 +127,13 @@ class stateSpace:
 def ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
 
     # create object containing preconfigured functions with static parameters (currying and parameter encapsulation)
-    config_funcs = ilqrConfiguredFuncs(ilqr_config)
+    config_funcs = ilqrConfiguredFuncs(ilqr_config, ctrl_state)
     # populate state sequence from seed control sequence
     ctrl_state.state_seq = config_funcs.simulate_dyn_func(ctrl_state.seed_state_vec,
                                                           ctrl_state.seed_control_seq)
+
     # calculate initial cost
-    ctrl_state.cost_float = calculate_total_cost(config_funcs.cost_func, 
-                                                   ctrl_state.state_seq, 
-                                                   ctrl_state.seed_control_seq)
+    ctrl_state.cost_float = calculate_total_cost(config_funcs.cost_func, ctrl_state.state_seq, ctrl_state.control_seq)
     # ensure seed_cost is initialized with larger differential than convergence bound
     ctrl_state.prev_cost_float = ctrl_state.cost_float + (1 + ilqr_config['converge_crit'])
     # while within iteration limit and while cost has not converged
@@ -124,7 +143,7 @@ def ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
         # perform backwards pass to calculate gains and expected value function change
         ctrl_state.K_seq,     ctrl_state.d_seq,       ctrl_state.Del_V_vec_seq  = calculate_backwards_pass(config_funcs, ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        ctrl_state.state_seq, ctrl_state.control_seq, ctrl_state.cost_float = calculate_forwards_pass(config_funcs, ctrl_state)
+        ctrl_state.state_seq, ctrl_state.control_seq, ctrl_state.cost_float     = calculate_forwards_pass(config_funcs, ctrl_state)
         # increment iteration counter
         ctrl_state.iter_int += ctrl_state.iter_int
     return ctrl_state
@@ -154,7 +173,7 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
                                                         ctrl_state.control_seq,
                                                         ctrl_state.time_seq)
     P_N, p_N = calculate_final_cost_to_go_approximation(config_funcs.cost_func, 
-                                                        ctrl_state.state_seq[-1], 
+                                                        ctrl_state.state_seq_minus_des[-1], 
                                                         len(ctrl_state.control_seq[0]))
     
     P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N)
@@ -167,13 +186,14 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
             q_x, q_u, q_xx, q_ux, q_uu = taylor_expand_pseudo_hamiltonian(config_funcs.cost_func,
                                                                         Ad_seq[k_step],
                                                                         Bd_seq[k_step],
-                                                                        ctrl_state.state_seq[k_step],
-                                                                        ctrl_state.control_seq[k_step],
+                                                                        ctrl_state.state_seq_minus_des[k_step],
+                                                                        ctrl_state.control_seq_minus_des[k_step],
                                                                         P_kp1,
-                                                                        p_kp1)
-            q_uu_reg = reqularize_q_uu(q_uu, reg_factor)
+                                                                        p_kp1,
+                                                                        k_step)
+            q_uu_reg = util.reqularize_mat(q_uu, reg_factor)
             # if q_uu_reg is not positive definite, reset loop to initial state and increase ro_reg
-            if is_pos_def(q_uu_reg) is False:
+            if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
                 reg_factor    = reg_factor + 0.1
                 P_kp1, p_kp1, k_seq, d_seq, Del_V_seq = initialize_backwards_pass(P_N, p_N)
@@ -206,6 +226,7 @@ def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCon
             # populate state and control sequences
             control_seq_new.append(u_k_new)
             state_seq_new.append(x_kp1_new)
+        # shift sequences for cost calculation wrt desired trajectories
         # calculate new trajectory cost    
         cost_float_new = calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
         # calculate the ratio between the expected cost decrease and actual cost decrease
@@ -231,9 +252,9 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
     time_span      = (0, time_step)
     if sim_method == 'Euler':
         for idx in range(int_iter):
-            state_dot  = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
-            state_next = jnp.array([state_seq[idx] + state_dot * time_step])
-            state_seq  = jnp.append(state_seq, state_next, axis=0)
+            state_dot_row = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
+            state_next    = jnp.array([state_seq[idx] + state_dot_row * time_step])
+            state_seq     = jnp.append(state_seq, state_next, axis=0)
     elif sim_method == 'solve_ivp_zoh':
         for idx in range(int_iter):
             dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx]))
@@ -362,18 +383,18 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
     total_cost = 0
     for idx in range(seq_len):
         if (idx == seq_len-1):
-            incremental_cost = cost_func(state_seq[idx], jnp.zeros(len(control_seq[0])), is_final_bool=True)
-        incremental_cost = cost_func(state_seq[idx], control_seq[idx])
+            incremental_cost = cost_func(state_seq[idx], jnp.zeros(len(control_seq[0])), idx, is_final_bool=True)
+        incremental_cost = cost_func(state_seq[idx], control_seq[idx], idx)
         total_cost = total_cost + incremental_cost
     return total_cost
 
-def taylor_expand_cost(cost_func, x_k, u_k):
+def taylor_expand_cost(cost_func, x_k, u_k, k_step):
 # This function creates a quadratic approximation of the cost function Using taylor expansion
 # Expansion is approximated about the rolled out trajectory
     # create concatenated state and control vector of primal points
     xu_k         = np.concatenate([x_k, u_k])
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu = lambda xu_k: cost_func(xu_k[:len(x_k)], xu_k[len(x_k):])
+    cost_func_xu = lambda xu_k: cost_func(xu_k[:len(x_k)], xu_k[len(x_k):], k_step)
     # calculate the concatenated jacobian vector for the cost function at the primal point
     jac_cat     = jax.jacfwd(cost_func_xu)(xu_k)
     # calculate the lumped hessian matrix for the cost function at the primal point
@@ -385,7 +406,7 @@ def taylor_expand_cost(cost_func, x_k, u_k):
     l_ux = hessian_cat[len(x_k):,:len(x_k)]
     return l_x, l_u, l_xx, l_uu, l_ux
 
-def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1):
+def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1, k_step):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
@@ -395,7 +416,7 @@ def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp
 # q_ux = l_ux + B^T P' A
 # q_x  = l_x  + A^T p'
 # q_u  = l_u  + B^T p'
-    l_x, l_u, l_xx, l_uu, l_ux = taylor_expand_cost(cost_func, x_k, u_k)
+    l_x, l_u, l_xx, l_uu, l_ux = taylor_expand_cost(cost_func, x_k, u_k, k_step)
     A_lin_k_T = jnp.transpose(A_lin_k)
     B_lin_k_T = jnp.transpose(B_lin_k)
 
@@ -410,7 +431,7 @@ def calculate_final_cost_to_go_approximation(cost_func, x_N, len_u):
     # create concatenated state and control vector of primal points
     xu_N         = np.concatenate([x_N, jnp.zeros(len_u)])
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu = lambda xu_N: cost_func(xu_N[:len(x_N)], xu_N[len(x_N):], is_final_bool=True)
+    cost_func_xu = lambda xu_N: cost_func(xu_N[:len(x_N)], xu_N[len(x_N):], k_step=-1, is_final_bool=True)
     # calculate the concatenated jacobian vector for the cost function at the primal point
     jac_cat      = jax.jacfwd(cost_func_xu)(xu_N)
     # calculate the lumped hessian matrix for the cost function at the primal point
@@ -442,8 +463,12 @@ def calculate_optimal_gains(q_uu_reg, q_ux, q_u):
     return K_k, d_k
 
 def calculate_u_k_new(u_nom_k ,x_nom_k ,x_new_k, K_k, d_k, line_search_factor):
-    u_k_updated = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
-    return u_k_updated
+    u_nom_k_col     = util.vec_1D_array_to_col(u_nom_k)
+    x_nom_k_col     = util.vec_1D_array_to_col(x_nom_k)
+    x_new_k_col     = util.vec_1D_array_to_col(x_new_k)
+    u_k_updated_col = u_nom_k_col + K_k @ (x_new_k_col - x_nom_k_col) + line_search_factor * d_k
+    u_k_updated_row = util.vec_1D_array_to_row(u_k_updated_col)
+    return u_k_updated_row
 
 def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
     Del_V_sum = 0
@@ -462,31 +487,8 @@ def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
     else:
         in_bounds_bool = False            
     return in_bounds_bool
-# ---------- utility functions ----------#
 
-def is_pos_def(x):
-    return jnp.all(jnp.linalg.eigvals(x) > 0)
-
-def reqularize_q_uu(q_uu, ro):
-    return q_uu + ro * jnp.eye(q_uu.shape[0], q_uu.shape[1])
-
-# ---------- Obsolete functions ----------#
-
-# def calculate_forward_rollout(state_init, control_seq, time_step, 
-#                               config_funcs: Optional[ilqrConfiguredFuncs] = None):
-#     # simulate forward dynamics
-#     # Linearize dynamics at each time step
-#     # calculate discretized linearized state space for each time step
-#     # return
-#     # **kwargs:
-#     # - sim_method('Euler', 'solve_ivp_zoh')
-#     # - c2d_method('Euler', 'zoh', 'zohCombined')
-#     # state_seq, time_seq  = simulate_forward_dynamics(state_trans_func, state_init, control_seq, time_step)
-#     state_seq  = config_funcs.simulate_dyn_func(state_init, control_seq)
-#     total_cost = config_funcs.calculate_total_cost(state_seq, control_seq)
-#     return state_seq, time_seq, cost_seq, total_cost
-
-# def calculate_initial_rollout(state_trans_func, cost_func, state_init, control_seq, time_step):
-#     state_seq, time_seq, _, _ = calculate_forward_rollout(state_trans_func, cost_func, state_init, control_seq, time_step)
-#     ad_seq, bd_seq            = calculate_linearized_state_space_seq(state_trans_func, state_seq, control_seq, time_step)
-#     return state_seq, time_seq, ad_seq, bd_seq
+def vec_state_and_control_to_col(x, u):
+    x_vec = util.vec_1D_array_to_col(x)
+    u_vec = util.vec_1D_array_to_col(u)
+    return x_vec, u_vec
