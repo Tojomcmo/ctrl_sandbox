@@ -101,45 +101,47 @@ class shared_unit_test_data_and_funcs:
                     ])
         return state_dot  
 
-    def cost_func_quad_state_and_control_full(self, cost_func_params, state_vec, control_vec, state_des_seq, control_des_seq, k_step, is_final_bool=False):
+    def cost_func_quad_state_and_control_full(self,cost_func_params:dict, state_vec, control_vec, k_step, state_des_seq, control_des_seq, is_final_bool=False):
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
     # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
     # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q = cost_func_params['Q']
-        R = cost_func_params['R']
+        Q  = cost_func_params['Q']
+        R  = cost_func_params['R']
         Qf = cost_func_params['Qf']
         # check that dimensions match [TODO]
+        x_k_corr     = util.calculate_current_minus_des(state_vec  , state_des_seq[k_step]  )
+        u_k_corr     = util.calculate_current_minus_des(control_vec, control_des_seq[k_step])
+        x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
+        u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
         if is_final_bool:
-            state_corrected   = util.calculate_current_minus_des(state_vec, state_des_seq[k_step])
-            cost = (0.5) * (  state_corrected   @ Qf @ jnp.transpose(state_corrected  ))
+            cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
-            state_corrected   = util.calculate_current_minus_des(state_vec, state_des_seq[k_step])
-            control_corrected = util.calculate_current_minus_des(control_vec, control_des_seq[k_step])            
-            cost = (0.5) * ( (state_corrected   @ Q  @ jnp.transpose(state_corrected  ))
-                            +(control_corrected @ R  @ jnp.transpose(control_corrected)))
-        return cost
-    
-    def cost_func_quad_state_and_control_curried(self, state_vec, control_vec, k_step, is_final_bool=False):
+            cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
+                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
+        return cost_float      
+
+    def cost_func_quad_state_and_control_pend_curried(self, state_vec, control_vec, k_step, is_final_bool=False):
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
     # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
     # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q = self.pend_cost_func_params['Q']
-        R = self.pend_cost_func_params['R']
+        Q  = self.pend_cost_func_params['Q']
+        R  = self.pend_cost_func_params['R']
         Qf = self.pend_cost_func_params['Qf']
         # check that dimensions match [TODO]
+        x_k_corr     = util.calculate_current_minus_des(state_vec  , self.seed_des_traj[k_step]  )
+        u_k_corr     = util.calculate_current_minus_des(control_vec, jnp.zeros(len(control_vec[k_step])))
+        x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
+        u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
         if is_final_bool:
-            state_corrected   = util.calculate_current_minus_des(state_vec, state_des_seq[k_step])
-            cost = (0.5) * (  state_corrected   @ Qf @ jnp.transpose(state_corrected  ))
+            cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
-            state_corrected   = util.calculate_current_minus_des(state_vec, state_des_seq[k_step])
-            control_corrected = util.calculate_current_minus_des(control_vec, control_des_seq[k_step])            
-            cost = (0.5) * ( (state_corrected   @ Q  @ jnp.transpose(state_corrected  ))
-                            +(control_corrected @ R  @ jnp.transpose(control_corrected)))
-        return cost    
+            cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
+                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
+        return cost_float   
 
 class stateSpace_tests(unittest.TestCase):
     def test_state_space_class_accepts_valid_continuous_system(self):
@@ -232,36 +234,27 @@ class stateSpace_tests(unittest.TestCase):
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
 
 class ilqrConfiguredFuncs_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
-        self.assertEqual(True, True)    
+    def test_accepts_valid_inputs(self):
+        self.assertEqual(True,True)  
 
 class ilqrControllerState_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+    def test_accepts_valid_inputs(self):
+        self.assertEqual(True,True)
 
 class ilqr_controller_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+    def test_accepts_valid_inputs(self):
+        self.assertEqual(True,True)
 
 class calculate_backwards_pass_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+    def test_accepts_valid_inputs(self):
+        self.assertEqual(True,True)
 
 class calculate_forwards_pass_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+    def test_accepts_valid_inputs(self):
+        self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
-
-    def dyn_func(self, x, u, t=None):
-        y = jnp.array([
-                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
-                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
-                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
-                    ])
-        return y
-
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True,True)
 
 class discretize_state_space_tests(unittest.TestCase):
@@ -351,14 +344,6 @@ class linearize_dynamics_tests(unittest.TestCase):
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
-    def dyn_func(self, t, x, u):
-        y = jnp.array([
-                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
-                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
-                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
-                    ])
-        return y
-
     def test_calculate_linearized_state_space_seq_accepts_valid_system(self):
         time_step    = 0.1
         num_steps    = 20
@@ -406,36 +391,18 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
 
 class initialize_backwards_pass_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class initialize_forwards_pass_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_total_cost_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class taylor_expand_cost_tests(unittest.TestCase):
-
-    def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q = cost_func_params['Q']
-        R = cost_func_params['R']
-        Qf = cost_func_params['Qf']
-        # check that dimensions match [TODO]
-        if is_final_bool:
-            cost = (0.5) * (  state_vec   @ Qf @ jnp.transpose(state_vec  ))
-        else:
-            cost = (0.5) * ( (state_vec   @ Q  @ jnp.transpose(state_vec  ))
-                            +(control_vec @ R  @ jnp.transpose(control_vec)))
-        return cost
-
     def test_taylor_expand_cost_accepts_valid_system(self):
         func_params = {
                         'Q'  : jnp.array([[1.,0,0],[0,10.,0],[0,0,1.]]),
@@ -455,27 +422,10 @@ class taylor_expand_cost_tests(unittest.TestCase):
         self.assertEqual(l_ux.all(), jnp.zeros([len(u_k),len(x_k)]).all())            
 
 class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_final_cost_to_go_approximation_tests(unittest.TestCase):
-    def cost_func_quad_state_and_control(self, cost_func_params, state_vec, control_vec, is_final_bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q = cost_func_params['Q']
-        R = cost_func_params['R']
-        Qf = cost_func_params['Qf']
-        # check that dimensions match [TODO]
-        if is_final_bool:
-            cost = (0.5) * (  state_vec   @ Qf @ jnp.transpose(state_vec  ))
-        else:
-            cost = (0.5) * ( (state_vec   @ Q  @ jnp.transpose(state_vec  ))
-                            +(control_vec @ R  @ jnp.transpose(control_vec)))
-        return cost
-    
     def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):
         func_params = {
                         'Q'  : jnp.array([[1.,0,0],[0,10.,0],[0,0,1.]]),
@@ -492,27 +442,27 @@ class calculate_final_cost_to_go_approximation_tests(unittest.TestCase):
         self.assertEqual(P_N.all(), func_params['Qf'].all())
 
 class calculate_backstep_ctg_approx_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_optimal_gains_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_u_k_new_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_expected_cost_decrease_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_cost_decrease_ratio_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class analyze_cost_decrease_tests(unittest.TestCase):
-    def accepts_valid_inputs(self):
+    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
  
 if __name__ == '__main__':

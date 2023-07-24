@@ -3,7 +3,6 @@ from jax import numpy as jnp
 # ---------- utility functions ----------#
 
 def is_pos_def(x):
-    print(x)
     eigs = jnp.linalg.eigvals(x)
     return jnp.all(eigs > 0)
 
