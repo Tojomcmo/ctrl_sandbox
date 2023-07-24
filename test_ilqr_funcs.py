@@ -447,24 +447,74 @@ class calculate_backstep_ctg_approx_tests(unittest.TestCase):
 
 class calculate_optimal_gains_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+        q_uu = jnp.array([[1.,1.],[0,1.]])
+        q_ux = jnp.array([[0.1,0.2,0.3,0.4],[1., 2., 3., 4.]])
+        q_u  = jnp.array([[1],[2]])
+        K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
+        K_k_expected = -jnp.linalg.inv(q_uu) @ q_ux
+        d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
+        self.assertEqual(K_k.all(), K_k_expected.all())
+        self.assertEqual(d_k.all(), d_k_expected.all())
 
 class calculate_u_k_new_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+        u_nom_k = jnp.array([1, 1])
+        x_nom_k = jnp.array([0.1, 0.2, 0.3, 0.4])
+        x_new_k = jnp.array([0.2, 0.3, 0.4, 0.5])
+        K_k     = jnp.ones([2, 4])
+        d_k     = jnp.ones([2, 1])
+        line_search_factor = 2
+        u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
+                                                 K_k, d_k, line_search_factor)
 
-class calculate_expected_cost_decrease_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
         self.assertEqual(True, True)
 
 class calculate_cost_decrease_ratio_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+        prev_cost_float = 10.0
+        new_cost_float  = 8.0
+        Del_V_seq = jnp.array([[1,4],[2,5],[3,6]])
+        line_search_factor = 2
+        cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
+                                                                 new_cost_float,
+                                                                 Del_V_seq,
+                                                                 line_search_factor)
+        del_V_sum_exp = ((1+2+3) * line_search_factor) + ((4+5+6) * line_search_factor**2)
+        # del_V_sum_exp = 72
+        expected_output = (1 / del_V_sum_exp) * (prev_cost_float - new_cost_float)
+        self.assertEqual(cost_decrease_ratio, expected_output)
+
+class calculate_expected_cost_decrease_tests(unittest.TestCase):
+    def test_accepts_valid_inputs(self):
+        Del_V_seq = jnp.array([[1,4],[2,5],[3,6]])
+        line_search_factor = 2
+        Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_seq, line_search_factor)
+        expected_output = ((1+2+3) * line_search_factor) + ((4+5+6) * line_search_factor**2)
+        # expected_output = 72
+        self.assertEqual(Del_V_sum, expected_output)
 
 class analyze_cost_decrease_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        self.assertEqual(True, True)
+    def test_returns_true_for_in_bound_inputs(self):
+        data_and_funcs      = shared_unit_test_data_and_funcs()
+        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        cost_decrease_ratio = bounds[0] + (bounds[0] + bounds[1]) *0.5
+        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
+        self.assertEqual(in_bounds_bool, True)
  
+    def test_returns_false_for_input_too_high(self):
+        data_and_funcs      = shared_unit_test_data_and_funcs()
+        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        cost_decrease_ratio = bounds[1] + 1
+        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
+        self.assertEqual(in_bounds_bool, False)
+
+    def test_returns_false_for_input_too_low(self):
+        data_and_funcs      = shared_unit_test_data_and_funcs()
+        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        cost_decrease_ratio = bounds[0] - 1
+        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
+        self.assertEqual(in_bounds_bool, False)
+
 if __name__ == '__main__':
     unittest.main()
 

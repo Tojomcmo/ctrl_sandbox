@@ -457,7 +457,7 @@ def calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k):
 def calculate_optimal_gains(q_uu_reg, q_ux, q_u):
     # K_k is a linear feedback term related to del_x from nominal trajectory
     # d_k is a feedforward term related to trajectory correction
-    inverted_q_uu = jnp.invert(q_uu_reg)
+    inverted_q_uu = jnp.linalg.inv(q_uu_reg)
     K_k           = -inverted_q_uu @ q_ux
     d_k           = -inverted_q_uu @ q_u
     return K_k, d_k
@@ -468,27 +468,29 @@ def calculate_u_k_new(u_nom_k ,x_nom_k ,x_new_k, K_k, d_k, line_search_factor):
     x_new_k_col     = util.vec_1D_array_to_col(x_new_k)
     u_k_updated_col = u_nom_k_col + K_k @ (x_new_k_col - x_nom_k_col) + line_search_factor * d_k
     u_k_updated_row = util.vec_1D_array_to_row(u_k_updated_col)
+    print(K_k)
+    print(u_k_updated_row)
     return u_k_updated_row
-
-def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
-    Del_V_sum = 0
-    for idx in Del_V_vec_seq:
-        Del_V_sum = Del_V_sum + ((line_search_factor * Del_V_vec_seq[idx][0]) + (line_search_factor**2 * Del_V_vec_seq[idx][1]))
-    return Del_V_sum    
 
 def calculate_cost_decrease_ratio(prev_cost_float, cost_float_updated, Del_V_vec_seq, line_search_factor):
     Del_V_sum = calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
-    cost_decrease_ratio = (-1 / Del_V_sum) * (prev_cost_float - cost_float_updated)
+    cost_decrease_ratio = (1 / Del_V_sum) * (prev_cost_float - cost_float_updated)
     return cost_decrease_ratio
 
+def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
+    Del_V_sum = 0
+    for idx in range(len(Del_V_vec_seq)):
+        Del_V_sum = Del_V_sum + ((line_search_factor * Del_V_vec_seq[idx][0]) + (line_search_factor**2 * Del_V_vec_seq[idx][1]))
+    return Del_V_sum    
+
 def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
-    if cost_decrease_ratio in range(cost_ratio_bounds[0], cost_ratio_bounds[1]):
+    if (cost_decrease_ratio > cost_ratio_bounds[0]) and (cost_decrease_ratio < cost_ratio_bounds[1]):
         in_bounds_bool = True
     else:
         in_bounds_bool = False            
     return in_bounds_bool
 
-def vec_state_and_control_to_col(x, u):
+
     x_vec = util.vec_1D_array_to_col(x)
     u_vec = util.vec_1D_array_to_col(u)
     return x_vec, u_vec
