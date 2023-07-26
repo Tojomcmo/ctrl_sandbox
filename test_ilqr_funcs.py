@@ -57,22 +57,25 @@ class shared_unit_test_data_and_funcs:
         # self.des_state_seq   = jnp.stack([pos_des_traj,vel_des_traj], axis=1)
         # self.des_control_seq = jnp.zeros([20,1])
 
-        self.len_seq              = 20
-        self.seed_state_vec       = (jnp.ones([2,1]) * 0.1)
-        self.seed_control_seq = [jnp.zeros([1,1])] * self.len_seq
+        self.len_seq          = 10
+        self.seed_state_vec   = (jnp.ones([2,1]) * 0.1)
+        self.seed_control_seq = [jnp.ones([1,1])] * (self.len_seq-1)
 
-        self.x_len                = jnp.shape(util.vec_1D_array_to_col(self.seed_state_vec))[0]
-        self.u_len                = jnp.shape(util.vec_1D_array_to_col(self.seed_control_seq[0]))[0]
+        self.x_len            = jnp.shape(util.vec_1D_array_to_col(self.seed_state_vec))[0]
+        self.u_len            = jnp.shape(util.vec_1D_array_to_col(self.seed_control_seq[0]))[0]
 
-        self.state_seq            = [self.seed_state_vec] * self.len_seq
-        self.control_seq          = [jnp.ones([1,1])] * self.len_seq
+        self.state_seq        = [self.seed_state_vec] * self.len_seq
+        self.control_seq      = [jnp.ones([1,1])] * (self.len_seq-1)
 
-        self.des_state_seq        = [jnp.array([[jnp.pi], [0]])] * self.len_seq
-        self.des_control_seq      = [jnp.zeros([1,1])] * self.len_seq
+        self.des_state_seq    = [jnp.array([[0], [0]])] * self.len_seq
+        self.des_control_seq  = [jnp.array([[0]])] * (self.len_seq-1)
 
-        self.time_step            = self.ilqr_config['time_step']
-        time_id                   = list(range(self.len_seq))
-        self.time_seq             = [i * self.time_step for i in time_id]
+        # self.K_seq            = [jnp.ones([self.u_len, self.x_len])] * (self.len_seq-1)
+        # self.d_seq            = [jnp.ones([self.u_len, 1         ])] * (self.len_seq-1)
+        # self.Del_V_vec_seq    = [jnp.ones([1         , 2         ])] * (self.len_seq-1)
+        self.time_step        = self.ilqr_config['time_step']
+        time_id               = list(range(self.len_seq))
+        self.time_seq         = [i * self.time_step for i in time_id]
 
     def gen_dyn_func_full(self, x, u, t=None):
         y = jnp.array([
@@ -138,13 +141,13 @@ class shared_unit_test_data_and_funcs:
         R  = cost_func_params['R']
         Qf = cost_func_params['Qf']
         # check that dimensions match [TODO]
-        x_k_corr     = util.calculate_current_minus_des_array(state_vec  , state_des_seq[k_step]  )
-        u_k_corr     = util.calculate_current_minus_des_array(control_vec, control_des_seq[k_step])
+        x_k_corr     = util.calculate_current_minus_des_array(state_vec, state_des_seq[k_step])
         x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
-        u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
         if is_final_bool:
             cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
+            u_k_corr     = util.calculate_current_minus_des_array(control_vec, control_des_seq[k_step])
+            u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)
             cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
                                   +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
         return cost_float      
@@ -161,14 +164,14 @@ class shared_unit_test_data_and_funcs:
         
         # check that dimensions match [TODO]
         x_k_corr     = util.calculate_current_minus_des_array(state_vec  , self.des_state_seq[k_step]  )
-        u_k_corr     = util.calculate_current_minus_des_array(control_vec, self.des_control_seq[k_step])
         x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
-        u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
         if is_final_bool:
-            cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
+            cost_float   = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
-            cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
-                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
+            u_k_corr     = util.calculate_current_minus_des_array(control_vec, self.des_control_seq[k_step])
+            u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
+            cost_float   = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
+                                    +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
         return cost_float   
 
 class stateSpace_tests(unittest.TestCase):
@@ -269,7 +272,21 @@ class ilqrControllerState_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         self.assertEqual(True,True)
 
-class ilqr_controller_tests(unittest.TestCase):
+class initialize_ilqr_controller_tests(unittest.TestCase):
+    def test_accepts_valid_inputs(self):
+        data_and_funcs = shared_unit_test_data_and_funcs()
+        ilqr_config = data_and_funcs.ilqr_config
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.seed_state_vec,
+                                              data_and_funcs.control_seq,
+                                              data_and_funcs.time_step,
+                                              data_and_funcs.des_state_seq,
+                                              data_and_funcs.des_control_seq)
+        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        
+        self.assertEqual(len(state_seq),data_and_funcs.len_seq) 
+        self.assertEqual((jnp.abs(cost_float-prev_cost_float) > ilqr_config['converge_crit']), True)   
+
+class run_ilqr_controller_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         self.assertEqual(True,True)
 
@@ -287,16 +304,35 @@ class calculate_backwards_pass_tests(unittest.TestCase):
         
         k_seq, d_seq, Del_V_vec_seq = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
         print(k_seq)
-        self.assertEqual(len(k_seq),data_and_funcs.len_seq)
-        self.assertEqual(len(d_seq),data_and_funcs.len_seq)
-        self.assertEqual(len(Del_V_vec_seq),data_and_funcs.len_seq) 
+        self.assertEqual(len(k_seq),data_and_funcs.len_seq-1)
+        self.assertEqual(len(d_seq),data_and_funcs.len_seq-1)
+        self.assertEqual(len(Del_V_vec_seq),data_and_funcs.len_seq-1) 
         self.assertEqual(jnp.shape(k_seq[0]),(data_and_funcs.u_len, data_and_funcs.x_len))                  
         self.assertEqual(jnp.shape(d_seq[0]),(data_and_funcs.u_len, 1))                       
         self.assertEqual(jnp.shape(Del_V_vec_seq[0]),(1, 2)) 
 
 class calculate_forwards_pass_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-
+        data_and_funcs = shared_unit_test_data_and_funcs()
+        ilqr_config = data_and_funcs.ilqr_config
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.seed_state_vec,
+                                              data_and_funcs.control_seq,
+                                              data_and_funcs.time_step,
+                                              data_and_funcs.des_state_seq,
+                                              data_and_funcs.des_control_seq)
+        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        ctrl_state.state_seq = state_seq
+        ctrl_state.cost_float = cost_float
+        ctrl_state.prev_cost_float = prev_cost_float
+        k_seq, d_seq, Del_V_vec_seq = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        ctrl_state.K_seq         = k_seq
+        ctrl_state.d_seq         = d_seq
+        ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
+        # ctrl_state.K_seq         = data_and_funcs.K_seq
+        # ctrl_state.d_seq         = data_and_funcs.d_seq
+        # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
+        state_seq_new, control_seq_new, cost_float_new = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
+        
         self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
@@ -381,15 +417,13 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         u_len          = len(data_and_funcs.control_seq[0])
         control_seq    = data_and_funcs.control_seq
         state_seq      = data_and_funcs.state_seq
-        A_lin_array_expected_shape = (len_seq, x_len, x_len)
-        B_lin_array_expected_shape = (len_seq, x_len, u_len)
         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(data_and_funcs.pend_dyn_func_curried,
                                                                              self.discretize_ss_simple, 
                                                                              state_seq, 
                                                                              control_seq, 
                                                                              time_seq)
-        self.assertEqual(len(A_lin_array), len_seq)
-        self.assertEqual(len(B_lin_array), len_seq)
+        self.assertEqual(len(A_lin_array), len_seq-1)
+        self.assertEqual(len(B_lin_array), len_seq-1)
 
     # def test_calculate_linearized_state_space_seq_rejects_invalid_sequence_dimensions(self):
     #     time_step    = 0.1
@@ -433,7 +467,7 @@ class discretize_state_space_tests(unittest.TestCase):
         D = jnp.array([[0,0]])
         ss_c = ilqr.stateSpace(A,B,C,D)
         time_step = 0.1
-        c2d_methods = ['Euler', 'zoh', 'zohCombined']
+        c2d_methods = ['euler', 'zoh', 'zohCombined']
         for c2d_method  in c2d_methods:
             ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method)
             self.assertEqual(ss.a.shape, A.shape)
@@ -488,9 +522,9 @@ class initialize_backwards_pass_tests(unittest.TestCase):
         P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, len_seq)
         self.assertEqual(jnp.shape(P_kp1), (x_len, x_len))
         self.assertEqual(jnp.shape(p_kp1), (x_len, 1))
-        self.assertEqual(len(K_seq), len_seq)
-        self.assertEqual(len(K_seq), len_seq)
-        self.assertEqual(len(Del_V_vec_seq), len_seq) 
+        self.assertEqual(len(K_seq), len_seq-1)
+        self.assertEqual(len(K_seq), len_seq-1)
+        self.assertEqual(len(Del_V_vec_seq), len_seq-1) 
 
 class initialize_forwards_pass_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -499,7 +533,7 @@ class initialize_forwards_pass_tests(unittest.TestCase):
         len_seq           = shared_data_funcs.len_seq
         state_seq_updated, control_seq_updated, cost_float_updated, in_bounds_bool = ilqr.initialize_forwards_pass(seed_state_vec, len_seq)
         self.assertEqual(len(state_seq_updated), len_seq)
-        self.assertEqual(len(control_seq_updated), len_seq)
+        self.assertEqual(len(control_seq_updated), len_seq-1)
         self.assertEqual(cost_float_updated, 0)
         self.assertEqual(in_bounds_bool, False)
 
@@ -672,29 +706,3 @@ class analyze_cost_decrease_tests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-
-
-
-
-
-    # class vectorize_state_and_control(unittest.TestCase):
-    # def test_accepts_horizontal_inputs(self):
-    #     x = jnp.array([[1,2,3,4,5],[6,7,8,9,10]])
-    #     u = jnp.array([[0,1,2,3],[4,5,6,7]]) 
-    #     k   = 0
-    #     x_k_vec, u_k_vec = ilqr.vectorize_state_and_control(x[k], u[k])
-    #     x_k_vec_exp = jnp.array([[1],[2],[3],[4],[5]])
-    #     u_k_vec_exp = jnp.array([[0],[1],[2],[3]])
-    #     self.assertEqual(x_k_vec.all(), x_k_vec_exp.all())
-    #     self.assertEqual(u_k_vec.all(), u_k_vec_exp.all())
-
-    # def test_accepts_vertical_inputs(self):
-    #     x = jnp.array([[1],[2],[3],[4],[5]])
-    #     u = jnp.array([[0],[1],[2],[3]])
-    #     k   = 0
-    #     x_k_vec, u_k_vec = ilqr.vectorize_state_and_control(x, u)
-    #     x_k_vec_exp = jnp.array([[1],[2],[3],[4],[5]])
-    #     u_k_vec_exp = jnp.array([[0],[1],[2],[3]])
-    #     self.assertEqual(x_k_vec.all(), x_k_vec_exp.all())
-    #     self.assertEqual(u_k_vec.all(), u_k_vec_exp.all())    

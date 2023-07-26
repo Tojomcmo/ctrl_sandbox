@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
    controller_state = ilqr.ilqrControllerState(state_init_vec, control_init_seq, ilqr_config['time_step'])
 
-   controller_output = ilqr.ilqr_controller(ilqr_config, controller_state)
+   controller_output = ilqr.run_ilqr_controller(ilqr_config, controller_state)
 
    # calculate initial rollout
    # 
