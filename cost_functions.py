@@ -11,8 +11,8 @@ def cost_func_quad_state_and_control(cost_func_params:dict, state_vec, control_v
     R  = cost_func_params['R']
     Qf = cost_func_params['Qf']
     # check that dimensions match [TODO]
-    x_k_corr     = util.calculate_current_minus_des(state_vec  , state_des_seq[k_step]  )
-    u_k_corr     = util.calculate_current_minus_des(control_vec, control_des_seq[k_step])
+    x_k_corr     = util.calculate_current_minus_des_array(state_vec  , state_des_seq[k_step]  )
+    u_k_corr     = util.calculate_current_minus_des_array(control_vec, control_des_seq[k_step])
     x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
     u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
     if is_final_bool:

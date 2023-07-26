@@ -9,9 +9,9 @@ def is_pos_def(x):
 def reqularize_mat(mat, ro):
     return mat + ro * jnp.eye(mat.shape[0], mat.shape[1])
 
-def calculate_current_minus_des(current_seq,desired_seq):  
-    current_minus_des_seq = current_seq - desired_seq
-    return current_minus_des_seq
+def calculate_current_minus_des_array(current_array,desired_array):  
+    current_minus_des_array = current_array - desired_array
+    return current_minus_des_array
 
 def vec_1D_array_to_col(array_1D):
     col_vec = array_1D.reshape(-1,1)
@@ -20,3 +20,7 @@ def vec_1D_array_to_col(array_1D):
 def vec_1D_array_to_row(array_1D):
     row_vec = array_1D.reshape(1,-1)
     return row_vec
+
+def get_vec_from_seq_as_col(vec_seq, k):
+    col_vec = vec_seq[k].reshape(-1,1)
+    return col_vec

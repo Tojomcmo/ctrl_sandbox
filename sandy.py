@@ -23,8 +23,10 @@ print('a_jax mult x: ',  a_jax @ x_t )
 print('a mult a_jax_k: ', a @ (a_jax[k]).reshape(-1,1))
 
 
-asdf = []
-asdf.append(a_k)
-print(asdf)
-asdf.append(a_k)
-print(asdf)
+seed_control_vec_seq = [jnp.zeros([1,1])] * 3
+
+print(seed_control_vec_seq)
+
+
+a = list(range(10))
+print(a)
