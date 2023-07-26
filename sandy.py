@@ -21,3 +21,10 @@ print(x_t)
 print('a mult x: ',  a @ x_t )
 print('a_jax mult x: ',  a_jax @ x_t )
 print('a mult a_jax_k: ', a @ (a_jax[k]).reshape(-1,1))
+
+
+asdf = []
+asdf.append(a_k)
+print(asdf)
+asdf.append(a_k)
+print(asdf)

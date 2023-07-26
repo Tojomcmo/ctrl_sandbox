@@ -17,7 +17,9 @@ class ilqrControllerState:
     def __init__(self, seed_state_vec, seed_contro1_seq, time_step, state_des_seq = None, control_des_seq = None):
         self.seed_state_vec        = seed_state_vec
         self.seed_control_seq      = seed_contro1_seq
-        self.len_seq               = len(seed_contro1_seq)
+        self.len_seq               = jnp.shape(seed_contro1_seq)[0]
+        self.state_len             = jnp.shape(seed_state_vec)[1]
+        self.control_len           = jnp.shape(seed_contro1_seq)[1]
         if state_des_seq == None:
             self.state_des_seq     = jnp.zeros([self.len_seq, self.num_states()])
         else:
@@ -26,7 +28,7 @@ class ilqrControllerState:
             self.control_des_seq   = jnp.zeros([self.len_seq, self.num_controls()])
         else:
             self.control_des_seq   = control_des_seq 
-        self.state_seq             = []
+        self.state_seq             = seed_state_vec
         self.control_seq           = seed_contro1_seq
         self.des_state_diff_seq    = []
         self.des_control_diff_seq  = []
@@ -34,12 +36,12 @@ class ilqrControllerState:
         self.control_seq_minus_des = []
         self.cost_float            = 0.0
         self.prev_cost_float       = 0.0
-        self.K_seq                 = []
-        self.d_seq                 = []
-        self.Del_V_vec_seq         = []
+        self.K_seq                 = jnp.empty([self.len_seq,self.control_len, self.state_len])
+        self.d_seq                 = jnp.empty([self.len_seq,self.control_len, 1])
+        self.Del_V_vec_seq         = jnp.empty([self.len_seq,1, 2])
         self.iter_int              = 0
         self.time_step             = time_step
-        self.time_seq              = jnp.arange(len(self.seed_control_seq) +1) * time_step
+        self.time_seq              = jnp.arange(self.len_seq) * time_step
         
     def update_time_sequence(self, new_time_step):
         self.time_step = new_time_step
@@ -74,7 +76,7 @@ class ilqrConfiguredFuncs:
     def create_curried_state_trans_func(self, ilqr_config):
         state_trans_func         = ilqr_config['state_trans_func']
         state_trans_func_params  = ilqr_config['state_trans_func_params']
-        state_trans_func_curried = lambda t,x,u=None: state_trans_func(t,x,u,state_trans_func_params)
+        state_trans_func_curried = lambda t,x,u=None: state_trans_func(state_trans_func_params,t,x,u)
         return state_trans_func_curried
     
     def create_curried_simulate_dyn_func(self, ilqr_config):
@@ -141,9 +143,9 @@ def ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
         # retain previous cost value for convergence check
         ctrl_state.prev_cost_float = ctrl_state.cost_float
         # perform backwards pass to calculate gains and expected value function change
-        ctrl_state.K_seq,     ctrl_state.d_seq,       ctrl_state.Del_V_vec_seq  = calculate_backwards_pass(config_funcs, ctrl_state)
+        ctrl_state.K_seq, ctrl_state.d_seq, ctrl_state.Del_V_vec_seq        = calculate_backwards_pass(config_funcs, ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        ctrl_state.state_seq, ctrl_state.control_seq, ctrl_state.cost_float     = calculate_forwards_pass(config_funcs, ctrl_state)
+        ctrl_state.state_seq, ctrl_state.control_seq, ctrl_state.cost_float = calculate_forwards_pass(config_funcs, ctrl_state)
         # increment iteration counter
         ctrl_state.iter_int += ctrl_state.iter_int
     return ctrl_state
@@ -168,15 +170,18 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
 #   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
 
     Ad_seq, Bd_seq = calculate_linearized_state_space_seq(config_funcs.state_trans_func,
-                                                        config_funcs.c2d_ss_func,
-                                                        ctrl_state.state_seq,
-                                                        ctrl_state.control_seq,
-                                                        ctrl_state.time_seq)
+                                                          config_funcs.c2d_ss_func,
+                                                          ctrl_state.state_seq,
+                                                          ctrl_state.control_seq,
+                                                          ctrl_state.time_seq)
     P_N, p_N = calculate_final_cost_to_go_approximation(config_funcs.cost_func, 
-                                                        ctrl_state.state_seq_minus_des[-1], 
-                                                        len(ctrl_state.control_seq[0]))
+                                                        ctrl_state.state_seq[-1], 
+                                                        ctrl_state.control_len)
     
-    P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N)
+    P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
+                                                                          ctrl_state.state_len,
+                                                                          ctrl_state.control_len,
+                                                                          ctrl_state.len_seq)
     reg_factor = 0
     is_valid_q_uu = False
     while is_valid_q_uu is False:
@@ -186,8 +191,8 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
             q_x, q_u, q_xx, q_ux, q_uu = taylor_expand_pseudo_hamiltonian(config_funcs.cost_func,
                                                                         Ad_seq[k_step],
                                                                         Bd_seq[k_step],
-                                                                        ctrl_state.state_seq_minus_des[k_step],
-                                                                        ctrl_state.control_seq_minus_des[k_step],
+                                                                        ctrl_state.state_seq[k_step],
+                                                                        ctrl_state.control_seq[k_step],
                                                                         P_kp1,
                                                                         p_kp1,
                                                                         k_step)
@@ -196,20 +201,31 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
             if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
                 reg_factor    = reg_factor + 0.1
-                P_kp1, p_kp1, k_seq, d_seq, Del_V_seq = initialize_backwards_pass(P_N, p_N)
+                P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
+                                                                                      ctrl_state.state_len,
+                                                                                      ctrl_state.control_len,
+                                                                                      ctrl_state.len_seq)
                 break
             else:
                 K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux, q_u)
                 P_kp1, p_kp1, Del_V_vec_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
-                k_seq.extend(K_k)
-                d_seq.extend(d_k)
-                Del_V_vec_seq.extend(Del_V_vec_k)
+                seq_loc = ctrl_state.len_seq-(idx)
+                print(K_k[0])
+                print(jnp.shape(k_seq))
+                print(k_seq.at[seq_loc].get())
+                print(k_seq[0])
+                k_seq.at[seq_loc].set(K_k)
+                d_seq.at[k_step:(k_step+1)].set(d_k)
+                Del_V_vec_seq.at[k_step:(k_step+1),:,:].set(Del_V_vec_k)
+                print(k_seq)
 
     return k_seq, d_seq, Del_V_vec_seq
 
 def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
     #initialize updated state vec, updated control_vec, line search factor
-    state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec)
+    state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
+                                                                                           jnp.shape(ctrl_state.state_seq),  
+                                                                                           jnp.shape(ctrl_state.control_seq))
     line_search_factor = 1
     line_search_scale_param = 0.5
     while not in_bounds_bool:
@@ -224,8 +240,9 @@ def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCon
             # calculate updated next state with dynamics function
             x_kp1_new = config_funcs.state_trans_func(ctrl_state.time_seq[k_step], state_seq_new[k_step], u_k_new)
             # populate state and control sequences
-            control_seq_new.append(u_k_new)
-            state_seq_new.append(x_kp1_new)
+            control_seq_new.at[k_step:(k_step+1),:].add(u_k_new)
+            state_seq_new.at[k_step:(k_step+1),:].add(x_kp1_new)
+
         # shift sequences for cost calculation wrt desired trajectories
         # calculate new trajectory cost    
         cost_float_new = calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
@@ -234,7 +251,9 @@ def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCon
         in_bounds_bool = config_funcs.analyze_cost_dec_func(cost_decrease_ratio)
         # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
         if not in_bounds_bool:
-            initialize_forwards_pass(ctrl_state.seed_state_vec)
+            state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
+                                                                                                    jnp.shape(ctrl_state.state_seq),  
+                                                                                                    jnp.shape(ctrl_state.control_seq))
             line_search_factor = line_search_factor * line_search_scale_param
     return state_seq_new, control_seq_new, cost_float_new
 
@@ -248,15 +267,15 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
     int_iter       = len(control_seq)
     state_seq      = state_init
-    time_seq       = jnp.arange(int_iter + 1) * time_step
-    time_span      = (0, time_step)
+    time_seq       = jnp.arange(int_iter) * time_step
     if sim_method == 'Euler':
-        for idx in range(int_iter):
+        for idx in range(int_iter-1):
             state_dot_row = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
             state_next    = jnp.array([state_seq[idx] + state_dot_row * time_step])
             state_seq     = jnp.append(state_seq, state_next, axis=0)
     elif sim_method == 'solve_ivp_zoh':
-        for idx in range(int_iter):
+        time_span = (0,time_step)
+        for idx in range(int_iter-1):
             dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx]))
             result_ivp   = solve_ivp(dyn_func_zoh, time_span, state_seq[idx])
             state_next   = jnp.array([result_ivp.y[:,-1]])
@@ -264,6 +283,46 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
     else:
         raise ValueError("invalid simulation method")
     return state_seq
+
+def linearize_dynamics(dyn_func,t_primal, x_primal, u_primal):
+# Linearizes the dynamics function about the primals x and u
+# dyn_func  - [in] continuous function of state transition
+# x_primal  - [in] primal state linearization point
+# u         - [in] primal control linearization point
+# A_lin     - [out] continuous time linearization of dyn_func wrt state eval at x,u
+# B_lin     - [out] continuous time linearization of dyn_func wrt control eval at x,u
+    a_lin = jax.jacfwd(lambda x: dyn_func(t_primal, x       , u_primal))(x_primal)
+    b_lin = jax.jacfwd(lambda u: dyn_func(t_primal, x_primal, u       ))(u_primal)
+    return a_lin, b_lin
+
+def calculate_linearized_state_space_seq(dyn_func, c2d_ss_func, state_seq, control_seq, time_seq):
+    # walk through state and control sequences
+    # for each element, linearize the dyn_func dynamics
+    # calculate the discretized dynamics for each linearized element
+    # return a 3d matrix of both state and control transition matrices for each time step
+    if len(state_seq.shape) != 2 or len(control_seq.shape) != 2:
+        raise ValueError('state or control sequence is incorrect array dimension. sequences must be 2d arrays')
+    elif len(state_seq) != len(control_seq):
+        raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
+    else:
+        len_seq     = len(time_seq)
+        state_dim   = jnp.shape(state_seq)[1]
+        control_dim = jnp.shape(control_seq)[1]
+        a_lin_array = jnp.zeros((len_seq,state_dim, state_dim))
+        b_lin_array = jnp.zeros((len_seq,state_dim, control_dim))
+        c_mat_dummy = jnp.zeros((1,state_dim))
+        d_mat_dummy = jnp.zeros((1,control_dim))
+        for idx in range(len_seq):
+            a_lin, b_lin             = linearize_dynamics(dyn_func,time_seq[idx], state_seq[idx], control_seq[idx])
+            ss_pend_lin_continuous   = stateSpace(a_lin, b_lin, c_mat_dummy, d_mat_dummy)
+            ss_pend_lin_discrete     = c2d_ss_func(ss_pend_lin_continuous)
+            if idx == 0:
+                a_lin_array = jnp.array([ss_pend_lin_discrete.a])
+                b_lin_array = jnp.array([ss_pend_lin_discrete.b])
+            else:
+                a_lin_array = jnp.append(a_lin_array, jnp.array([ss_pend_lin_discrete.a]), axis=0)
+                b_lin_array = jnp.append(b_lin_array, jnp.array([ss_pend_lin_discrete.b]), axis=0)
+    return a_lin_array, b_lin_array
 
 def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_method='Euler'):
 #   A - (nxn) - continuous state transition matrix
@@ -293,7 +352,7 @@ def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_me
         m  = input_state_space.b.shape[1]
         p  = input_state_space.c.shape[0]
 
-        if c2d_method=='Euler' :
+        if c2d_method=='euler' :
             a_d = jnp.eye(n) + (input_state_space.a * time_step)
             b_d = input_state_space.b * time_step
             c_d = input_state_space.c
@@ -321,58 +380,20 @@ def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_me
     d_state_space = stateSpace(a_d, b_d, c_d, d_d, time_step)
     return d_state_space
 
-def linearize_dynamics(dyn_func, x_primal, u_primal, t_primal):
-# Linearizes the dynamics function about the primals x and u
-# dyn_func  - [in] continuous function of state transition
-# x_primal  - [in] primal state linearization point
-# u         - [in] primal control linearization point
-# A_lin     - [out] continuous time linearization of dyn_func wrt state eval at x,u
-# B_lin     - [out] continuous time linearization of dyn_func wrt control eval at x,u
-    a_lin = jax.jacfwd(lambda x: dyn_func(t_primal, x       , u_primal))(x_primal)
-    b_lin = jax.jacfwd(lambda u: dyn_func(t_primal, x_primal, u       ))(u_primal)
-    return a_lin, b_lin
-
-def calculate_linearized_state_space_seq(dyn_func, c2d_ss_func, state_seq, control_seq, time_seq):
-    # walk through state and control sequences
-    # for each element, linearize the dyn_func dynamics
-    # calculate the discretized dynamics for each linearized element
-    # return a 3d matrix of both state and control transition matrices for each time step
-    if len(state_seq.shape) != 2 or len(control_seq.shape) != 2:
-        raise ValueError('state or control sequence is incorrect array dimension. sequences must be 2d arrays')
-    elif len(state_seq) != len(control_seq)+1:
-        raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
-    else:
-        state_dim   = len(state_seq[1,:])
-        control_dim = len(control_seq[1,:])
-        a_lin_array = jnp.zeros((state_dim, state_dim,1))
-        b_lin_array = jnp.zeros((state_dim, control_dim,1))
-        c_mat_dummy = jnp.zeros((1,state_dim))
-        d_mat_dummy = jnp.zeros((1,control_dim))
-        for idx,_ in enumerate(control_seq):
-            a_lin, b_lin             = linearize_dynamics(dyn_func, state_seq[idx], control_seq[idx], time_seq[idx])
-            ss_pend_lin_continuous   = stateSpace(a_lin, b_lin, c_mat_dummy, d_mat_dummy)
-            ss_pend_lin_discrete     = c2d_ss_func(ss_pend_lin_continuous)
-            if idx == 0:
-                a_lin_array = jnp.array([ss_pend_lin_discrete.a])
-                b_lin_array = jnp.array([ss_pend_lin_discrete.b])
-            else:
-                a_lin_array = jnp.append(a_lin_array, jnp.array([ss_pend_lin_discrete.a]), axis=0)
-                b_lin_array = jnp.append(b_lin_array, jnp.array([ss_pend_lin_discrete.b]), axis=0)
-    return a_lin_array, b_lin_array
-
-def initialize_backwards_pass(P_N, p_N):
-    K_seq=[]
-    d_seq=[]
-    Del_V_vec_seq=[]
+def initialize_backwards_pass(P_N, p_N, state_dim, control_dim, len_seq):
+    K_seq         = jnp.zeros([len_seq, control_dim, state_dim])
+    d_seq         = jnp.zeros([len_seq, control_dim, 1])
+    Del_V_vec_seq = jnp.zeros([len_seq, 1, 2])
     P_kp1 = P_N
     p_kp1 = p_N
     return P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq
 
-def initialize_forwards_pass(seed_state_vec):
-    control_seq_updated = []
-    state_seq_updated = []
+def initialize_forwards_pass(seed_state_vec, state_seq_dim, control_seq_dim):
+    control_seq_updated = jnp.zeros([control_seq_dim[0], control_seq_dim[1]])
+    state_seq_updated   = jnp.zeros([state_seq_dim[0], state_seq_dim[1]])
+    seed_state_vec.reshape(1,-1)
+    state_seq_updated = state_seq_updated.at[0:1,:].add(seed_state_vec)
     cost_float_updated = 0
-    state_seq_updated.append(seed_state_vec)
     in_bounds_bool = False
     return state_seq_updated, control_seq_updated, cost_float_updated, in_bounds_bool
 
@@ -384,6 +405,7 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
     for idx in range(seq_len):
         if (idx == seq_len-1):
             incremental_cost = cost_func(state_seq[idx], jnp.zeros(len(control_seq[0])), idx, is_final_bool=True)
+            break
         incremental_cost = cost_func(state_seq[idx], control_seq[idx], idx)
         total_cost = total_cost + incremental_cost
     return total_cost
@@ -396,11 +418,11 @@ def taylor_expand_cost(cost_func, x_k, u_k, k_step):
     # create lambda function of reduced inputs to only a single vector
     cost_func_xu = lambda xu_k: cost_func(xu_k[:len(x_k)], xu_k[len(x_k):], k_step)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat     = jax.jacfwd(cost_func_xu)(xu_k)
+    jac_cat     = jax.jacfwd(cost_func_xu)(xu_k)[0][0]
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat = jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k)
-    l_x = jac_cat[:len(x_k)]
-    l_u = jac_cat[len(x_k):]
+    hessian_cat = jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k)[0][0]
+    l_x = (jac_cat[:len(x_k)]).reshape(-1,1)
+    l_u = (jac_cat[len(x_k):]).reshape(-1,1)
     l_xx = hessian_cat[:len(x_k),:len(x_k)]
     l_uu = hessian_cat[len(x_k):,len(x_k):]
     l_ux = hessian_cat[len(x_k):,:len(x_k)]
@@ -431,13 +453,13 @@ def calculate_final_cost_to_go_approximation(cost_func, x_N, len_u):
     # create concatenated state and control vector of primal points
     xu_N         = np.concatenate([x_N, jnp.zeros(len_u)])
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu = lambda xu_N: cost_func(xu_N[:len(x_N)], xu_N[len(x_N):], k_step=-1, is_final_bool=True)
+    cost_func_xu = lambda xu_N: cost_func(xu_N[:len(x_N)], xu_N[len(x_N):], -1, is_final_bool=True)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = jax.jacfwd(cost_func_xu)(xu_N)
+    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_N))[0][0]
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = jax.jacfwd(jax.jacrev(cost_func_xu))(xu_N)
-    l_x          = jac_cat[:len(x_N)]
-    l_xx         = hessian_cat[:len(x_N),:len(x_N)]
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_N))[0][0]
+    l_x          = (jac_cat[:(len(x_N))]).reshape(-1,1)
+    l_xx         = hessian_cat[:(len(x_N)),:(len(x_N))]
     P_N = l_xx
     p_N = l_x
     return P_N, p_N
@@ -451,7 +473,7 @@ def calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k):
     q_xu        = q_ux.transpose()
     P_k         = (q_xx) + (K_kt @ q_uu @ K_k) + (K_kt @ q_ux) + (q_xu @ K_k)
     p_k         = (q_x ) + (K_kt @ q_uu @ d_k) + (K_kt @ q_u ) + (q_xu @ d_k)
-    Del_V_vec_k = jnp.array([[(d_kt @ q_u)],[(0.5) * (d_kt @ q_uu @ d_k)]])
+    Del_V_vec_k = jnp.array([[(d_kt @ q_u)],[(0.5) * (d_kt @ q_uu @ d_k)]]).reshape(1,-1)
     return P_k, p_k, Del_V_vec_k
 
 def calculate_optimal_gains(q_uu_reg, q_ux, q_u):
@@ -468,8 +490,6 @@ def calculate_u_k_new(u_nom_k ,x_nom_k ,x_new_k, K_k, d_k, line_search_factor):
     x_new_k_col     = util.vec_1D_array_to_col(x_new_k)
     u_k_updated_col = u_nom_k_col + K_k @ (x_new_k_col - x_nom_k_col) + line_search_factor * d_k
     u_k_updated_row = util.vec_1D_array_to_row(u_k_updated_col)
-    print(K_k)
-    print(u_k_updated_row)
     return u_k_updated_row
 
 def calculate_cost_decrease_ratio(prev_cost_float, cost_float_updated, Del_V_vec_seq, line_search_factor):

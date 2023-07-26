@@ -68,6 +68,13 @@ class vec_1D_array_to_col_tests(unittest.TestCase):
         x_k_vec_exp = jnp.array([[1],[2],[3],[4],[5]])
         self.assertEqual(x_k_vec.all(), x_k_vec_exp.all())
 
+    def test_accepts_ones_input(self):
+        x           = jnp.ones([2,5])
+        x_k_vec     = util.vec_1D_array_to_col(x)
+        x_k_vec_exp = jnp.array([[1],[1],[1],[1],[1]])
+        self.assertEqual(x_k_vec.all(), x_k_vec_exp.all())
+
+
 class vec_1D_array_to_row_tests(unittest.TestCase):
     def test_accepts_horizontal_inputs(self):
         x = jnp.array([[1,2,3,4,5],[6,7,8,9,10]])
