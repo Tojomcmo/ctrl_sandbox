@@ -14,15 +14,15 @@ from scipy.integrate import solve_ivp
 import ilqr_utils as util
 
 class ilqrControllerState:
-    def __init__(self, seed_state_vec, seed_contro1_seq, time_step, state_des_seq = None, control_des_seq = None):
-        # direct population
+    def __init__(self,ilqr_config, seed_state_vec, seed_contro1_seq, state_des_seq = None, control_des_seq = None):
+        # direct parameter population
         self.seed_state_vec        = seed_state_vec
         self.seed_control_seq      = seed_contro1_seq
-        self.time_step             = time_step
+        self.time_step             = ilqr_config['time_step']
         self.cost_float            = 0.0
         self.prev_cost_float       = 0.0
         self.iter_int              = 0        
-        # dependent population
+        # dependent parameter population
         self.len_seq               = len(seed_contro1_seq)+1
         self.state_len             = self.get_num_states()
         self.control_len           = self.get_num_controls()
@@ -309,12 +309,12 @@ def calculate_linearized_state_space_seq(dyn_func, c2d_ss_func, state_seq, contr
         raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
     else:
         len_seq     = len(time_seq)
-        state_dim   = jnp.shape(state_seq[0])[0]
-        control_dim = jnp.shape(control_seq[0])[0]
+        state_len   = jnp.shape(state_seq[0])[0]
+        control_len = jnp.shape(control_seq[0])[0]
         a_lin_array = [None] * (len_seq-1)
         b_lin_array = [None] * (len_seq-1)
-        c_mat_dummy = jnp.zeros((1,state_dim))
-        d_mat_dummy = jnp.zeros((1,control_dim))
+        c_mat_dummy = jnp.zeros((1,state_len))
+        d_mat_dummy = jnp.zeros((1,control_len))
         for idx in range(len_seq-1):
             a_lin, b_lin             = linearize_dynamics(dyn_func,time_seq[idx], state_seq[idx], control_seq[idx])
             ss_pend_lin_continuous   = stateSpace(a_lin, b_lin, c_mat_dummy, d_mat_dummy)
@@ -400,15 +400,13 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
     # check state_seq and control_seq are valid lengths
     # Calculate total cost
     seq_len    = len(state_seq)
-    control_len = jnp.shape(control_seq[0])
     total_cost = 0
     for idx in range(seq_len):
         if (idx == seq_len-1):
             incremental_cost = cost_func(state_seq[idx], jnp.zeros([1,1]), idx, is_final_bool=True)
         else:
             incremental_cost = cost_func(state_seq[idx], control_seq[idx], idx)
-            total_cost = total_cost + incremental_cost
-    total_cost.reshape(-1) 
+        total_cost = total_cost + incremental_cost 
     return total_cost
 
 def taylor_expand_cost(cost_func, x_k, u_k, k_step):
