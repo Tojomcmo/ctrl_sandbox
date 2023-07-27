@@ -39,8 +39,8 @@ class calculate_seq_minus_des_array_tests(unittest.TestCase):
         C = jnp.array([[1,1,1,1,1]])
         k = 0
         A_minus_B = util.calculate_current_minus_des_array(A[0],B[0])
-        print(A_minus_B)
-        print(C)
+        # print(A_minus_B)
+        # print(C)
         self.assertEqual(A_minus_B.all(), C.all())           
 
 class vec_1D_array_to_col_tests(unittest.TestCase):
@@ -62,7 +62,6 @@ class vec_1D_array_to_col_tests(unittest.TestCase):
         x_k_vec     = util.vec_1D_array_to_col(x)
         x_k_vec_exp = jnp.array([[1],[1],[1],[1],[1]])
         self.assertEqual(x_k_vec.all(), x_k_vec_exp.all())
-
 
 class vec_1D_array_to_row_tests(unittest.TestCase):
     def test_accepts_horizontal_inputs(self):

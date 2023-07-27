@@ -16,6 +16,11 @@ class shared_unit_test_data_and_funcs:
                         'R'  : jnp.array([[1.]]),
                         'Qf' : jnp.array([[1.,0],[0,1.]])
                       } 
+        self.pend_cost_func_params = {
+                        'Q'  : jnp.array([[1.,0],[0,1.]]),
+                        'R'  : jnp.array([[0.001]]),
+                        'Qf' : jnp.array([[100.,0],[0,100.]])
+                      } 
         self.pend_unit_state_trans_params = {
                         'b'  : 1.0,
                         'l'  : 1.0,
@@ -31,17 +36,30 @@ class shared_unit_test_data_and_funcs:
                         'l'  : 2.0,
                         'g'  : 3.0
                       } 
-        self.ilqr_config = {
-            'state_trans_func'          : self.pend_dyn_func_full,
+        self.ilqr_config_lin_pend_unit_cost = {
+            'state_trans_func'          : self.pend_lin_dyn_func_full,
             'state_trans_func_params'   : self.pend_unit_state_trans_params,
             'cost_func'                 : self.cost_func_quad_state_and_control_full,
             'cost_func_params'          : self.pend_unit_cost_func_params,
-            'sim_method'                : 'euler',
-            'c2d_method'                : 'euler',
+            'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
+            'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
             'max_iter'                  : 100,
             'time_step'                 : 0.1,
-            'converge_crit'             : 1e-6,
-            'cost_ratio_bounds'         : [1e-4, 10]
+            'converge_crit'             : 1e-5,
+            'cost_ratio_bounds'         : [1e-6, 20]
+            }
+        
+        self.ilqr_config_nl_pend = {
+            'state_trans_func'          : self.pend_dyn_func_full,
+            'state_trans_func_params'   : self.pend_unit_state_trans_params,
+            'cost_func'                 : self.cost_func_quad_state_and_control_full,
+            'cost_func_params'          : self.pend_cost_func_params,
+            'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
+            'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
+            'max_iter'                  : 100,
+            'time_step'                 : 0.1,
+            'converge_crit'             : 1e-5,
+            'cost_ratio_bounds'         : [1e-6, 20]
             }
         
         # self.len_seq              = 20
@@ -74,7 +92,7 @@ class shared_unit_test_data_and_funcs:
         self.d_seq            = [jnp.ones([self.u_len, 1         ])] * (self.len_seq-1)
         self.Del_V_vec_seq    = [jnp.ones([1         , 2         ])] * (self.len_seq-1)
 
-        self.time_step        = self.ilqr_config['time_step']
+        self.time_step        = self.ilqr_config_lin_pend_unit_cost['time_step']
         time_id               = list(range(self.len_seq))
         self.time_seq         = [i * self.time_step for i in time_id]
 
@@ -132,6 +150,38 @@ class shared_unit_test_data_and_funcs:
                     ])
         return state_dot  
 
+    def pend_lin_dyn_func_full(self, params, time, state, control):
+    # continuous time dynamic equation for simple pendulum 
+    # time[in]       - time component, necessary prarmeter for ode integration
+    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
+    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
+    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
+    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        g = params['g']
+        l = params['l']
+        b = params['b']
+        state_dot = jnp.array([
+                    state[1],
+                    -((b/l) * state[1]) - ((state[0]) * (g/l)) + control[0]
+                    ])
+        return state_dot
+    
+    def pend_unit_lin_dyn_func_curried(self, time, state, control):
+    # continuous time dynamic equation for simple pendulum 
+    # time[in]       - time component, necessary prarmeter for ode integration
+    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
+    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
+    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
+    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        g = 1.0
+        l = 1.0
+        b = 1.0
+        state_dot = jnp.array([
+                    state[1],
+                    -((b/l) * state[1]) - ((state[0]) * (g/l)) + control[0]
+                    ])
+        return state_dot
+    
     def cost_func_quad_state_and_control_full(self,cost_func_params:dict, state_vec, control_vec, k_step, state_des_seq, control_des_seq, is_final_bool=False):
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
@@ -276,34 +326,60 @@ class ilqrControllerState_tests(unittest.TestCase):
 class initialize_ilqr_controller_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config,
+        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
                                               data_and_funcs.seed_state_vec,
                                               data_and_funcs.control_seq,
                                               data_and_funcs.des_state_seq,
                                               data_and_funcs.des_control_seq)
         config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
-        
         self.assertEqual(len(state_seq),data_and_funcs.len_seq) 
         self.assertEqual((jnp.abs(cost_float-prev_cost_float) > ilqr_config['converge_crit']), True)   
 
 class run_ilqr_controller_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
+    def test_accepts_valid_linear_inputs(self):
+        data_and_funcs = shared_unit_test_data_and_funcs()
+        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
+                                              data_and_funcs.seed_state_vec,
+                                              data_and_funcs.control_seq,
+                                              data_and_funcs.des_state_seq,
+                                              data_and_funcs.des_control_seq)
+        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        ctrl_state.state_seq = state_seq
+        ctrl_state.cost_float = cost_float
+        ctrl_state.prev_cost_float = prev_cost_float
+        ctrl_state = ilqr.run_ilqr_controller(ilqr_config, config_funcs, ctrl_state)
+        self.assertEqual(True,True)
+
+    def test_accepts_valid_nl_inputs(self):
+        data_and_funcs = shared_unit_test_data_and_funcs()
+        ilqr_config = data_and_funcs.ilqr_config_nl_pend
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_nl_pend,
+                                              data_and_funcs.seed_state_vec,
+                                              data_and_funcs.control_seq,
+                                              data_and_funcs.des_state_seq,
+                                              data_and_funcs.des_control_seq)
+        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        ctrl_state.state_seq = state_seq
+        ctrl_state.cost_float = cost_float
+        ctrl_state.prev_cost_float = prev_cost_float
+        ctrl_state = ilqr.run_ilqr_controller(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
 class calculate_backwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
+    def test_accepts_valid_linear_dyn_inputs(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.seed_state_vec,
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
+                                              data_and_funcs.seed_state_vec,
                                               data_and_funcs.control_seq,
-                                              data_and_funcs.time_step,
                                               data_and_funcs.des_state_seq,
                                               data_and_funcs.des_control_seq)
         ctrl_state.state_seq = data_and_funcs.state_seq
-        config_funcs = ilqr.ilqrConfiguredFuncs(data_and_funcs.ilqr_config,
+        config_funcs = ilqr.ilqrConfiguredFuncs(data_and_funcs.ilqr_config_lin_pend_unit_cost,
                                                 ctrl_state)
         
-        k_seq, d_seq, Del_V_vec_seq = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
         self.assertEqual(len(k_seq),data_and_funcs.len_seq-1)
         self.assertEqual(len(d_seq),data_and_funcs.len_seq-1)
         self.assertEqual(len(Del_V_vec_seq),data_and_funcs.len_seq-1) 
@@ -312,27 +388,48 @@ class calculate_backwards_pass_tests(unittest.TestCase):
         self.assertEqual(jnp.shape(Del_V_vec_seq[0]),(1, 2)) 
 
 class calculate_forwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
+    def test_accepts_valid_linear_dyn_inputs(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.seed_state_vec,
+        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
+                                              data_and_funcs.seed_state_vec,
                                               data_and_funcs.control_seq,
-                                              data_and_funcs.time_step,
                                               data_and_funcs.des_state_seq,
                                               data_and_funcs.des_control_seq)
         config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
         ctrl_state.state_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
-        k_seq, d_seq, Del_V_vec_seq = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
         ctrl_state.K_seq         = k_seq
         ctrl_state.d_seq         = d_seq
         ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
-        
+        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
+        self.assertEqual(True,True)
+
+    def test_accepts_valid_nl_dyn_inputs(self):
+        data_and_funcs = shared_unit_test_data_and_funcs()
+        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
+        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_nl_pend,
+                                              data_and_funcs.seed_state_vec,
+                                              data_and_funcs.control_seq,
+                                              data_and_funcs.des_state_seq,
+                                              data_and_funcs.des_control_seq)
+        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        ctrl_state.state_seq = state_seq
+        ctrl_state.cost_float = cost_float
+        ctrl_state.prev_cost_float = prev_cost_float
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        ctrl_state.K_seq         = k_seq
+        ctrl_state.d_seq         = d_seq
+        ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
+        # ctrl_state.K_seq         = data_and_funcs.K_seq
+        # ctrl_state.d_seq         = data_and_funcs.d_seq
+        # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
+        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
@@ -420,10 +517,39 @@ class linearize_dynamics_tests(unittest.TestCase):
         a_lin_expected = jnp.array([[0, 1], 
                                     [-(g/l)*jnp.cos(state_pos), -(b/l)]])
         b_lin_expected = jnp.array([[0],[1]])
-        print('a_lin: ', a_lin)
-        print('a_lin_expected: ', a_lin_expected)
-        print('b_lin: ', b_lin)
-        print('b_lin_expected: ', b_lin_expected)
+        # print('a_lin: ', a_lin)
+        # print('a_lin_expected: ', a_lin_expected)
+        # print('b_lin: ', b_lin)
+        # print('b_lin_expected: ', b_lin_expected)
+        self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
+        self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
+        self.assertEqual(a_lin.all(), a_lin_expected.all())
+        self.assertEqual(b_lin.all(), b_lin_expected.all())
+
+    def test_linearize_dynamics_accepts_valid_linear_case(self):
+        data_and_funcs  = shared_unit_test_data_and_funcs()
+        time_seq        = data_and_funcs.time_seq
+        control_seq     = data_and_funcs.control_seq
+        state_seq       = data_and_funcs.state_seq
+        x_len           = data_and_funcs.x_len
+        u_len           = data_and_funcs.u_len
+        k_step          = 1
+        a_lin, b_lin    = ilqr.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
+                                                  time_seq[k_step],
+                                                  state_seq[k_step],
+                                                  control_seq[k_step])
+        
+        g = data_and_funcs.pend_unit_state_trans_params['g']
+        l = data_and_funcs.pend_unit_state_trans_params['l']
+        b = data_and_funcs.pend_unit_state_trans_params['b']
+        state_pos = state_seq[k_step][0][0]
+        a_lin_expected = jnp.array([[0, 1], 
+                                    [-(g/l), -(b/l)]])
+        b_lin_expected = jnp.array([[0],[1]])
+        # print('a_lin: ', a_lin)
+        # print('a_lin_expected: ', a_lin_expected)
+        # print('b_lin: ', b_lin)
+        # print('b_lin_expected: ', b_lin_expected)
         self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
         self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
         self.assertEqual(a_lin.all(), a_lin_expected.all())
@@ -663,9 +789,9 @@ class taylor_expand_cost_tests(unittest.TestCase):
         l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.des_control_seq[k_step])
         l_xx_expected = cost_func_params['Q']
         l_uu_expected = cost_func_params['R']  
-        print('l_x: ', l_x)  
-        print('l_x_expected: ',l_x_expected)    
-        print('state_length: ', len(x_seq[0]))
+        # print('l_x: ', l_x)  
+        # print('l_x_expected: ',l_x_expected)    
+        # print('state_length: ', len(x_seq[0]))
         self.assertEqual(l_x.all(),  l_x_expected.all())
         self.assertEqual(l_u.all(),  l_u_expected.all())
         self.assertEqual(l_xx.all(), l_xx_expected.all())
@@ -770,7 +896,7 @@ class calculate_optimal_gains_tests(unittest.TestCase):
         q_ux = jnp.array([[1.,1.],[0,1.]])
         q_u  = jnp.array([[1.],[1.]])
         K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
-        print(jnp.linalg.inv(q_uu))
+        # print(jnp.linalg.inv(q_uu))
         K_k_expected = -jnp.linalg.inv(q_uu) @ q_ux
         d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
         K_k_expected = -(jnp.array([[1.,-1.],[0,1.]])) @ (jnp.array([[1.,1.],[0,1.]]))
@@ -831,7 +957,7 @@ class calculate_cost_decrease_ratio_tests(unittest.TestCase):
                                                                  Del_V_seq,
                                                                  line_search_factor)
         del_V_sum_exp = ((1+1+1) * line_search_factor) + ((2+2+2) * line_search_factor**2)
-        expected_output = jnp.array((1 / del_V_sum_exp) * (prev_cost_float - new_cost_float))
+        expected_output = jnp.array((1 / -del_V_sum_exp) * (prev_cost_float - new_cost_float))
         self.assertEqual(cost_decrease_ratio, expected_output)
 
 class calculate_expected_cost_decrease_tests(unittest.TestCase):
@@ -845,21 +971,21 @@ class calculate_expected_cost_decrease_tests(unittest.TestCase):
 class analyze_cost_decrease_tests(unittest.TestCase):
     def test_returns_true_for_in_bound_inputs(self):
         data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
         cost_decrease_ratio = bounds[0] + (bounds[0] + bounds[1]) * 0.5
         in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
         self.assertEqual(in_bounds_bool, True)
  
     def test_returns_false_for_input_too_high(self):
         data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
         cost_decrease_ratio = bounds[1] + 1
         in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
         self.assertEqual(in_bounds_bool, False)
 
     def test_returns_false_for_input_too_low(self):
         data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config['cost_ratio_bounds']
+        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
         cost_decrease_ratio = bounds[0] - 1
         in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
         self.assertEqual(in_bounds_bool, False)

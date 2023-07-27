@@ -7,6 +7,7 @@
 import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
+import copy
 import numpy as np
 from typing import Optional
 from scipy.integrate import solve_ivp
@@ -21,9 +22,12 @@ class ilqrControllerState:
         self.time_step             = ilqr_config['time_step']
         self.cost_float            = 0.0
         self.prev_cost_float       = 0.0
-        self.iter_int              = 0        
+        self.iter_int              = 0 
+        self.ro_reg                = 0.0
+        self.ro_reg_change_bool    = False    
         # dependent parameter population
         self.len_seq               = len(seed_contro1_seq)+1
+        self.seed_state_seq        = [None] * (self.len_seq)
         self.state_len             = self.get_num_states()
         self.control_len           = self.get_num_controls()
         self.state_seq             = [None] * self.len_seq
@@ -45,14 +49,14 @@ class ilqrControllerState:
             state_des_seq = [jnp.zeros([self.get_num_states(), 1])] * self.len_seq
         else:
             assert(len(state_des_seq) == len(self.state_seq))
-            return state_des_seq  
+        return state_des_seq  
 
     def populate_desired_control_seq(self, control_des_seq):
         if control_des_seq == None:
             control_des_seq = [jnp.zeros([self.get_num_controls(), 1])] * (self.len_seq-1)
         else:
             assert(len(control_des_seq) == len(self.control_seq))
-            return control_des_seq          
+        return control_des_seq          
 
     def get_num_states(self):
         return jnp.shape(util.vec_1D_array_to_col(self.seed_state_vec))[0]
@@ -144,19 +148,29 @@ def initialize_ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
     return config_funcs, state_seq, cost_float, prev_cost_float
 
 def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerState):
-
-    while (ctrl_state.iter_int < ilqr_config['max_iter']) and (jnp.abs(ctrl_state.prev_cost_float - ctrl_state.cost_float) > ilqr_config['converge_crit']):
+    local_ctrl_state = copy.deepcopy(ctrl_state)
+    converge_measure = ilqr_config['converge_crit'] + 1
+    converge_reached = False
+    while (local_ctrl_state.iter_int < ilqr_config['max_iter']) and (converge_reached is False):
         # retain previous cost value for convergence check
-        ctrl_state.prev_cost_float = ctrl_state.cost_float
+        local_ctrl_state.iter_int += 1
+        local_ctrl_state.prev_cost_float = local_ctrl_state.cost_float
         # perform backwards pass to calculate gains and expected value function change
-        ctrl_state.K_seq, ctrl_state.d_seq, ctrl_state.Del_V_vec_seq        = calculate_backwards_pass(config_funcs, ctrl_state)
+        local_ctrl_state.K_seq, local_ctrl_state.d_seq, local_ctrl_state.Del_V_vec_seq, local_ctrl_state.ro_reg = calculate_backwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        ctrl_state.state_seq, ctrl_state.control_seq, ctrl_state.cost_float = calculate_forwards_pass(config_funcs, ctrl_state)
+        local_ctrl_state.state_seq, local_ctrl_state.control_seq, local_ctrl_state.cost_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # increment iteration counter
-        ctrl_state.iter_int += ctrl_state.iter_int
-    return ctrl_state
+        converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)
+        print('iteration number: ', local_ctrl_state.iter_int)
+        print('converge_measurer: ', converge_measure)
+        print('ro_reg_value: ', local_ctrl_state.ro_reg)
+        print('need to increase ro again?: ', local_ctrl_state.ro_reg_change_bool)
+        if (converge_measure < ilqr_config['converge_crit']) and (local_ctrl_state.ro_reg_change_bool is False):
+            converge_reached = True
+            print('controller finished')
+    return local_ctrl_state
 
-def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
+def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
 #   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
 #   k = - inv(q_uu) * q_u
 #   K = - inv(q_uu) * q_ux
@@ -186,7 +200,10 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
     
     P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
                                                                           ctrl_state.len_seq)
-    reg_factor = 0
+    if ctrl_state.ro_reg_change_bool is True:
+        ro_reg = ctrl_state.ro_reg + ilqr_config['ro_change']
+    else:
+        ro_reg = ilqr_config['ro_start']
     is_valid_q_uu = False
     while is_valid_q_uu is False:
         for idx in range(ctrl_state.len_seq - 1):
@@ -200,31 +217,31 @@ def calculate_backwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCo
                                                                         P_kp1,
                                                                         p_kp1,
                                                                         k_step)
-            q_uu_reg = util.reqularize_mat(q_uu, reg_factor)
+            q_uu_reg = util.reqularize_mat(q_uu, ro_reg)
             # if q_uu_reg is not positive definite, reset loop to initial state and increase ro_reg
             if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
-                reg_factor    = reg_factor + 0.1
+                ro_reg    = ro_reg + 0.1
                 P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
                                                                                       ctrl_state.len_seq)
                 break
             else:
                 K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux, q_u)
                 P_kp1, p_kp1, Del_V_vec_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
-                seq_loc = ctrl_state.len_seq-(idx)
                 k_seq[k_step]         = K_k
                 d_seq[k_step]         = d_k
                 Del_V_vec_seq[k_step] = Del_V_vec_k
-    return k_seq, d_seq, Del_V_vec_seq
+    return k_seq, d_seq, Del_V_vec_seq, ro_reg
 
-def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
+def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
     #initialize updated state vec, updated control_vec, line search factor
     state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
                                                                                            ctrl_state.len_seq)
     line_search_factor = 1
     line_search_scale_param = 0.5
     iter_count = 0
-    max_iter   = 100
+    max_iter   = ilqr_config['fp_max_iter']
+    ro_reg_change_bool = False
     while not in_bounds_bool and (iter_count < max_iter):
         for k_step in range(ctrl_state.len_seq-1):
             # calculate updated control value
@@ -235,7 +252,8 @@ def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCon
                                         ctrl_state.d_seq[k_step], 
                                         line_search_factor)
             # calculate updated next state with dynamics function
-            x_kp1_new = config_funcs.state_trans_func(ctrl_state.time_seq[k_step], state_seq_new[k_step], u_k_new)
+            x_kp1_new = (config_funcs.simulate_dyn_func(state_seq_new[k_step], u_k_new))[-1]
+            
             # populate state and control sequences
             control_seq_new[k_step]  = u_k_new
             state_seq_new[k_step+1]  = x_kp1_new 
@@ -247,14 +265,20 @@ def calculate_forwards_pass(config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrCon
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_new, ctrl_state.Del_V_vec_seq, line_search_factor) 
         in_bounds_bool = config_funcs.analyze_cost_dec_func(cost_decrease_ratio)
         # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
-        if not in_bounds_bool and (iter_count < max_iter-1):
+        if in_bounds_bool:
+            break
+        elif (iter_count == max_iter-1):
+            iter_count     += 1  
+            state_seq_new   = ctrl_state.state_seq
+            control_seq_new = ctrl_state.control_seq
+            cost_float_new  = ctrl_state.cost_float
+            ro_reg_change_bool = True
+        else:
             state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
                                                                                                    ctrl_state.len_seq)
-            line_search_factor = line_search_factor * line_search_scale_param
+            line_search_factor *= line_search_scale_param
             iter_count += 1
-        elif (iter_count == max_iter-1):
-            iter_count += 1  
-    return state_seq_new, control_seq_new, cost_float_new
+    return state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool
 
 def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_method = 'euler'):
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
@@ -479,7 +503,9 @@ def calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k):
     q_xu        = q_ux.transpose()
     P_k         = (q_xx) + (K_kt @ q_uu @ K_k) + (K_kt @ q_ux) + (q_xu @ K_k)
     p_k         = (q_x ) + (K_kt @ q_uu @ d_k) + (K_kt @ q_u ) + (q_xu @ d_k)
-    Del_V_vec_k = jnp.array([[(d_kt @ q_u)],[(0.5) * (d_kt @ q_uu @ d_k)]]).reshape(1,-1)
+    # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
+    # Del_V_vec_k = jnp.array([[-jnp.abs((d_kt @ q_u))],[-jnp.abs((0.5) * (d_kt @ q_uu @ d_k))]]).reshape(1,-1)
+    Del_V_vec_k = jnp.array([[(d_kt @ q_u)],[((0.5) * (d_kt @ q_uu @ d_k))]]).reshape(1,-1)
     return P_k, p_k, Del_V_vec_k
 
 def calculate_optimal_gains(q_uu_reg, q_ux, q_u):
@@ -495,12 +521,11 @@ def calculate_u_k_new(u_nom_k ,x_nom_k ,x_new_k, K_k, d_k, line_search_factor):
     x_nom_k_col     = util.vec_1D_array_to_col(x_nom_k)
     x_new_k_col     = util.vec_1D_array_to_col(x_new_k)
     u_k_updated_col = u_nom_k_col + K_k @ (x_new_k_col - x_nom_k_col) + line_search_factor * d_k
-    u_k_updated_row = util.vec_1D_array_to_row(u_k_updated_col)
-    return u_k_updated_row
+    return u_k_updated_col
 
 def calculate_cost_decrease_ratio(prev_cost_float, new_cost_float, Del_V_vec_seq, line_search_factor):
     Del_V_sum = calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
-    cost_decrease_ratio = (1 / Del_V_sum) * (prev_cost_float - new_cost_float)
+    cost_decrease_ratio = (1 / -Del_V_sum) * (prev_cost_float - new_cost_float)
     return cost_decrease_ratio
 
 def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
