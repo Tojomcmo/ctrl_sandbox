@@ -160,7 +160,7 @@ def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerStat
         # perform forwards pass to calculate new trajectory and trajectory cost
         local_ctrl_state.state_seq, local_ctrl_state.control_seq, local_ctrl_state.cost_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # increment iteration counter
-        converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)
+        converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)/ctrl_state.cost_float
         print('iteration number: ', local_ctrl_state.iter_int)
         print('converge_measure: ', converge_measure)
         print('ro_reg_value: ', local_ctrl_state.ro_reg)
@@ -245,6 +245,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
     iter_count = 0
     max_iter   = ilqr_config['fp_max_iter']
     ro_reg_change_bool = False
+    norm_cost_decrease = ilqr_config['converge_crit'] + 1
     while not in_bounds_bool and (iter_count < max_iter):
         for k_step in range(ctrl_state.len_seq-1):
             # calculate updated control value
@@ -265,13 +266,17 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
         # calculate new trajectory cost    
         cost_float_new = calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
         # calculate the ratio between the expected cost decrease and actual cost decrease
-        expected_cost_decrease = calculate_expected_cost_decrease(ctrl_state.Del_V_vec_seq, line_search_factor)
         actual_cost_decrease = cost_float_new - ctrl_state.cost_float
+        norm_cost_decrease = jnp.abs(actual_cost_decrease)/ctrl_state.cost_float
+        expected_cost_decrease = calculate_expected_cost_decrease(ctrl_state.Del_V_vec_seq, line_search_factor)
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_new, ctrl_state.Del_V_vec_seq, line_search_factor) 
         in_bounds_bool = config_funcs.analyze_cost_dec_func(cost_decrease_ratio)
+
         # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
-        if in_bounds_bool:
+        if (norm_cost_decrease < ilqr_config['converge_crit']) and (iter_count < 3):
             break
+        elif in_bounds_bool:
+            break    
         elif (iter_count == max_iter-1):
             iter_count     += 1  
             state_seq_new   = ctrl_state.state_seq

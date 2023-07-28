@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
    cost_func_params    = {'Q'  : jnp.array([[10.,0],[0,1.]]),
-                          'R'  : jnp.array([[0.1]]),
-                          'Qf' : jnp.array([[10.,0],[0,1.]])}
+                          'R'  : jnp.array([[0.01]]),
+                          'Qf' : jnp.array([[100.,0],[0,10.]])}
    state_trans_params  = {'b'  : 0.1,
                           'l'  : 1.0,
                           'g'  : 9.81}
@@ -20,9 +20,9 @@ if __name__ == "__main__":
                     'cost_func_params'          : cost_func_params,
                     'sim_method'                : 'solve_ivp_zoh', # 'euler', "solve_ivp_zoh"
                     'c2d_method'                : 'zohCombined',# 'euler', "zoh", 'zohCombined'
-                    'max_iter'                  : 15,
+                    'max_iter'                  : 10,
                     'time_step'                 : 0.1,
-                    'converge_crit'             : 1e-4,
+                    'converge_crit'             : 1e-3,
                     'cost_ratio_bounds'         : [1e-6, 10],
                     'ro_reg_start'              : 0.0,
                     'ro_reg_change'             : 0.25,
@@ -31,9 +31,9 @@ if __name__ == "__main__":
    
    time_step = 0.1
    len_seq   = 20
-   state_init_vec = jnp.array([[0.5],[-0.1]])
+   state_init_vec = jnp.array([[-0.],[-0.]])
    control_init_seq = [jnp.array([[0.]])] * (len_seq - 1)
-   state_des_seq = [jnp.array([[jnp.pi], [0]])] * (len_seq)
+   state_des_seq = [jnp.array([[-jnp.pi], [0]])] * (len_seq)
 
    controller_state = ilqr.ilqrControllerState(ilqr_config, state_init_vec, control_init_seq, state_des_seq=state_des_seq)
    # initialize controller state and configured functions
@@ -51,7 +51,6 @@ if __name__ == "__main__":
                   controller_output.state_seq]
    x_plot_seq_names = ['initial_seq', 'desired_seq', 'output_seq']
    x_plot_seq_styles = ['r.', 'g.', 'b.']
-   analyze.plot_compare_state_sequences(x_plot_seqs, x_plot_seq_names, x_plot_seq_styles, fig_num=1)
    analyze.plot_compare_state_sequences(x_plot_seqs, x_plot_seq_names, x_plot_seq_styles, fig_num=1)
 
    # u_plot_seqs = [controller_state.seed_control_seq,
