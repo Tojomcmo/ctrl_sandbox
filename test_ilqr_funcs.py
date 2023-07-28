@@ -43,10 +43,13 @@ class shared_unit_test_data_and_funcs:
             'cost_func_params'          : self.pend_unit_cost_func_params,
             'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
             'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
-            'max_iter'                  : 100,
+            'max_iter'                  : 20,
             'time_step'                 : 0.1,
             'converge_crit'             : 1e-5,
-            'cost_ratio_bounds'         : [1e-6, 20]
+            'cost_ratio_bounds'         : [1e-6, 20],
+            'ro_reg_start'              : 0.25,
+            'ro_reg_change'             : 0.25,
+            'fp_max_iter'               : 5
             }
         
         self.ilqr_config_nl_pend = {
@@ -56,10 +59,13 @@ class shared_unit_test_data_and_funcs:
             'cost_func_params'          : self.pend_cost_func_params,
             'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
             'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
-            'max_iter'                  : 100,
+            'max_iter'                  : 20,
             'time_step'                 : 0.1,
             'converge_crit'             : 1e-5,
-            'cost_ratio_bounds'         : [1e-6, 20]
+            'cost_ratio_bounds'         : [1e-6, 20],
+            'ro_reg_start'              : 0.25,
+            'ro_reg_change'             : 0.25,
+            'fp_max_iter'               : 5
             }
         
         # self.len_seq              = 20
@@ -379,7 +385,8 @@ class calculate_backwards_pass_tests(unittest.TestCase):
         config_funcs = ilqr.ilqrConfiguredFuncs(data_and_funcs.ilqr_config_lin_pend_unit_cost,
                                                 ctrl_state)
         
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(data_and_funcs.ilqr_config_lin_pend_unit_cost,
+                                                                            config_funcs, ctrl_state)
         self.assertEqual(len(k_seq),data_and_funcs.len_seq-1)
         self.assertEqual(len(d_seq),data_and_funcs.len_seq-1)
         self.assertEqual(len(Del_V_vec_seq),data_and_funcs.len_seq-1) 
@@ -400,14 +407,14 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         ctrl_state.state_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(ilqr_config, config_funcs, ctrl_state)
         ctrl_state.K_seq         = k_seq
         ctrl_state.d_seq         = d_seq
         ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
+        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
     def test_accepts_valid_nl_dyn_inputs(self):
@@ -422,14 +429,14 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         ctrl_state.state_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(config_funcs, ctrl_state)
+        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(ilqr_config, config_funcs, ctrl_state)
         ctrl_state.K_seq         = k_seq
         ctrl_state.d_seq         = d_seq
         ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(config_funcs, ctrl_state)
+        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
@@ -811,18 +818,23 @@ class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
         p_kp1   = jnp.ones([x_len, 1])
         P_kp1   = jnp.ones([x_len, x_len])
         k_step  = 1
-        q_x, q_u, q_xx, q_ux, q_uu = ilqr.taylor_expand_pseudo_hamiltonian(cost_func, 
-                                                                           A_lin_k, 
-                                                                           B_lin_k, 
-                                                                           x_k, 
-                                                                           u_k, 
-                                                                           P_kp1, p_kp1, 
-                                                                           k_step)
+        ro_reg  = 1
+        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
+                                                                            cost_func, 
+                                                                            A_lin_k, 
+                                                                            B_lin_k, 
+                                                                            x_k, 
+                                                                            u_k, 
+                                                                            P_kp1, p_kp1,
+                                                                            ro_reg, 
+                                                                            k_step)
         self.assertEqual(jnp.shape(q_x),  (x_len, 1))
         self.assertEqual(jnp.shape(q_u),  (u_len, 1))
         self.assertEqual(jnp.shape(q_xx), (x_len,x_len))
         self.assertEqual(jnp.shape(q_uu), (u_len,u_len))
         self.assertEqual(jnp.shape(q_ux), (u_len,x_len)) 
+        self.assertEqual(jnp.shape(q_uu_reg), (u_len,u_len))
+        self.assertEqual(jnp.shape(q_ux_reg), (u_len,x_len)) 
 
     def test_accepts_valid_inputs_from_shared(self):
         shared_data_funcs = shared_unit_test_data_and_funcs()        
@@ -836,18 +848,23 @@ class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
         p_kp1   = jnp.ones([x_len, 1])
         P_kp1   = jnp.ones([x_len, x_len])
         k_step  = 1
-        q_x, q_u, q_xx, q_ux, q_uu = ilqr.taylor_expand_pseudo_hamiltonian(cost_func, 
-                                                                           A_lin_k, 
-                                                                           B_lin_k, 
-                                                                           x_seq[k_step], 
-                                                                           u_seq[k_step], 
-                                                                           P_kp1, p_kp1, 
-                                                                           k_step)
+        ro_reg = 1.0
+        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
+                                                                            cost_func, 
+                                                                            A_lin_k, 
+                                                                            B_lin_k, 
+                                                                            x_seq[k_step], 
+                                                                            u_seq[k_step], 
+                                                                            P_kp1, p_kp1,
+                                                                            ro_reg, 
+                                                                            k_step)
         self.assertEqual(jnp.shape(q_x),  (x_len, 1))
         self.assertEqual(jnp.shape(q_u),  (u_len, 1))
         self.assertEqual(jnp.shape(q_xx), (x_len,x_len))
         self.assertEqual(jnp.shape(q_uu), (u_len,u_len))
-        self.assertEqual(jnp.shape(q_ux), (u_len,x_len))  
+        self.assertEqual(jnp.shape(q_ux), (u_len,x_len)) 
+        self.assertEqual(jnp.shape(q_uu_reg), (u_len,u_len))
+        self.assertEqual(jnp.shape(q_ux_reg), (u_len,x_len)) 
 
 class calculate_final_cost_to_go_approximation_tests(unittest.TestCase):
     def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):

@@ -27,8 +27,11 @@ def pend_dyn_lin(params, time, state, control):
     g = params['g']
     l = params['l']
     b = params['b']
+    vel = state[1]
+    pos = state[0]
+    tq  = control[0]
     state_dot = jnp.array([
-                state[1],
-                -((b/l) * state[1]) - ((state[0]) * (g/l)) + control[0]
+                vel,
+                -((b/l) * vel) - ((g/l) * pos) + tq
                 ])
     return state_dot
