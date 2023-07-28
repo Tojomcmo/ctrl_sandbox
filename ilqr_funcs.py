@@ -162,12 +162,14 @@ def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerStat
         # increment iteration counter
         converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)
         print('iteration number: ', local_ctrl_state.iter_int)
-        print('converge_measurer: ', converge_measure)
+        print('converge_measure: ', converge_measure)
         print('ro_reg_value: ', local_ctrl_state.ro_reg)
-        print('need to increase ro again?: ', local_ctrl_state.ro_reg_change_bool)
+        print('need to increase ro?: ', local_ctrl_state.ro_reg_change_bool)
         if (converge_measure < ilqr_config['converge_crit']) and (local_ctrl_state.ro_reg_change_bool is False):
             converge_reached = True
-            print('controller finished')
+            print('controller converged')
+        elif local_ctrl_state.iter_int == ilqr_config['max_iter']:  
+            print('controller reached iteration limit')
     return local_ctrl_state
 
 def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
@@ -201,32 +203,33 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
     P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
                                                                           ctrl_state.len_seq)
     if ctrl_state.ro_reg_change_bool is True:
-        ro_reg = ctrl_state.ro_reg + ilqr_config['ro_change']
+        ro_reg = ctrl_state.ro_reg + ilqr_config['ro_reg_change']
     else:
-        ro_reg = ilqr_config['ro_start']
+        ro_reg = ilqr_config['ro_reg_start']
     is_valid_q_uu = False
     while is_valid_q_uu is False:
         for idx in range(ctrl_state.len_seq - 1):
             k_step = -(idx + 1)
             is_valid_q_uu = True
-            q_x, q_u, q_xx, q_ux, q_uu = taylor_expand_pseudo_hamiltonian(config_funcs.cost_func,
+            q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
+                                                                        config_funcs.cost_func,
                                                                         Ad_seq[k_step],
                                                                         Bd_seq[k_step],
                                                                         ctrl_state.state_seq[k_step],
                                                                         ctrl_state.control_seq[k_step],
                                                                         P_kp1,
                                                                         p_kp1,
+                                                                        ro_reg,
                                                                         k_step)
-            q_uu_reg = util.reqularize_mat(q_uu, ro_reg)
             # if q_uu_reg is not positive definite, reset loop to initial state and increase ro_reg
             if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
-                ro_reg    = ro_reg + 0.1
+                ro_reg    = ro_reg + ilqr_config['ro_reg_change']
                 P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
                                                                                       ctrl_state.len_seq)
                 break
             else:
-                K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux, q_u)
+                K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
                 P_kp1, p_kp1, Del_V_vec_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
                 k_seq[k_step]         = K_k
                 d_seq[k_step]         = d_k
@@ -262,6 +265,8 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
         # calculate new trajectory cost    
         cost_float_new = calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
         # calculate the ratio between the expected cost decrease and actual cost decrease
+        expected_cost_decrease = calculate_expected_cost_decrease(ctrl_state.Del_V_vec_seq, line_search_factor)
+        actual_cost_decrease = cost_float_new - ctrl_state.cost_float
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_new, ctrl_state.Del_V_vec_seq, line_search_factor) 
         in_bounds_bool = config_funcs.analyze_cost_dec_func(cost_decrease_ratio)
         # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
@@ -455,7 +460,7 @@ def taylor_expand_cost(cost_func, x_k, u_k, k_step):
     l_ux = hessian_cat[x_k_len:,:x_k_len]
     return l_x, l_u, l_xx, l_uu, l_ux
 
-def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1, k_step):
+def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1, ro_reg, k_step):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
@@ -468,13 +473,16 @@ def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp
     l_x, l_u, l_xx, l_uu, l_ux = taylor_expand_cost(cost_func, x_k, u_k, k_step)
     A_lin_k_T = jnp.transpose(A_lin_k)
     B_lin_k_T = jnp.transpose(B_lin_k)
+    P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
 
-    q_x  = l_x  + A_lin_k_T @ p_kp1
-    q_u  = l_u  + B_lin_k_T @ p_kp1
-    q_xx = l_xx + A_lin_k_T @ P_kp1 @ A_lin_k
-    q_uu = l_uu + B_lin_k_T @ P_kp1 @ B_lin_k
-    q_ux = l_ux + B_lin_k_T @ P_kp1 @ A_lin_k
-    return q_x, q_u, q_xx, q_ux, q_uu
+    q_x      = l_x  + A_lin_k_T @ p_kp1
+    q_u      = l_u  + B_lin_k_T @ p_kp1
+    q_xx     = l_xx + A_lin_k_T @ P_kp1     @ A_lin_k
+    q_uu     = l_uu + B_lin_k_T @ P_kp1     @ B_lin_k
+    q_ux     = l_ux + B_lin_k_T @ P_kp1     @ A_lin_k
+    q_uu_reg = l_uu + B_lin_k_T @ P_kp1_reg @ B_lin_k
+    q_ux_reg = l_ux + B_lin_k_T @ P_kp1_reg @ A_lin_k
+    return q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg
 
 def calculate_final_cost_to_go_approximation(cost_func, x_N, len_u):
     # create concatenated state and control vector of primal points
@@ -543,6 +551,3 @@ def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
     return in_bounds_bool
 
 
-    x_vec = util.vec_1D_array_to_col(x)
-    u_vec = util.vec_1D_array_to_col(u)
-    return x_vec, u_vec
