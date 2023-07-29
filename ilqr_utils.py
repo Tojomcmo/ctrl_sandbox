@@ -12,18 +12,18 @@ def reqularize_mat(mat, ro):
 
 def calc_and_shape_array_diff(current_array,desired_array,shape=None):  
     if shape == 'row':
-        current_minus_des_array = vec_1D_array_to_row(current_array - desired_array)
+        current_minus_des_array = array_to_row(current_array - desired_array)
     elif shape == 'col':
-        current_minus_des_array = vec_1D_array_to_col(current_array - desired_array)
+        current_minus_des_array = array_to_col(current_array - desired_array)
     else:
         current_minus_des_array = current_array - desired_array
     return current_minus_des_array
 
-def vec_1D_array_to_col(array_1D):
+def array_to_col(array_1D):
     col_vec = array_1D.reshape(-1,1)
     return col_vec
 
-def vec_1D_array_to_row(array_1D):
+def array_to_row(array_1D):
     row_vec = array_1D.reshape(1,-1)
     return row_vec
 
