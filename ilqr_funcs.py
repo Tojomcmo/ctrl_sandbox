@@ -443,28 +443,24 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
         total_cost = total_cost + incremental_cost 
     return total_cost
 
-def taylor_expand_cost(cost_func, x_k, u_k, k_step):
+def taylor_expand_cost(cost_func, x_k:float, u_k:float, k_step):
 # This function creates a quadratic approximation of the cost function Using taylor expansion
 # Expansion is approximated about the rolled out trajectory
     # create concatenated state and control vector of primal points
-    x_k_col      = x_k.reshape(-1,1)
-    x_k_len      = jnp.shape(x_k_col)[0]
-    u_k_col      = u_k.reshape(-1,1)
-    xu_k         = np.concatenate([x_k_col, u_k_col])
-    xu_k_len     = jnp.shape(xu_k)[0]
+    xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
     cost_func_xu = lambda xu_k: cost_func(xu_k[:x_k_len], xu_k[x_k_len:], k_step)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat     = (jax.jacfwd(cost_func_xu)(xu_k)).reshape(xu_k_len)
+    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax)).reshape(xu_k_len)
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k)).reshape(xu_k_len,xu_k_len)
-    l_x = (jac_cat[:x_k_len]).reshape(-1,1)
-    l_u = (jac_cat[x_k_len:]).reshape(-1,1)
-    l_xx = hessian_cat[:x_k_len,:x_k_len]
-    l_uu = hessian_cat[x_k_len:,x_k_len:]
-    l_ux = hessian_cat[x_k_len:,:x_k_len]
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax)).reshape(xu_k_len,xu_k_len)
+    l_x = np.array((jac_cat[:x_k_len]).reshape(-1,1))
+    l_u = np.array((jac_cat[x_k_len:]).reshape(-1,1))
+    l_xx = np.array((hessian_cat[:x_k_len,:x_k_len]))
+    l_uu = np.array((hessian_cat[x_k_len:,x_k_len:]))
+    l_ux = np.array((hessian_cat[x_k_len:,:x_k_len]))
     return l_x, l_u, l_xx, l_uu, l_ux
-
+    
 def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1, ro_reg, k_step):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
@@ -542,10 +538,10 @@ def calculate_cost_decrease_ratio(prev_cost_float, new_cost_float, Del_V_vec_seq
     return cost_decrease_ratio
 
 def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
+    assert (Del_V_vec_seq.shape)[1] == 2, "Del_V_vec_seq is not the right shape, must be (:,2)" 
     Del_V_sum = 0
     for idx in range(len(Del_V_vec_seq)):
-        Del_V_vec = (Del_V_vec_seq[idx]).reshape(-1)
-        Del_V_sum = Del_V_sum + ((line_search_factor * Del_V_vec[0]) + (line_search_factor**2 * Del_V_vec[1]))
+        Del_V_sum = Del_V_sum + ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
     return Del_V_sum    
 
 def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
@@ -555,4 +551,11 @@ def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
         in_bounds_bool = False            
     return in_bounds_bool
 
-
+def prep_xu_vec_for_diff(x_k,u_k):
+    x_k_col      = x_k.reshape(-1,1)
+    u_k_col      = u_k.reshape(-1,1)
+    xu_k         = np.concatenate([x_k_col, u_k_col])
+    x_k_len      = np.shape(x_k_col)[0]
+    xu_k_len     = np.shape(xu_k)[0]
+    xu_k_jax     = jnp.array(xu_k)
+    return xu_k_jax, xu_k_len, x_k_len

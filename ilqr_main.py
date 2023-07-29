@@ -1,4 +1,5 @@
 from jax import numpy as jnp
+import numpy as np
 import ilqr_funcs as ilqr
 import dyn_functions as dyn
 import cost_functions as cost
@@ -8,9 +9,9 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
    cost_func_params    = {'Q'  : jnp.array([[10.,0],[0,1.]]),
-                          'R'  : jnp.array([[0.01]]),
-                          'Qf' : jnp.array([[100.,0],[0,10.]])}
-   state_trans_params  = {'b'  : 0.1,
+                          'R'  : jnp.array([[.01]]),
+                          'Qf' : jnp.array([[10.,0],[0,10.]])}
+   state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
    ilqr_config = {
@@ -30,8 +31,8 @@ if __name__ == "__main__":
                  }
    
    time_step = 0.1
-   len_seq   = 20
-   state_init_vec = jnp.array([[-0.],[-0.]])
+   len_seq   = 30
+   state_init_vec = jnp.array([[0.],[0.]])
    control_init_seq = [jnp.array([[0.]])] * (len_seq - 1)
    state_des_seq = [jnp.array([[-jnp.pi], [0]])] * (len_seq)
 
@@ -44,7 +45,7 @@ if __name__ == "__main__":
    # run ilqr controller
    controller_output = ilqr.run_ilqr_controller(ilqr_config, config_funcs, controller_state)
 
-   print(controller_output.control_seq)
+   print(np.array(controller_output.control_seq))
 
    x_plot_seqs = [controller_state.seed_state_seq,
                   controller_state.state_des_seq,

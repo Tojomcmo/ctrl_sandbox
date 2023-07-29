@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
-import ilqr_funcs as ilqr
 from jax import numpy as jnp
+
+import ilqr_funcs as ilqr
 import ilqr_utils as util
 
 # for each input
@@ -198,12 +199,12 @@ class shared_unit_test_data_and_funcs:
         R  = cost_func_params['R']
         Qf = cost_func_params['Qf']
         # check that dimensions match [TODO]
-        x_k_corr     = util.calculate_current_minus_des_array(state_vec, state_des_seq[k_step])
+        x_k_corr     = util.calc_and_shape_array_diff(state_vec, state_des_seq[k_step])
         x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
         if is_final_bool:
             cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
-            u_k_corr     = util.calculate_current_minus_des_array(control_vec, control_des_seq[k_step])
+            u_k_corr     = util.calc_and_shape_array_diff(control_vec, control_des_seq[k_step])
             u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)
             cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
                                   +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
@@ -220,12 +221,12 @@ class shared_unit_test_data_and_funcs:
         Qf = self.pend_unit_cost_func_params['Qf']
         
         # check that dimensions match [TODO]
-        x_k_corr     = util.calculate_current_minus_des_array(state_vec  , self.des_state_seq[k_step]  )
+        x_k_corr     = util.calc_and_shape_array_diff(state_vec  , self.des_state_seq[k_step]  )
         x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)
         if is_final_bool:
             cost_float   = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
         else:
-            u_k_corr     = util.calculate_current_minus_des_array(control_vec, self.des_control_seq[k_step])
+            u_k_corr     = util.calc_and_shape_array_diff(control_vec, self.des_control_seq[k_step])
             u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)       
             cost_float   = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
                                     +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
@@ -238,10 +239,10 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         ss = ilqr.stateSpace(A,B,C,D)
-        self.assertEqual(ss.a.all(), A.all())
-        self.assertEqual(ss.b.all(), B.all())
-        self.assertEqual(ss.c.all(), C.all())
-        self.assertEqual(ss.d.all(), D.all())
+        self.assertEqual(ss.a.tolist(), A.tolist())
+        self.assertEqual(ss.b.tolist(), B.tolist())
+        self.assertEqual(ss.c.tolist(), C.tolist())
+        self.assertEqual(ss.d.tolist(), D.tolist())
         self.assertEqual(ss.type, 'continuous')
         self.assertEqual(ss.time_step, None)
 
@@ -251,10 +252,10 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         ss = ilqr.stateSpace(A,B,C,D, time_step = 0.1)
-        self.assertEqual(ss.a.all(), A.all())
-        self.assertEqual(ss.b.all(), B.all())
-        self.assertEqual(ss.c.all(), C.all())
-        self.assertEqual(ss.d.all(), D.all())
+        self.assertEqual(ss.a.tolist(), A.tolist())
+        self.assertEqual(ss.b.tolist(), B.tolist())
+        self.assertEqual(ss.c.tolist(), C.tolist())
+        self.assertEqual(ss.d.tolist(), D.tolist())
         self.assertEqual(ss.type, 'discrete')
         self.assertEqual(ss.time_step, 0.1)
 
@@ -470,7 +471,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
             state_next       = state_seq[idx] + state_dot_row * time_step
             state_seq_expected[idx+1] = state_next
         self.assertEqual(len(state_seq), len_seq)
-        self.assertEqual(state_seq[-1].all(), state_seq_expected[-1].all())
+        self.assertEqual(state_seq[-1].tolist(), state_seq_expected[-1].tolist())
 
     def test_accepts_valid_inputs_euler_from_shared(self):
         data_and_funcs  = shared_unit_test_data_and_funcs()
@@ -530,8 +531,8 @@ class linearize_dynamics_tests(unittest.TestCase):
         # print('b_lin_expected: ', b_lin_expected)
         self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
         self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
-        self.assertEqual(a_lin.all(), a_lin_expected.all())
-        self.assertEqual(b_lin.all(), b_lin_expected.all())
+        self.assertEqual(a_lin.tolist(), a_lin_expected.tolist())
+        self.assertEqual(b_lin.tolist(), b_lin_expected.tolist())
 
     def test_linearize_dynamics_accepts_valid_linear_case(self):
         data_and_funcs  = shared_unit_test_data_and_funcs()
@@ -559,8 +560,8 @@ class linearize_dynamics_tests(unittest.TestCase):
         # print('b_lin_expected: ', b_lin_expected)
         self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
         self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
-        self.assertEqual(a_lin.all(), a_lin_expected.all())
-        self.assertEqual(b_lin.all(), b_lin_expected.all())
+        self.assertEqual(a_lin.tolist(), a_lin_expected.tolist())
+        self.assertEqual(b_lin.tolist(), b_lin_expected.tolist())
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
@@ -606,8 +607,8 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         #assert validity
         self.assertEqual(len(A_lin_array), len_seq-1)
         self.assertEqual(len(B_lin_array), len_seq-1)
-        self.assertEqual((A_lin_array[0]).all(), A_lin_d_expected.all())
-        self.assertEqual((B_lin_array[0]).all(), B_lin_d_expected.all())        
+        self.assertEqual((A_lin_array[0]).tolist(), A_lin_d_expected.tolist())
+        self.assertEqual((B_lin_array[0]).tolist(), B_lin_d_expected.tolist())        
 
     def test_calculate_linearized_state_space_seq_accepts_valid_system_from_shared(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
@@ -694,10 +695,10 @@ class discretize_state_space_tests(unittest.TestCase):
         self.assertEqual(ss.d.shape, D.shape)
         self.assertEqual(ss.time_step, time_step)
         self.assertEqual(ss.type, 'discrete')     
-        self.assertEqual(B.all(), B_d_expected.all())       
-        self.assertEqual(A.all(), A_d_expected.all())  
-        self.assertEqual(C.all(), C_d_expected.all())
-        self.assertEqual(D.all(), D_d_expected.all())
+        self.assertEqual(B.tolist(), B_d_expected.tolist())       
+        self.assertEqual(A.tolist(), A_d_expected.tolist())  
+        self.assertEqual(C.tolist(), C_d_expected.tolist())
+        self.assertEqual(D.tolist(), D_d_expected.tolist())
 
     def test_descritize_state_space_rejects_discrete_input_system(self):
         A = jnp.array([[1,1,1],[0,1,1],[0,0,1]])
@@ -799,11 +800,35 @@ class taylor_expand_cost_tests(unittest.TestCase):
         # print('l_x: ', l_x)  
         # print('l_x_expected: ',l_x_expected)    
         # print('state_length: ', len(x_seq[0]))
-        self.assertEqual(l_x.all(),  l_x_expected.all())
-        self.assertEqual(l_u.all(),  l_u_expected.all())
-        self.assertEqual(l_xx.all(), l_xx_expected.all())
-        self.assertEqual(l_uu.all(), l_uu_expected.all())
-        self.assertEqual(l_ux.all(), jnp.zeros([len(u_seq[0]),len(x_seq[0])]).all())            
+        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
+        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
+        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
+        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
+        self.assertEqual(l_ux.tolist(), jnp.zeros([len(u_seq[0]),len(x_seq[0])]).tolist())            
+
+    def test_taylor_expand_cost_accepts_list_of_np_arrays(self):
+        shared_data_funcs = shared_unit_test_data_and_funcs()
+        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
+        cost_func_params = shared_data_funcs.pend_unit_cost_func_params
+        x_seq = [np.array([[1.],[2.]])] * 3
+        u_seq = [np.array([[3.]])] * 3
+        k_step = 1
+        l_x, l_u, l_xx, l_uu, l_ux = ilqr.taylor_expand_cost(cost_func,
+                                                            x_seq[k_step],
+                                                            u_seq[k_step],
+                                                            k_step)
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.des_state_seq[k_step])
+        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.des_control_seq[k_step])
+        l_xx_expected = cost_func_params['Q']
+        l_uu_expected = cost_func_params['R']  
+        # print('l_x: ', l_x)  
+        # print('l_x_expected: ',l_x_expected)    
+        # print('state_length: ', len(x_seq[0]))
+        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
+        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
+        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
+        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
+        self.assertEqual(l_ux.tolist(), jnp.zeros([len(u_seq[0]),len(x_seq[0])]).tolist()) 
 
 class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -879,8 +904,8 @@ class calculate_final_cost_to_go_approximation_tests(unittest.TestCase):
         P_N_expected = shared_data_funcs.pend_unit_cost_func_params['Qf']
         # print('P_N_exp: ', P_N_expected)
         # print('p_N_exp: ', p_N_expected)
-        self.assertEqual(p_N.all(), p_N_expected.all())
-        self.assertEqual(P_N.all(), P_N_expected.all())
+        self.assertEqual(p_N.tolist(), p_N_expected.tolist())
+        self.assertEqual(P_N.tolist(), P_N_expected.tolist())
 
 class calculate_backstep_ctg_approx_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -903,9 +928,9 @@ class calculate_backstep_ctg_approx_tests(unittest.TestCase):
         self.assertEqual(jnp.shape(P_k), (x_len, x_len))
         self.assertEqual(jnp.shape(p_k), (x_len, 1))  
         self.assertEqual(jnp.shape(Del_V_vec_k), (1,2))      
-        self.assertEqual(P_k.all(), P_k_expect.all())
-        self.assertEqual(d_k.all(), d_k_expect.all()) 
-        self.assertEqual(Del_V_vec_k.all(), Del_V_vec_k_expect.all())
+        self.assertEqual(P_k.tolist(), P_k_expect.tolist())
+        self.assertEqual(d_k.tolist(), d_k_expect.tolist()) 
+        self.assertEqual(Del_V_vec_k.tolist(), Del_V_vec_k_expect.tolist())
 
 class calculate_optimal_gains_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -918,8 +943,8 @@ class calculate_optimal_gains_tests(unittest.TestCase):
         d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
         K_k_expected = -(jnp.array([[1.,-1.],[0,1.]])) @ (jnp.array([[1.,1.],[0,1.]]))
         d_k_expected = -(jnp.array([[1.,-1.],[0,1.]])) @ (jnp.array([[1.],[1.]]))
-        self.assertEqual(K_k.all(), K_k_expected.all())
-        self.assertEqual(d_k.all(), d_k_expected.all())
+        self.assertEqual(K_k.tolist(), K_k_expected.tolist())
+        self.assertEqual(d_k.tolist(), d_k_expected.tolist())
 
     def test_accepts_valid_inputs_from_shared(self):
         q_uu = jnp.array([[1.,1.],[0,1.]])
@@ -928,8 +953,8 @@ class calculate_optimal_gains_tests(unittest.TestCase):
         K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
         K_k_expected = -jnp.linalg.inv(q_uu) @ q_ux
         d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
-        self.assertEqual(K_k.all(), K_k_expected.all())
-        self.assertEqual(d_k.all(), d_k_expected.all())    
+        self.assertEqual(K_k.tolist(), K_k_expected.tolist())
+        self.assertEqual(d_k.tolist(), d_k_expected.tolist())    
 
 class calculate_u_k_new_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -967,23 +992,43 @@ class calculate_cost_decrease_ratio_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         prev_cost_float = 100.0
         new_cost_float  = 70.0
-        Del_V_seq = [jnp.array([[1,2]])] * 3
+        Del_V_seq = np.array([[1,2],[1,2],[1,2]])
         line_search_factor = 2
         cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
                                                                  new_cost_float,
                                                                  Del_V_seq,
                                                                  line_search_factor)
         del_V_sum_exp = ((1+1+1) * line_search_factor) + ((2+2+2) * line_search_factor**2)
-        expected_output = jnp.array((1 / -del_V_sum_exp) * (prev_cost_float - new_cost_float))
+        expected_output = np.array((1 / -del_V_sum_exp) * (prev_cost_float - new_cost_float))
         self.assertEqual(cost_decrease_ratio, expected_output)
+
+    def test_rejects_invalid_input_dimension(self):
+        prev_cost_float = 100.0
+        new_cost_float  = 70.0
+        Del_V_seq = np.array([[1,2,3],[1,2,3],[1,2,3]])
+        line_search_factor = 2
+        with self.assertRaises(AssertionError) as assert_seq_len_error:
+            cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
+                                                                 new_cost_float,
+                                                                 Del_V_seq,
+                                                                 line_search_factor)
+        self.assertEqual(str(assert_seq_len_error.exception), 'Del_V_vec_seq is not the right shape, must be (:,2)')
+
 
 class calculate_expected_cost_decrease_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        Del_V_vec_seq = [jnp.array([[1,2]])] * 3
+        Del_V_vec_seq = np.array([[1,2],[1,2],[1,2]]) 
         line_search_factor = 2
         Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
         expected_output = ((1+1+1) * line_search_factor) + ((2+2+2) * line_search_factor**2)
         self.assertEqual(Del_V_sum, expected_output)
+
+    def test_reject_invalid_array_shape(self):
+        Del_V_vec_seq = np.array([[1,2,3],[1,2,3],[1,2,3]]) 
+        line_search_factor = 2
+        with self.assertRaises(AssertionError) as assert_seq_len_error:
+            Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
+        self.assertEqual(str(assert_seq_len_error.exception), 'Del_V_vec_seq is not the right shape, must be (:,2)')
 
 class analyze_cost_decrease_tests(unittest.TestCase):
     def test_returns_true_for_in_bound_inputs(self):
@@ -1006,6 +1051,72 @@ class analyze_cost_decrease_tests(unittest.TestCase):
         cost_decrease_ratio = bounds[0] - 1
         in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
         self.assertEqual(in_bounds_bool, False)
+
+class prep_xu_vecs_for_diff_tests(unittest.TestCase):
+    def test_accepts_valid_np_col_inputs(self):
+        #create test conditions
+        x_k = np.array([[1],[2],[3]])
+        u_k = np.array([[4],[5]])
+        #test function
+        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        # create expected output
+        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
+        xu_k_len_expected = 5
+        x_k_len_expected  = 3
+        #compare outputs
+        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
+        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
+        self.assertEqual(xu_k_len, xu_k_len_expected)
+        self.assertEqual(x_k_len, x_k_len_expected)
+
+    def test_accepts_valid_np_row_inputs(self):
+        #create test conditions
+        x_k = np.array([[1,2,3]])
+        u_k = np.array([[4,5]])
+        #test function
+        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        # create expected output
+        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
+        xu_k_len_expected = 5
+        x_k_len_expected  = 3
+        #compare outputs
+        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
+        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
+        self.assertEqual(xu_k_len, xu_k_len_expected)
+        self.assertEqual(x_k_len, x_k_len_expected)
+
+    def test_accepts_valid_jnp_col_inputs(self):
+        #create test conditions
+        x_k = jnp.array([[1],[2],[3]])
+        u_k = jnp.array([[4],[5]])
+        #test function
+        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        # create expected output
+        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
+        xu_k_len_expected = 5
+        x_k_len_expected  = 3
+        #compare outputs
+        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
+        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
+        self.assertEqual(xu_k_len, xu_k_len_expected)
+        self.assertEqual(x_k_len, x_k_len_expected)
+
+    def test_accepts_valid_jnp_row_inputs(self):
+        #create test conditions
+        x_k = jnp.array([[1,2,3]])
+        u_k = jnp.array([[4,5]])
+        #test function
+        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        # create expected output
+        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
+        xu_k_len_expected = 5
+        x_k_len_expected  = 3
+        #compare outputs
+        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
+        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
+        self.assertEqual(xu_k_len, xu_k_len_expected)
+        self.assertEqual(x_k_len, x_k_len_expected)
+
 
 if __name__ == '__main__':
     unittest.main()
