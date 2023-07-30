@@ -17,54 +17,67 @@ from scipy.integrate import solve_ivp
 import ilqr_utils as util
 
 class ilqrControllerState:
-    def __init__(self,ilqr_config, seed_state_vec, seed_contro1_seq, state_des_seq = None, control_des_seq = None):
+    def __init__(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike = np.zeros([1,1]), u_des_seq:npt.ArrayLike = np.zeros([1,1])):
         # direct parameter population
-        self.seed_state_vec        = seed_state_vec
-        self.seed_control_seq      = seed_contro1_seq
-        self.time_step             = ilqr_config['time_step']
-        self.cost_float            = 0.0
-        self.prev_cost_float       = 0.0
-        self.iter_int              = 0 
-        self.ro_reg                = 0.0
-        self.ro_reg_change_bool    = False    
+        seed_x_des_seq, seed_u_des_seq = self.populate_des_seqs(x_des_seq, u_des_seq, seed_x_vec, seed_u_seq)
+        self.validate_input_data(ilqr_config, seed_x_vec, seed_u_seq, seed_x_des_seq, seed_u_des_seq)          
+        self.seed_x_vec         = seed_x_vec     
+        self.seed_u_seq         = seed_u_seq     
+        self.time_step          = ilqr_config['time_step']
+        self.cost_float         = 0.0
+        self.prev_cost_float    = 0.0
+        self.iter_int           = 0 
+        self.ro_reg             = 0.0
+        self.ro_reg_change_bool = False    
+        
         # dependent parameter population
-        self.len_seq               = len(seed_contro1_seq)+1
-        self.seed_state_seq        = [None] * (self.len_seq)
-        self.state_len             = self.get_num_states()
-        self.control_len           = self.get_num_controls()
-        self.state_seq             = [None] * self.len_seq
-        self.control_seq           = seed_contro1_seq
-        self.time_seq              = self.create_time_sequence()
-        self.state_des_seq         = self.populate_desired_state_seq(state_des_seq)
-        self.control_des_seq       = self.populate_desired_control_seq(control_des_seq)
-        self.K_seq                 = [None] * (self.len_seq-1)
-        self.d_seq                 = [None] * (self.len_seq-1)
-        self.Del_V_vec_seq         = [None] * (self.len_seq-1)
+        self.u_seq         = seed_u_seq        
+        self.len_seq       = self.get_len_seq()
+        self.x_len         = self.get_num_states()
+        self.u_len         = self.get_num_controls()
+        self.seed_x_seq    = np.zeros([self.len_seq,self.x_len,1])        
+        self.x_seq         = np.zeros([self.len_seq,self.x_len,1])
+        self.time_seq      = np.arange(self.len_seq) * self.time_step
+        self.x_des_seq     = seed_x_des_seq
+        self.u_des_seq     = seed_u_des_seq
+        self.K_seq         = np.zeros([self.len_seq-1, self.u_len, self.x_len])
+        self.d_seq         = np.zeros([self.len_seq-1, self.u_len,          1])
+        self.Del_V_vec_seq = np.zeros([self.len_seq-1, 2])
+
+    def validate_input_data(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike, u_des_seq:npt.ArrayLike):
+        if seed_x_vec.ndim != 2 or (seed_x_vec.shape)[1] != 1:
+            raise ValueError('seed state vector has invalid dimension, must be float array of (1,n,1)')
+        if seed_u_seq.ndim != 3 or (seed_u_seq.shape)[2] != 1:
+            raise ValueError('seed control vector has invalid dimension, must be float array of (len_seq-1,m,1)')
+        if u_des_seq.tolist() != (np.zeros([1,1])).tolist(): 
+                if  u_des_seq.shape != seed_u_seq.shape:
+                    raise ValueError('desired control vector has invalid dimension, must match seed control sequence (len_seq-1,m,1)')
+        if x_des_seq.tolist() != (np.zeros([1,1])).tolist(): 
+                if  x_des_seq.shape != (len(seed_u_seq)+1, len(seed_x_vec), 1):
+                    raise ValueError('desired state vector has invalid dimension, must match seed control sequence length and state vector length (len_seq,n,1)')
 
     def create_time_sequence(self):
         time_id        = list(range(self.len_seq))
         time_seq       = [i * self.time_step for i in time_id]
         return time_seq
 
-    def populate_desired_state_seq(self, state_des_seq):
-        if state_des_seq == None:
-            state_des_seq = [jnp.zeros([self.get_num_states(), 1])] * self.len_seq
-        else:
-            assert(len(state_des_seq) == len(self.state_seq))
-        return state_des_seq  
+    def populate_des_seqs(self, x_des_seq, u_des_seq, x_vec, u_vec):
+        # if the desired x and u are initialized to zeros 1 x 1, 
+        # the sequences are filled to fit the input x and u arrays.
+        if x_des_seq.tolist() == (np.zeros([1,1])).tolist():
+            x_des_seq = np.zeros([len(u_vec[0])+1,len(x_vec[0]), 1])
+        if u_des_seq.tolist() == (np.zeros([1,1])).tolist():
+            u_des_seq = np.zeros_like(u_vec)           
+        return x_des_seq, u_des_seq
 
-    def populate_desired_control_seq(self, control_des_seq):
-        if control_des_seq == None:
-            control_des_seq = [jnp.zeros([self.get_num_controls(), 1])] * (self.len_seq-1)
-        else:
-            assert(len(control_des_seq) == len(self.control_seq))
-        return control_des_seq          
-
+    def get_len_seq(self):
+        return len(self.seed_u_seq)+1
+    
     def get_num_states(self):
-        return jnp.shape(util.array_to_col(self.seed_state_vec))[0]
+        return len(self.seed_x_vec)
     
     def get_num_controls(self):
-        return jnp.shape(util.array_to_col(self.seed_control_seq[0]))[0]
+        return len(self.seed_u_seq[0])
 
 class ilqrConfiguredFuncs:
     def __init__(self, ilqr_config, controller_state:ilqrControllerState):
@@ -77,8 +90,8 @@ class ilqrConfiguredFuncs:
     def create_curried_cost_func(self, ilqr_config, controller_state):
         cost_func         = ilqr_config['cost_func']
         cost_func_params  = ilqr_config['cost_func_params']
-        state_des_seq     = controller_state.state_des_seq
-        control_des_seq   = controller_state.control_des_seq
+        state_des_seq     = controller_state.x_des_seq
+        control_des_seq   = controller_state.u_des_seq
         cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, state_des_seq, control_des_seq, is_final_bool)
         return cost_func_curried 
     
@@ -139,11 +152,11 @@ def initialize_ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
     # create object containing preconfigured functions with static parameters (currying and parameter encapsulation)
     config_funcs = ilqrConfiguredFuncs(ilqr_config, ctrl_state)
     # populate state sequence from seed control sequence
-    state_seq = config_funcs.simulate_dyn_func(ctrl_state.seed_state_vec,
-                                               ctrl_state.seed_control_seq)
+    state_seq = config_funcs.simulate_dyn_func(ctrl_state.seed_x_vec,
+                                               ctrl_state.seed_u_seq)
 
     # calculate initial cost
-    cost_float = calculate_total_cost(config_funcs.cost_func, state_seq, ctrl_state.control_seq)
+    cost_float = calculate_total_cost(config_funcs.cost_func, state_seq, ctrl_state.u_seq)
     # ensure seed_cost is initialized with larger differential than convergence bound
     prev_cost_float = cost_float + (1 + ilqr_config['converge_crit'])
     # while within iteration limit and while cost has not converged    
@@ -160,7 +173,7 @@ def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerStat
         # perform backwards pass to calculate gains and expected value function change
         local_ctrl_state.K_seq, local_ctrl_state.d_seq, local_ctrl_state.Del_V_vec_seq, local_ctrl_state.ro_reg = calculate_backwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        local_ctrl_state.state_seq, local_ctrl_state.control_seq, local_ctrl_state.cost_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
+        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # increment iteration counter
         converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)/ctrl_state.cost_float
         print('iteration number: ', local_ctrl_state.iter_int)
@@ -195,15 +208,16 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
 
     Ad_seq, Bd_seq = calculate_linearized_state_space_seq(config_funcs.state_trans_func,
                                                           config_funcs.c2d_ss_func,
-                                                          ctrl_state.state_seq,
-                                                          ctrl_state.control_seq,
+                                                          ctrl_state.x_seq,
+                                                          ctrl_state.u_seq,
                                                           ctrl_state.time_seq)
-    P_N, p_N = calculate_final_ctg_approx(config_funcs.cost_func, 
-                                                        ctrl_state.state_seq[-1], 
-                                                        ctrl_state.control_len)
     
-    P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
-                                                                          ctrl_state.len_seq)
+    P_N, p_N = calculate_final_ctg_approx(config_funcs.cost_func, 
+                                                        ctrl_state.x_seq[-1], 
+                                                        ctrl_state.u_len)
+    
+    P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N, ctrl_state.x_len,
+                                                                          ctrl_state.u_len, ctrl_state.len_seq)
     if ctrl_state.ro_reg_change_bool is True:
         ro_reg = ctrl_state.ro_reg + ilqr_config['ro_reg_change']
     else:
@@ -217,8 +231,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
                                                                         config_funcs.cost_func,
                                                                         Ad_seq[k_step],
                                                                         Bd_seq[k_step],
-                                                                        ctrl_state.state_seq[k_step],
-                                                                        ctrl_state.control_seq[k_step],
+                                                                        ctrl_state.x_seq[k_step],
+                                                                        ctrl_state.u_seq[k_step],
                                                                         P_kp1,
                                                                         p_kp1,
                                                                         ro_reg,
@@ -227,8 +241,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
             if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
                 ro_reg    = ro_reg + ilqr_config['ro_reg_change']
-                P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N,
-                                                                                      ctrl_state.len_seq)
+                P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N, ctrl_state.x_len,
+                                                                                      ctrl_state.u_len, ctrl_state.len_seq)
                 break
             else:
                 K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
@@ -240,8 +254,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
 
 def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
     #initialize updated state vec, updated control_vec, line search factor
-    state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
-                                                                                           ctrl_state.len_seq)
+    state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
+                                                                                           ctrl_state.seed_x_vec, ctrl_state.len_seq)
     line_search_factor = 1
     line_search_scale_param = 0.5
     iter_count = 0
@@ -251,8 +265,8 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
     while not in_bounds_bool and (iter_count < max_iter):
         for k_step in range(ctrl_state.len_seq-1):
             # calculate updated control value
-            u_k_new = calculate_u_k_new(ctrl_state.control_seq[k_step],
-                                        ctrl_state.state_seq[k_step],
+            u_k_new = calculate_u_k_new(ctrl_state.u_seq[k_step],
+                                        ctrl_state.x_seq[k_step],
                                         state_seq_new[k_step], 
                                         ctrl_state.K_seq[k_step], 
                                         ctrl_state.d_seq[k_step], 
@@ -281,13 +295,13 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
             break    
         elif (iter_count == max_iter-1):
             iter_count     += 1  
-            state_seq_new   = ctrl_state.state_seq
-            control_seq_new = ctrl_state.control_seq
+            state_seq_new   = ctrl_state.x_seq
+            control_seq_new = ctrl_state.u_seq
             cost_float_new  = ctrl_state.cost_float
             ro_reg_change_bool = True
         else:
-            state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.seed_state_vec,
-                                                                                                   ctrl_state.len_seq)
+            state_seq_new,control_seq_new,cost_float_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
+                                                                                           ctrl_state.seed_x_vec, ctrl_state.len_seq)
             line_search_factor *= line_search_scale_param
             iter_count += 1
     return state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool
@@ -317,7 +331,7 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
             dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx].reshape(-1)))
             y_0 = (state_seq[idx]).reshape(-1)
             result_ivp       = solve_ivp(dyn_func_zoh, time_span, y_0)
-            state_next       = (jnp.array([result_ivp.y[:,-1]])).reshape(-1,1)
+            state_next       = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
             state_seq[idx+1] = state_next
     else:
         raise ValueError("invalid simulation method")
@@ -416,7 +430,7 @@ def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_me
     d_state_space = stateSpace(a_d, b_d, c_d, d_d, time_step)
     return d_state_space
 
-def initialize_backwards_pass(P_N, p_N, u_len, x_len, len_seq):
+def initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq):
     K_seq         = np.zeros([(len_seq-1), u_len, x_len])
     d_seq         = np.zeros([(len_seq-1), u_len, 1])
     Del_V_vec_seq = np.zeros([(len_seq-1), 2])
