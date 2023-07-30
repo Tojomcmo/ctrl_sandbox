@@ -11,13 +11,13 @@ def cost_func_quad_state_and_control(cost_func_params:dict, state_vec, control_v
     R  = cost_func_params['R']
     Qf = cost_func_params['Qf']
     # check that dimensions match [TODO]
-    x_k_corr     = util.calculate_current_minus_des_array(state_vec  , state_des_seq[k_step]  )
-    x_k_corr_col = util.vec_1D_array_to_col(x_k_corr)    
+    x_k_corr     = util.calc_and_shape_array_diff(state_vec  , state_des_seq[k_step]  )
+    x_k_corr_col = util.array_to_col(x_k_corr)    
     if is_final_bool:
         cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
     else:
-        u_k_corr     = util.calculate_current_minus_des_array(control_vec, control_des_seq[k_step])
-        u_k_corr_col = util.vec_1D_array_to_col(u_k_corr)   
+        u_k_corr     = util.calc_and_shape_array_diff(control_vec, control_des_seq[k_step])
+        u_k_corr_col = util.array_to_col(u_k_corr)   
         cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
                               +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
     return cost_float                   
