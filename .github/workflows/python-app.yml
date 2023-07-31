@@ -40,7 +40,7 @@ jobs:
         python -m pytest
     - name: Tests
       run: |
-        python -m pytest tests/        
+        python -m pytest test/        
     # - name: Dyn Functions Test
     #   run: |
     #     python -m pytest tests/test_ilqr_dyns.py
