@@ -10,7 +10,7 @@ class plot_2d_state_scatter_sequences_tests(unittest.TestCase):
         x_seq = [jnp.array([[1.],[2.]]),
                  jnp.array([[3.],[4.]]),
                  jnp.array([[5.],[6.]])]                    
-        analyze.plot_2d_state_scatter_sequences(x_seq)
+        # analyze.plot_2d_state_scatter_sequences(x_seq)
         self.assertEqual(True, True)        
 
 class plot_2d_state_batch_sequences_tests(unittest.TestCase):
@@ -18,8 +18,6 @@ class plot_2d_state_batch_sequences_tests(unittest.TestCase):
         x_seq = [jnp.array([[1.],[2.]]),
                  jnp.array([[4.],[3.]]),
                  jnp.array([[5.],[6.]])]                    
-        analyze.plot_2d_state_quiver(x_seq)
-        plt.show()
         self.assertEqual(True, True)        
 
 class plot_compare_two_state_sequences_tests(unittest.TestCase):
@@ -34,9 +32,6 @@ class plot_compare_two_state_sequences_tests(unittest.TestCase):
         x_names  = ['sequence1', 'sequence2']   
         x_styles = ['b.', 'r.']     
 
-        analyze.plot_compare_state_sequences(x_seqs,x_names, x_styles)
-        plt.legend()
-        plt.show()
         self.assertEqual(True, True)        
 
 

@@ -50,7 +50,8 @@ class shared_unit_test_data_and_funcs:
             'cost_ratio_bounds'         : [1e-6, 20],
             'ro_reg_start'              : 0.25,
             'ro_reg_change'             : 0.25,
-            'fp_max_iter'               : 5
+            'fp_max_iter'               : 5,
+            'log_ctrl_history'          : True
             }
         self.ilqr_config_nl_pend = {
             'state_trans_func'          : self.pend_dyn_func_full,
@@ -65,7 +66,8 @@ class shared_unit_test_data_and_funcs:
             'cost_ratio_bounds'         : [1e-6, 20],
             'ro_reg_start'              : 0.25,
             'ro_reg_change'             : 0.25,
-            'fp_max_iter'               : 5
+            'fp_max_iter'               : 5,
+            'log_ctrl_history'          : True
             }
         
         self.len_seq          = 10
@@ -346,7 +348,7 @@ class run_ilqr_controller_tests(unittest.TestCase):
                                               data_and_funcs.u_seq,
                                               data_and_funcs.x_des_seq,
                                               data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
         ctrl_state.x_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
@@ -383,7 +385,7 @@ class calculate_forwards_pass_tests(unittest.TestCase):
                                               data_and_funcs.u_seq,
                                               data_and_funcs.x_des_seq,
                                               data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
         ctrl_state.x_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
@@ -394,7 +396,7 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
+        state_seq_new, control_seq_new, cost_float_new,cost_seq_new,line_search_factor, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
     def test_accepts_valid_nl_dyn_inputs(self):
@@ -405,7 +407,7 @@ class calculate_forwards_pass_tests(unittest.TestCase):
                                               data_and_funcs.u_seq,
                                               data_and_funcs.x_des_seq,
                                               data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
         ctrl_state.x_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
@@ -416,7 +418,7 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
+        state_seq_new, control_seq_new, cost_float_new,cost_seq_new,line_search_factor, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
@@ -721,7 +723,7 @@ class initialize_backwards_pass_tests(unittest.TestCase):
         u_len   = data_and_funcs.u_len
         p_N     = np.ones([x_len, 1])
         P_N     = np.ones([x_len, x_len])
-        P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, u_len, x_len, len_seq)
+        P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq)
         self.assertEqual(P_kp1.shape, (x_len, x_len))
         self.assertEqual(p_kp1.shape, (x_len, 1))
         self.assertEqual(K_seq.shape, ((len_seq-1), u_len, x_len))           
