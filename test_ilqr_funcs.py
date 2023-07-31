@@ -318,7 +318,7 @@ class initialize_ilqr_controller_tests(unittest.TestCase):
                                               data_and_funcs.u_seq,
                                               data_and_funcs.x_des_seq,
                                               data_and_funcs.u_des_seq)
-        config_funcs, x_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state) 
+        config_funcs, x_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state) 
         self.assertEqual((np.abs(cost_float-prev_cost_float) > ilqr_config['converge_crit']), True)   
 
 class run_ilqr_controller_tests(unittest.TestCase):
@@ -330,10 +330,11 @@ class run_ilqr_controller_tests(unittest.TestCase):
                                               data_and_funcs.u_seq,
                                               data_and_funcs.x_des_seq,
                                               data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
+        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
         ctrl_state.x_seq = state_seq
         ctrl_state.cost_float = cost_float
         ctrl_state.prev_cost_float = prev_cost_float
+        ctrl_state.cost_seq = cost_seq
         ctrl_state = ilqr.run_ilqr_controller(ilqr_config, config_funcs, ctrl_state)
         self.assertEqual(True,True)
 
@@ -734,7 +735,7 @@ class initialize_forwards_pass_tests(unittest.TestCase):
         u_len             = shared_data_funcs.u_len
         x_len             = shared_data_funcs.x_len
         len_seq           = shared_data_funcs.len_seq
-        state_seq_updated, control_seq_updated, cost_float_updated, in_bounds_bool = ilqr.initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
+        state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, in_bounds_bool = ilqr.initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
         self.assertEqual(len(state_seq_updated), len_seq)
         self.assertEqual(len(control_seq_updated), len_seq-1)
         self.assertEqual(cost_float_updated, 0)
@@ -746,7 +747,7 @@ class calculate_total_cost_tests(unittest.TestCase):
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
         x_seq = np.ones([3,2,1])
         u_seq = jnp.ones([3,1,1])
-        total_cost = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
         total_cost_expect = (0.5*(2+1)) + (0.5*(2+1)) + (0.5*(2+0))
         self.assertEqual(total_cost, total_cost_expect)        
         # TODO add assert for matching expected value
@@ -755,12 +756,12 @@ class calculate_total_cost_tests(unittest.TestCase):
         shared_data_funcs = shared_unit_test_data_and_funcs()
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
         len_seq = shared_data_funcs.len_seq
-        Q     = shared_data_funcs.ilqr_config_lin_pend_unit_cost['Q']
-        R     = shared_data_funcs.ilqr_config_lin_pend_unit_cost['R']
-        Qf    = shared_data_funcs.ilqr_config_lin_pend_unit_cost['Qf']
+        Q     = shared_data_funcs.pend_unit_cost_func_params['Q']
+        R     = shared_data_funcs.pend_unit_cost_func_params['R']
+        Qf    = shared_data_funcs.pend_unit_cost_func_params['Qf']
         x_seq = shared_data_funcs.x_seq
         u_seq = shared_data_funcs.u_seq
-        total_cost = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
         # (len-1)*0.5*(x.T Q x + u.T R u) + 0.5*(x.T Qf x)
         total_cost_expect = 9*(0.5*(1+4) + (0.5*(1))) + (0.5*(4+1))       
         self.assertEqual(total_cost, total_cost_expect)      

@@ -18,7 +18,7 @@ class plot_2d_state_batch_sequences_tests(unittest.TestCase):
         x_seq = [jnp.array([[1.],[2.]]),
                  jnp.array([[4.],[3.]]),
                  jnp.array([[5.],[6.]])]                    
-        analyze.plot_2d_state_batch_sequences(x_seq)
+        analyze.plot_2d_state_quiver(x_seq)
         plt.show()
         self.assertEqual(True, True)        
 

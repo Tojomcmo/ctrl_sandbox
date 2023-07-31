@@ -1,21 +1,25 @@
 from jax import numpy as jnp
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import matplotlib.gridspec as gridspec
+
 import ilqr_funcs as ilqr
 import dyn_functions as dyn
 import cost_functions as cost
 import analyze_ilqr_output_funcs as analyze
 
-import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0,1.]]),
-                          'R'  : jnp.array([[.01]]),
-                          'Qf' : jnp.array([[10.,0],[0,10.]])}
+   #------- Define controller configuration -------#
+   cost_func_params    = {'Q'  : jnp.array([[1.,0],[0.,1.]]) * 1,
+                          'R'  : jnp.array([[1.]]),
+                          'Qf' : jnp.array([[1.,0],[0.,1.]]) * 1}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
    ilqr_config = {
-                    'state_trans_func'          : dyn.pend_dyn_nl,
+                    'state_trans_func'          : dyn.pend_dyn_lin,
                     'state_trans_func_params'   : state_trans_params,
                     'cost_func'                 : cost.cost_func_quad_state_and_control,
                     'cost_func_params'          : cost_func_params,
@@ -23,48 +27,101 @@ if __name__ == "__main__":
                     'c2d_method'                : 'zohCombined',# 'euler', "zoh", 'zohCombined'
                     'max_iter'                  : 10,
                     'time_step'                 : 0.1,
-                    'converge_crit'             : 1e-3,
+                    'converge_crit'             : 1e-4,
                     'cost_ratio_bounds'         : [1e-6, 10],
                     'ro_reg_start'              : 0.0,
                     'ro_reg_change'             : 0.25,
-                    'fp_max_iter'               : 5
+                    'fp_max_iter'               : 5,
+                    'log_ctrl_history'          : True
                  }
    
+   #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 40
+   len_seq    = 10
 
-   x_init_vec = np.array([[1.],[-1.]])
-   u_init_seq = np.ones([len_seq-1, 1,1])
+   #---------- define plotting condition ----------#
+   plot_ctrl_output_bool = False
+   plot_ctrl_history_bool = True
 
-   x_des_seq  = np.zeros([len_seq, 2, 1])
-   x_des_seq[:,0] = np.pi
+   #---------- create desired trajectory ----------#
+   traj_gen_dyn_func_params = {'g' : 9.81,
+                               'b' : 1.0,
+                               'l' : 1.0}
+   x_tg_init_vec = np.array([[0.1],[0.1]])
+   u_tg_seq      = np.ones([len_seq-1,1,1])*(5)
+
+   #create curried dynamics function for simulation
+   traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_lin(traj_gen_dyn_func_params,t,x,u)
+   x_des_seq         = ilqr.simulate_forward_dynamics(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
+
+   #---------- set system init ----------#
+   x_init_vec = x_tg_init_vec
+   u_init_seq = np.zeros([len_seq-1, 1,1])
+   u_des_seq  = u_tg_seq
+   # u_des_seq  = np.zeros([len_seq-1, 1, 1])
+   # x_des_seq  = np.zeros([len_seq, 2, 1])
+   # x_des_seq[:,0] = np.pi
 
 
-   controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq, x_des_seq=x_des_seq)
+   controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq, x_des_seq=x_des_seq, u_des_seq=u_des_seq)
    # initialize controller state and configured functions
-   config_funcs, controller_state.x_seq, controller_state.cost_float, controller_state.prev_cost_float \
+   config_funcs, controller_state.x_seq, controller_state.cost_float, controller_state.prev_cost_float, controller_state.cost_seq \
    = ilqr.initialize_ilqr_controller(ilqr_config, controller_state)
    #save initial state_seq
    controller_state.seed_x_seq = controller_state.x_seq
    # run ilqr controller
    controller_output = ilqr.run_ilqr_controller(ilqr_config, config_funcs, controller_state)
 
-   print(np.array(controller_output.u_seq))
 
-   x_plot_seqs = [controller_state.seed_x_seq,
-                  controller_state.x_des_seq,
-                  controller_output.x_seq]
-   x_plot_seq_names = ['initial_seq', 'desired_seq', 'output_seq']
-   x_plot_seq_styles = ['r.', 'g.', 'b.']
-   analyze.plot_compare_state_sequences(x_plot_seqs, x_plot_seq_names, x_plot_seq_styles, fig_num=1)
 
-   # u_plot_seqs = [controller_state.seed_control_seq,
-   #              controller_state.control_des_seq,
-   #              controller_output.control_seq]
-   # u_plot_seq_names = ['initial_seq', 'desired_seq', 'output_seq']
-   # u_plot_seq_styles = ['r.', 'g.', 'b.']
-   # analyze.plot_compare_state_sequences(x_plot_seqs, x_plot_seq_names, x_plot_seq_styles, fig_num=1, xlabel='time')
-   # analyze.plot_compare_state_sequences(x_plot_seqs, x_plot_seq_names, x_plot_seq_styles, fig_num=1)
-   plt.legend()
-   plt.show()
+   if plot_ctrl_output_bool is True:
+      x_plot_seqs = [controller_state.seed_x_seq,
+                     controller_state.x_des_seq,
+                     controller_output.x_seq]
+      x_plot_seq_names = ['initial_seq', 'desired_seq', 'output_seq']
+      x_plot_seq_styles_dot = ['r.', 'g.', 'b.']
+      x_plot_seq_styles_quiver = ['red', 'green', 'blue']
+      gs = gridspec.GridSpec(2, 2)
+      fig = plt.figure(figsize=(14,6))
+      ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
+      ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
+      ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
+      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, xlabel = 'angPos', ylabel = 'angVel')
+      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control')
+      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
+      plt.tight_layout()
+      plt.show()
 
+   elif plot_ctrl_history_bool is True:
+      x_plot_seqs = controller_output.x_seq_history
+      x_plot_seqs.insert(0,controller_output.seed_x_seq)
+      x_plot_seqs.append(controller_output.x_des_seq)
+      x_plot_seq_names = []
+      x_plot_seq_styles_dot = []
+      x_plot_seq_styles_quiver = []
+      n = len(x_plot_seqs)
+      # set color map
+      colormap = cm.get_cmap('rainbow')
+      color = iter(colormap(np.linspace(0, 1, n)))
+      for idx in range(len(x_plot_seqs)):
+         if idx == 0:
+            x_plot_seq_names.append('seed state seq')
+            x_plot_seq_styles_quiver.append('purple')       
+         elif idx == n-1:
+            x_plot_seq_names.append('target state seq')
+            x_plot_seq_styles_quiver.append('red')    
+         else:   
+            x_plot_seq_names.append(f'seq iter {idx}')
+            x_plot_seq_styles_quiver.append('black')    
+         c = next(color)           
+         x_plot_seq_styles_dot.append(c) 
+      gs = gridspec.GridSpec(1, 1)
+      fig = plt.figure(figsize=(12,8))
+      ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
+      # ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
+      # ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
+      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, xlabel = 'angPos', ylabel = 'angVel')
+      # analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control')
+      # analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
+      plt.tight_layout()
+      plt.show()
