@@ -37,22 +37,4 @@ jobs:
     - name: Test with pytest
       continue-on-error: true
       run: |
-        python -m pytest
-    - name: Tests
-      run: |
-        python -m pytest test/        
-    # - name: Dyn Functions Test
-    #   run: |
-    #     python -m pytest tests/test_ilqr_dyns.py
-    # - name: Cost Functions Test
-    #   run: |
-    #     python -m pystest test/test_ilqr_costs.py
-    # - name: Cost Utils Test
-    #   run: |
-    #     python test/test_ilqr_utils.py        
-    # - name: Analyze Functions Test
-    #   run: |
-    #     python test/test_ilqr_funcs.py        
-    #     - name: ilqr Functions Test
-    #     run: |
-    #       python test/test_analyze_funcs.py             
+        python -m pytest      
