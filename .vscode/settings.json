@@ -11,5 +11,10 @@
         "test",    
         "-p",
         "test_*.py"    
-        ]
+        ],
+    
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests"
+    },
+    "python.envFile": "${workspaceFolder}/.env",
 }
