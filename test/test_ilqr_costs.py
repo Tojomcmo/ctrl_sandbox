@@ -1,7 +1,7 @@
 import unittest
 from jax import numpy as jnp
 
-import cost_functions as cfuncs
+import src.cost_functions as cfuncs
 
 
 class cost_func_quad_state_and_control_tests(unittest.TestCase):

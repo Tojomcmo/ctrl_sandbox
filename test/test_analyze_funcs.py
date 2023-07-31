@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 
-import analyze_ilqr_output_funcs as analyze
+import src.analyze_ilqr_output_funcs as analyze
 
 class plot_2d_state_scatter_sequences_tests(unittest.TestCase):
     def test_plot_2d_state_scatter_sequences(self):

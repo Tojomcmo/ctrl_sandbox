@@ -2,7 +2,7 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 
-import ilqr_utils as util
+import src.ilqr_utils as util
 
 
 class is_pos_def_tests(unittest.TestCase):

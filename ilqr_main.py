@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
-import ilqr_funcs as ilqr
-import dyn_functions as dyn
-import cost_functions as cost
-import analyze_ilqr_output_funcs as analyze
+import src.ilqr_funcs as ilqr
+import src.dyn_functions as dyn
+import src.cost_functions as cost
+import src.analyze_ilqr_output_funcs as analyze
 
 
 if __name__ == "__main__":
@@ -19,7 +19,7 @@ if __name__ == "__main__":
                           'l'  : 1.0,
                           'g'  : 9.81}
    ilqr_config = {
-                    'state_trans_func'          : dyn.pend_dyn_lin,
+                    'state_trans_func'          : dyn.pend_dyn_nl,
                     'state_trans_func_params'   : state_trans_params,
                     'cost_func'                 : cost.cost_func_quad_state_and_control,
                     'cost_func_params'          : cost_func_params,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
    u_tg_seq      = np.ones([len_seq-1,1,1])*(5)
 
    #create curried dynamics function for simulation
-   traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_lin(traj_gen_dyn_func_params,t,x,u)
+   traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,t,x,u)
    x_des_seq         = ilqr.simulate_forward_dynamics(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
 
    #---------- set system init ----------#
@@ -87,7 +87,7 @@ if __name__ == "__main__":
       ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
       ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
       analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, xlabel = 'angPos', ylabel = 'angVel')
-      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control')
+      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control') # type: ignore 
       analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
       plt.tight_layout()
       plt.show()

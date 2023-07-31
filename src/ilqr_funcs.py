@@ -14,7 +14,7 @@ from typing import Optional
 import scipy 
 from scipy.integrate import solve_ivp
 
-import ilqr_utils as util
+import src.ilqr_utils as util
 
 class ilqrControllerState:
     def __init__(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike = np.zeros([1,1]), u_des_seq:npt.ArrayLike = np.zeros([1,1])):
@@ -55,15 +55,15 @@ class ilqrControllerState:
             self.lsf_float_history = []
 
     def validate_input_data(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike, u_des_seq:npt.ArrayLike):
-        if seed_x_vec.ndim != 2 or (seed_x_vec.shape)[1] != 1:
+        if seed_x_vec.ndim != 2 or (seed_x_vec.shape)[1] != 1: # type: ignore
             raise ValueError('seed state vector has invalid dimension, must be float array of (1,n,1)')
-        if seed_u_seq.ndim != 3 or (seed_u_seq.shape)[2] != 1:
+        if seed_u_seq.ndim != 3 or (seed_u_seq.shape)[2] != 1: # type: ignore
             raise ValueError('seed control vector has invalid dimension, must be float array of (len_seq-1,m,1)')
-        if u_des_seq.tolist() != (np.zeros([1,1])).tolist(): 
-                if  u_des_seq.shape != seed_u_seq.shape:
+        if u_des_seq.tolist() != (np.zeros([1,1])).tolist():  # type: ignore
+                if  u_des_seq.shape != seed_u_seq.shape: # type: ignore
                     raise ValueError('desired control vector has invalid dimension, must match seed control sequence (len_seq-1,m,1)')
-        if x_des_seq.tolist() != (np.zeros([1,1])).tolist(): 
-                if  x_des_seq.shape != (len(seed_u_seq)+1, len(seed_x_vec), 1):
+        if x_des_seq.tolist() != (np.zeros([1,1])).tolist():  # type: ignore
+                if  x_des_seq.shape != (len(seed_u_seq)+1, len(seed_x_vec), 1): # type: ignore
                     raise ValueError('desired state vector has invalid dimension, must match seed control sequence length and state vector length (len_seq,n,1)')
 
     def create_time_sequence(self):
@@ -81,13 +81,13 @@ class ilqrControllerState:
         return x_des_seq, u_des_seq
 
     def get_len_seq(self):
-        return len(self.seed_u_seq)+1
+        return len(self.seed_u_seq)+1 # type: ignore
     
     def get_num_states(self):
-        return len(self.seed_x_vec)
+        return len(self.seed_x_vec) # type: ignore
     
     def get_num_controls(self):
-        return len(self.seed_u_seq[0])
+        return len(self.seed_u_seq[0]) # type: ignore
 
 class ilqrConfiguredFuncs:
     def __init__(self, ilqr_config, controller_state:ilqrControllerState):
@@ -253,7 +253,7 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
                                                                         Ad_seq[k_step],
                                                                         Bd_seq[k_step],
                                                                         ctrl_state.x_seq[k_step],
-                                                                        ctrl_state.u_seq[k_step],
+                                                                        ctrl_state.u_seq[k_step], # type: ignore
                                                                         P_kp1,
                                                                         p_kp1,
                                                                         ro_reg,
@@ -286,7 +286,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
     while not in_bounds_bool and (iter_count < max_iter):
         for k_step in range(ctrl_state.len_seq-1):
             # calculate updated control value
-            u_k_new = calculate_u_k_new(ctrl_state.u_seq[k_step],
+            u_k_new = calculate_u_k_new(ctrl_state.u_seq[k_step], # type: ignore
                                         ctrl_state.x_seq[k_step],
                                         state_seq_new[k_step], 
                                         ctrl_state.K_seq[k_step], 
@@ -296,7 +296,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
             x_kp1_new = (config_funcs.simulate_dyn_func(state_seq_new[k_step], u_k_new))[-1]
             
             # populate state and control sequences
-            control_seq_new[k_step]  = u_k_new
+            control_seq_new[k_step]  = u_k_new # type: ignore
             state_seq_new[k_step+1]  = x_kp1_new 
 
         # shift sequences for cost calculation wrt desired trajectories
@@ -541,18 +541,18 @@ def calculate_backstep_ctg_approx(q_x:npt.ArrayLike, q_u:npt.ArrayLike, q_xx:npt
     # P_k is the kth hessian approximation of the cost-to-go
     # p_k is the kth jacobian approximation of the cost-to-go
     # Del_V_k is the kth expected change in the value function
-    assert q_x.shape  == (len(q_x), 1), 'q_x must be column vector (n,1)'
-    assert q_u.shape  == (len(q_u), 1), 'q_u must be column vector (n,1)'
-    assert K_k.shape  == (len(q_u), len(q_x)), "K_k incorrect shape, must be (len(q_u), len(q_x))"
-    assert d_k.shape  == (len(q_u), 1       ), "d_k incorrect shape, must be (len(q_u), 1)"
-    assert q_xx.shape == (len(q_x), len(q_x)), "q_xx incorrect shape, must be (len(q_x), len(q_x))"
-    assert q_uu.shape == (len(q_u), len(q_u)), "q_uu incorrect shape, must be (len(q_u), len(q_u))"   
-    assert q_ux.shape == (len(q_u), len(q_x)), "q_ux incorrect shape, must be (len(q_u), len(q_x))"
-    K_kt        = K_k.T
-    d_kt        = d_k.T
-    q_xu        = q_ux.T
-    P_k         = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k)
-    p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k)
+    assert q_x.shape  == (len(q_x), 1), 'q_x must be column vector (n,1)' # type: ignore
+    assert q_u.shape  == (len(q_u), 1), 'q_u must be column vector (n,1)' # type: ignore
+    assert K_k.shape  == (len(q_u), len(q_x)), "K_k incorrect shape, must be (len(q_u), len(q_x))" # type: ignore
+    assert d_k.shape  == (len(q_u), 1       ), "d_k incorrect shape, must be (len(q_u), 1)" # type: ignore
+    assert q_xx.shape == (len(q_x), len(q_x)), "q_xx incorrect shape, must be (len(q_x), len(q_x))" # type: ignore
+    assert q_uu.shape == (len(q_u), len(q_u)), "q_uu incorrect shape, must be (len(q_u), len(q_u))"    # type: ignore
+    assert q_ux.shape == (len(q_u), len(q_x)), "q_ux incorrect shape, must be (len(q_u), len(q_x))" # type: ignore
+    K_kt        = K_k.T # type: ignore
+    d_kt        = d_k.T # type: ignore
+    q_xu        = q_ux.T # type: ignore
+    P_k         = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k) # type: ignore
+    p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k) # type: ignore
     # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
     # Del_V_vec_k = jnp.array([[-jnp.abs((d_kt @ q_u))],[-jnp.abs((0.5) * (d_kt @ q_uu @ d_k))]]).reshape(1,-1)
     Del_V_vec_k = np.array([(d_kt.T @ q_u),((0.5) * (d_kt.T @ q_uu @ d_k))]).reshape(1,-1)

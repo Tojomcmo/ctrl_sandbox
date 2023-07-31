@@ -1,5 +1,5 @@
 import unittest
-import dyn_functions as dyn
+import src.dyn_functions as dyn
 from jax import numpy as jnp
 
 

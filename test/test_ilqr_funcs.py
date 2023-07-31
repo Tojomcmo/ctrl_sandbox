@@ -2,8 +2,8 @@ import unittest
 import numpy as np
 from jax import numpy as jnp
 
-import ilqr_funcs as ilqr
-import ilqr_utils as util
+import src.ilqr_funcs as ilqr
+import src.ilqr_utils as util
 
 # for each input
 #   test one known case
@@ -13,14 +13,14 @@ import ilqr_utils as util
 class shared_unit_test_data_and_funcs:
     def __init__(self) -> None:
         self.pend_unit_cost_func_params = {
-                        'Q'  : np.array([[1.,0],[0,1.]]),
+                        'Q'  : np.array([[1.,0],[0,1.]]), # type: ignore
                         'R'  : np.array([[1.]]),
-                        'Qf' : np.array([[1.,0],[0,1.]])
+                        'Qf' : np.array([[1.,0],[0,1.]]) # type: ignore
                       } 
         self.pend_cost_func_params = {
-                        'Q'  : np.array([[1.,0],[0,1.]]),
+                        'Q'  : np.array([[1.,0],[0,1.]]), # type: ignore
                         'R'  : np.array([[0.001]]),
-                        'Qf' : np.array([[100.,0],[0,100.]])
+                        'Qf' : np.array([[100.,0],[0,100.]]) # type: ignore
                       } 
         self.pend_unit_state_trans_params = {
                         'b'  : 1.0,
@@ -28,9 +28,9 @@ class shared_unit_test_data_and_funcs:
                         'g'  : 1.0
                       } 
         self.gen_cost_func_params = {
-                        'Q'  : np.array([[1.,0,0],[0,10.,0],[0,0,1.]]),
-                        'R'  : np.array([[1.,0],[0,10.]]),
-                        'Qf' : np.array([[1.,0,0],[0,10.,0],[0,0,10.]])
+                        'Q'  : np.array([[1.,0,0],[0,10.,0],[0,0,1.]]), # type: ignore
+                        'R'  : np.array([[1.,0],[0,10.]]), # type: ignore
+                        'Qf' : np.array([[1.,0,0],[0,10.,0],[0,0,10.]]) # type: ignore
                       } 
         self.gen_state_trans_params = {
                         'b'  : 1.0,
@@ -588,8 +588,8 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         #assert validity
         self.assertEqual(len(A_lin_array), len_seq-1)
         self.assertEqual(len(B_lin_array), len_seq-1)
-        self.assertEqual((A_lin_array[0]).tolist(), A_lin_d_expected.tolist())
-        self.assertEqual((B_lin_array[0]).tolist(), B_lin_d_expected.tolist())        
+        self.assertEqual((A_lin_array[0]).tolist(), A_lin_d_expected.tolist()) # type: ignore
+        self.assertEqual((B_lin_array[0]).tolist(), B_lin_d_expected.tolist())         # type: ignore
 
     def test_calculate_linearized_state_space_seq_accepts_valid_system_from_shared(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
@@ -801,8 +801,8 @@ class taylor_expand_cost_tests(unittest.TestCase):
         u_seq = [np.array([[3.]])] * 3
         k_step = 1
         l_x, l_u, l_xx, l_uu, l_ux = ilqr.taylor_expand_cost(cost_func,
-                                                            x_seq[k_step],
-                                                            u_seq[k_step],
+                                                            x_seq[k_step], # type: ignore
+                                                            u_seq[k_step], # type: ignore
                                                             k_step)
         l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.x_des_seq[k_step])
         l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.u_des_seq[k_step])
