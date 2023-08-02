@@ -6,9 +6,6 @@ from numpy import typing as npt
 from typing import Optional
 from scipy.integrate import solve_ivp
 
-import src.ilqr_utils as util
-
- 
 class stateSpace:
     def __init__(self, a_mat, b_mat, c_mat, d_mat, time_step = None):
         if a_mat.shape[0] != a_mat.shape[1]:

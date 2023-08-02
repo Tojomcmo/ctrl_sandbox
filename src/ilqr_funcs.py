@@ -14,8 +14,8 @@ from typing import Optional
 import scipy 
 from scipy.integrate import solve_ivp
 
-import ilqr_utils as util
-import gen_ctrl_funcs as gen_ctrl
+import src.ilqr_utils as util
+import src.gen_ctrl_funcs as gen_ctrl
 
 class ilqrControllerState:
     def __init__(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike = np.zeros([1,1]), u_des_seq:npt.ArrayLike = np.zeros([1,1])):

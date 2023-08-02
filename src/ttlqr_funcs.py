@@ -1,7 +1,9 @@
 import numpy as np
 from numpy import typing as npt
-import gen_ctrl_funcs as gen_ctrl
-import ilqr_utils as util
+
+import src.gen_ctrl_funcs as gen_ctrl
+import src.ilqr_utils as util
+
 class ttlqrControllerConfig():
     def __init__(self, config_dict, u_des_seq, x_des_seq):
         # verify input data
@@ -87,7 +89,7 @@ def calculate_backstep_params_seq(ctrl_config:ttlqrControllerConfig):
         raise ValueError('invalid sequence of backstepped parameters, J(x,t)')
     return s_xx_seq, s_x_seq, s_0_seq
 
-def calculate_final_ctg_params(x_des_N:npt.ArrayLike, Qf:npt.ArrayLike):
+def calculate_final_ctg_params(Qf:npt.ArrayLike, x_des_N:npt.ArrayLike):
     # Calculate final cost to go
     s_xx_N = Qf
     s_x_N  = -(Qf @ x_des_N) # type: ignore
@@ -100,7 +102,6 @@ def calculate_ctg_params(Q:npt.ArrayLike, R:npt.ArrayLike, BRinvBT:npt.ArrayLike
                          lin_dyn_sys:gen_ctrl.stateSpace):
     A = lin_dyn_sys.a
     B = lin_dyn_sys.b
-    BRinvBT = 
     s_xx_k = Q - (s_xx_kp1 @ BRinvBT @ s_xx_kp1) + (s_xx_kp1 @ A) + (A.T @ s_xx_kp1) # type: ignore
     s_x_k  = -(Q @ x_des_k) + ((A.T - s_xx_kp1 @ BRinvBT) @ s_x_kp1) + (s_xx_kp1 @ B @ u_des_k) # type: ignore
     s_0_k  = (x_des_k.T @ Q @ x_des_k) - (s_x_kp1.T @ BRinvBT @ s_x_kp1) + 2 * (s_x_kp1.T @ B @ u_des_k) # type: ignore

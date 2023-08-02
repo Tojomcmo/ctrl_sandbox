@@ -1,7 +1,7 @@
 import unittest
-import src.dyn_functions as dyn
 from jax import numpy as jnp
 
+import src.dyn_functions as dyn
 
 class pend_nl_dyn_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):

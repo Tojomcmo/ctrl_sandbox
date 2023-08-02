@@ -220,7 +220,7 @@ class stateSpace_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.stateSpace(A,B,C,D)
+        ss = gen_ctrl.stateSpace(A,B,C,D)
         self.assertEqual(ss.a.tolist(), A.tolist())
         self.assertEqual(ss.b.tolist(), B.tolist())
         self.assertEqual(ss.c.tolist(), C.tolist())
@@ -233,7 +233,7 @@ class stateSpace_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.stateSpace(A,B,C,D, time_step = 0.1)
+        ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 0.1)
         self.assertEqual(ss.a.tolist(), A.tolist())
         self.assertEqual(ss.b.tolist(), B.tolist())
         self.assertEqual(ss.c.tolist(), C.tolist())
@@ -247,7 +247,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A matrix must be square')
 
     def test_state_space_rejects_A_and_B_matrix_n_dim_mismatch(self):
@@ -256,7 +256,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and B matrices must have same n(state) dimension')        
 
     def test_state_space_rejects_A_and_C_matrix_m_dim_mismatch(self):
@@ -265,7 +265,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and C matrices must have same m(state) dimension')        
 
     def test_state_space_rejects_B_and_D_matrix_m_dim_mismatch(self):
@@ -274,7 +274,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'B and D matrices must have the same m(control) dimension')  
  
     def test_state_space_rejects_C_and_D_matrix_n_dim_mismatch(self):
@@ -283,7 +283,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,],[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'C and D matrices must have the same n(measurement) dimension')  
 
     def test_state_space_rejects_invalid_timestep_input(self):
@@ -292,16 +292,16 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,]])
         with self.assertRaises(Exception) as assert_error_negative:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = -0.1) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = -0.1) 
         self.assertEqual(str(assert_error_negative.exception), 'invalid time step definition -0.1. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_string:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = 'lettuce') 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 'lettuce') 
         self.assertEqual(str(assert_error_string.exception), 'invalid time step definition lettuce. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_zero:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = 0) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 0) 
         self.assertEqual(str(assert_error_zero.exception), 'invalid time step definition 0. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_NaN:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = float("nan")) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = float("nan")) 
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
 
 class ilqrConfiguredFuncs_tests(unittest.TestCase):
@@ -441,7 +441,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         control_seq     = np.ones([4,1,1])
         time_step       = 0.1
         state_init      = np.array([[1.],[1.]])
-        state_seq       = ilqr.simulate_forward_dynamics(self.pend_unit_dyn_func, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(self.pend_unit_dyn_func, 
                                                          state_init, control_seq, time_step, 
                                                          sim_method = 'euler')
         # calculate expected output
@@ -464,7 +464,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = ilqr.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'euler')
         self.assertEqual(len(state_seq), len_seq)
@@ -478,7 +478,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = ilqr.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'solve_ivp_zoh')
         self.assertEqual(len(state_seq), len_seq)
@@ -495,7 +495,7 @@ class linearize_dynamics_tests(unittest.TestCase):
         x_len           = data_and_funcs.x_len
         u_len           = data_and_funcs.u_len
         k_step          = 1
-        a_lin, b_lin    = ilqr.linearize_dynamics(data_and_funcs.pend_unit_dyn_func_curried,
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_dyn_func_curried,
                                                   time_seq[k_step],
                                                   state_seq[k_step],
                                                   control_seq[k_step])
@@ -524,7 +524,7 @@ class linearize_dynamics_tests(unittest.TestCase):
         x_len           = data_and_funcs.x_len
         u_len           = data_and_funcs.u_len
         k_step          = 1
-        a_lin, b_lin    = ilqr.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
                                                   time_seq[k_step],
                                                   state_seq[k_step],
                                                   control_seq[k_step])
@@ -547,14 +547,14 @@ class linearize_dynamics_tests(unittest.TestCase):
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
-    def discretize_ss_simple(self, input_state_space:ilqr.stateSpace):
+    def discretize_ss_simple(self, input_state_space:gen_ctrl.stateSpace):
         time_step = 0.1
         n  = input_state_space.a.shape[0] 
         a_d = jnp.eye(n) + (input_state_space.a * time_step)
         b_d = input_state_space.b * time_step
         c_d = input_state_space.c
         d_d = input_state_space.d
-        d_state_space = ilqr.stateSpace(a_d, b_d, c_d, d_d, time_step)
+        d_state_space = gen_ctrl.stateSpace(a_d, b_d, c_d, d_d, time_step)
         return d_state_space
     
     def pend_unit_dyn_func(self, time, state, control):
@@ -574,7 +574,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         time_step      = 0.1
         control_seq    = [jnp.array([[1.]])] * (len_seq-1)
         state_seq      = [jnp.array([[1.],[1.]])] * (len_seq)
-        A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.pend_unit_dyn_func,
+        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.pend_unit_dyn_func,
                                                                              self.discretize_ss_simple, 
                                                                              state_seq, 
                                                                              control_seq, 
@@ -600,7 +600,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         u_len          = len(data_and_funcs.u_seq[0])
         control_seq    = data_and_funcs.u_seq
         state_seq      = data_and_funcs.x_seq
-        A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(data_and_funcs.pend_unit_dyn_func_curried,
+        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(data_and_funcs.pend_unit_dyn_func_curried,
                                                                              self.discretize_ss_simple, 
                                                                              state_seq, 
                                                                              control_seq, 
@@ -615,7 +615,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls, 2))
     #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_dim_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_dim_error.exception), 'state or control sequence is incorrect array dimension. sequences must be 2d arrays')
 
     # def test_calculate_linearized_state_space_seq_rejects_invalid_sequence_lengths(self):
@@ -626,7 +626,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls))
     #     state_seq    = jnp.ones((num_steps+2, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_len_error.exception), 'state and control sequences are incompatible lengths. state seq must be control seq length +1')
 
     # def test_calculate_linearized_state_space_seq_rejects_invalid_time_step(self):
@@ -637,7 +637,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls))
     #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
 
 class discretize_state_space_tests(unittest.TestCase):
@@ -647,11 +647,11 @@ class discretize_state_space_tests(unittest.TestCase):
         B = np.array([[1,1],[0,1],[0,0]])
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
-        ss_c = ilqr.stateSpace(A,B,C,D)
+        ss_c = gen_ctrl.stateSpace(A,B,C,D)
         time_step = 0.1
         c2d_methods = ['euler', 'zoh', 'zohCombined']
         for c2d_method  in c2d_methods:
-            ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method)
+            ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method)
             self.assertEqual(ss.a.shape, A.shape)
             self.assertEqual(ss.b.shape, B.shape)
             self.assertEqual(ss.c.shape, C.shape)
@@ -664,9 +664,9 @@ class discretize_state_space_tests(unittest.TestCase):
         B = np.array([[1.,1.],[0.,1.],[0.,0.]])
         C = np.array([[1.,0.,1.]])
         D = np.array([[0.,0.]])
-        ss_c = ilqr.stateSpace(A,B,C,D)
+        ss_c = gen_ctrl.stateSpace(A,B,C,D)
         time_step = 0.1
-        ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method='euler')
+        ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method='euler')
         A_d_expected = np.eye(3) + (A * time_step)
         B_d_expected = B * time_step
         C_d_expected = C
@@ -688,9 +688,9 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D, time_step)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D, time_step)
         with self.assertRaises(Exception) as assert_error_discrete:
-            ss = ilqr.discretize_state_space(ss_d,time_step)
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step)
         self.assertEqual(str(assert_error_discrete.exception), 'input state space is already discrete')
     
     def test_descritize_state_space_rejects_invalid_c2d_method(self):
@@ -699,9 +699,9 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_c2d_method:
-            ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
         self.assertEqual(str(assert_error_c2d_method.exception), 'invalid discretization method')
      
     def test_descritize_state_space_rejects_singular_A_matrix_for_zoh(self):
@@ -710,9 +710,9 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_singular_A_zoh:
-            ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
         self.assertEqual(str(assert_error_singular_A_zoh.exception), 'determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid'
 )
 
@@ -750,7 +750,7 @@ class calculate_total_cost_tests(unittest.TestCase):
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
         x_seq = np.ones([3,2,1])
         u_seq = jnp.ones([3,1,1])
-        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
         total_cost_expect = (0.5*(2+1)) + (0.5*(2+1)) + (0.5*(2+0))
         self.assertEqual(total_cost, total_cost_expect)        
         # TODO add assert for matching expected value
@@ -764,7 +764,7 @@ class calculate_total_cost_tests(unittest.TestCase):
         Qf    = shared_data_funcs.pend_unit_cost_func_params['Qf']
         x_seq = shared_data_funcs.x_seq
         u_seq = shared_data_funcs.u_seq
-        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
         # (len-1)*0.5*(x.T Q x + u.T R u) + 0.5*(x.T Qf x)
         total_cost_expect = 9*(0.5*(1+4) + (0.5*(1))) + (0.5*(4+1))       
         self.assertEqual(total_cost, total_cost_expect)      
@@ -1055,7 +1055,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1],[2],[3]])
         u_k = np.array([[4],[5]])
         #test function
-        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         # create expected output
         xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
         xu_k_len_expected = 5
@@ -1071,7 +1071,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1,2,3]])
         u_k = np.array([[4,5]])
         with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         self.assertEqual(str(assert_seq_len_error.exception), 'x_vector must be column vector (n,1)')
 
     def test_rejects_np_row_u_inputs(self):
@@ -1079,7 +1079,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1],[2],[3]])
         u_k = np.array([[4,5]])
         with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         self.assertEqual(str(assert_seq_len_error.exception), 'u_vector must be column vector (m,1)')
 
 if __name__ == '__main__':

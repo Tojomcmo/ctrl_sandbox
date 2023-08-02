@@ -6,15 +6,15 @@
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": false,
     "python.testing.unittestArgs": [
-        "-v", 
+        "-v",
         "-s",
-        "test",    
+        "./test",
         "-p",
-        "test_*.py"    
-        ],
+        "test_*.py"
+    ],
     
     "terminal.integrated.env.windows": {
         "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests"
     },
-    "python.envFile": "${workspaceFolder}/.env",
+    // "python.envFile": "${workspaceFolder}/.env",
 }
