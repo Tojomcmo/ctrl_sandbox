@@ -74,10 +74,10 @@ def calculate_backstep_params_seq(ctrl_config:ttlqrControllerConfig):
         raise TypeError('lin_dyn_sys is not discrete. state space must be discrete for function to be valid')
     len_seq = ctrl_config.len_seq
     x_len   = ctrl_config.x_len
-    s_xx_seq = np.zeros([len_seq, x_len, x_len]) # type: ignore
-    s_x_seq  = np.zeros([len_seq, x_len, 1    ]) # type: ignore
-    s_0_seq  = np.zeros([len_seq, 1])            # type: ignore
-    s_xx_seq[-1], s_x_seq[-1], s_x_seq[-1] = calculate_final_ctg_params(x_des_seq[-1], Qf) # type: ignore
+    s_xx_seq = np.zeros([len_seq, x_len, x_len]) 
+    s_x_seq  = np.zeros([len_seq, x_len, 1    ]) 
+    s_0_seq  = np.zeros([len_seq, 1])            
+    s_xx_seq[-1], s_x_seq[-1], s_x_seq[-1] = calculate_final_ctg_params(ctrl_config.x_des_seq[-1], ctrl_config.Qf)
     for idx in range(len_seq-1):
         k_step = - (idx + 2)
         s_xx_seq[k_step], s_x_seq[k_step], s_x_seq[k_step] = calculate_ctg_params(ctrl_config.Q, ctrl_config.R, ctrl_config.BRinvBT,
@@ -92,7 +92,7 @@ def calculate_backstep_params_seq(ctrl_config:ttlqrControllerConfig):
 def calculate_final_ctg_params(Qf:npt.ArrayLike, x_des_N:npt.ArrayLike):
     # Calculate final cost to go
     s_xx_N = Qf
-    s_x_N  = -(Qf @ x_des_N) # type: ignore
+    s_x_N  = -(Qf @ x_des_N)  # type: ignore
     s_0_N  = x_des_N.T @ Qf @ x_des_N  # type: ignore
     return s_xx_N, s_x_N, s_0_N
 
