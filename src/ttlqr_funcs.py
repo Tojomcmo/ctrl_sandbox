@@ -14,9 +14,7 @@ class ttlqrControllerConfig():
         self.u_des_seq   = u_des_seq
         self.Q           = config_dict['Q' ]
         self.R           = config_dict['R' ]
-        self.Qf          = config_dict['Qf']
-        self.c2d_func    = self.curry_c2d_func(config_dict)        
-        self.ss_discrete, self.lin_dyn_sys = self.curry_lin_dyn_func(config_dict['lin_dyn_sys_params'], config_dict['lin_dyn_sys'])        
+        self.Qf          = config_dict['Qf']      
         # dependent parameter fill
         self.len_seq     = len(x_des_seq)
         self.x_len       = len(x_des_seq[0])
@@ -25,7 +23,10 @@ class ttlqrControllerConfig():
         # time saving values
         self.RinvBT     = np.linalg.inv(self.R) @ (self.ss_discrete.b).T
         self.BRinvBT    = self.ss_discrete.b    @  self.RinvBT
-
+        # create curried functions
+        self.c2d_func                      = self.curry_c2d_func(config_dict['c2d_method'])        
+        self.ss_discrete, self.lin_dyn_sys = self.curry_lin_dyn_func(config_dict['lin_dyn_sys_params'], config_dict['lin_dyn_sys'])
+        self.ctg_params_func               = self.curry_ctg_params_func()  
 
     def verify_config_dict(self, config_dict):
         expected_keys = ['Q','R','Qf',
@@ -45,9 +46,8 @@ class ttlqrControllerConfig():
     def verify_input_des_seqs(self, u_des_seq, x_des_seq):    
         return
     
-    def curry_c2d_func(self, config_dict):
+    def curry_c2d_func(self, c2d_method:str):
         time_step  = self.time_step
-        c2d_method = config_dict['c2d_method']
         c2d_func   = lambda cont_state_space: gen_ctrl.discretize_state_space(cont_state_space, time_step, c2d_method)
         return c2d_func
 
@@ -57,7 +57,12 @@ class ttlqrControllerConfig():
         ss_discrete           = self.c2d_func(ss_cont)
         curried_lin_dyn_func  = lambda t, x, u: (ss_discrete.a @ x + ss_discrete @ u)
         return ss_discrete, curried_lin_dyn_func
-
+    
+    def curry_ctg_params_func(self):
+        ctg_params_func = lambda xdk,udk,sxxk,sxk,s0k: calculate_ctg_params(self.Q, self.R, self.BRinvBT,
+                                                                            xdk, udk, sxxk,sxk,s0k,
+                                                                            self.ss_discrete.a, self.ss_discrete.b)
+        return ctg_params_func
 
 class ttlqrControllerState:
     def __init__(self, u_len, x_len, len_seq):
@@ -78,13 +83,12 @@ def calculate_backstep_params_seq(ctrl_config:ttlqrControllerConfig):
     s_x_seq  = np.zeros([len_seq, x_len, 1    ]) 
     s_0_seq  = np.zeros([len_seq, 1])            
     s_xx_seq[-1], s_x_seq[-1], s_x_seq[-1] = calculate_final_ctg_params(ctrl_config.x_des_seq[-1], ctrl_config.Qf)
+
     for idx in range(len_seq-1):
         k_step = - (idx + 2)
-        s_xx_seq[k_step], s_x_seq[k_step], s_x_seq[k_step] = calculate_ctg_params(ctrl_config.Q, ctrl_config.R, ctrl_config.BRinvBT,
-                                                                                  ctrl_config.x_des_seq[k_step],
-                                                                                  ctrl_config.u_des_seq[k_step],
-                                                                                  s_xx_seq[k_step+1],s_x_seq[k_step+1],s_0_seq[k_step+1],
-                                                                                  ctrl_config.ss_discrete)
+        s_xx_seq[k_step], s_x_seq[k_step], s_x_seq[k_step] = ctrl_config.ctg_params_func(ctrl_config.x_des_seq[k_step],
+                                                                                        ctrl_config.u_des_seq[k_step],
+                                                                                        s_xx_seq[k_step+1],s_x_seq[k_step+1],s_0_seq[k_step+1])
     if not verify_backstep_params(s_xx_seq, s_x_seq, s_0_seq):
         raise ValueError('invalid sequence of backstepped parameters, J(x,t)')
     return s_xx_seq, s_x_seq, s_0_seq
@@ -99,14 +103,11 @@ def calculate_final_ctg_params(Qf:npt.ArrayLike, x_des_N:npt.ArrayLike):
 def calculate_ctg_params(Q:npt.ArrayLike, R:npt.ArrayLike, BRinvBT:npt.ArrayLike,
                          x_des_k:npt.ArrayLike, u_des_k:npt.ArrayLike, 
                          s_xx_kp1:npt.ArrayLike, s_x_kp1:npt.ArrayLike, s_0_kp1:npt.ArrayLike, 
-                         lin_dyn_sys:gen_ctrl.stateSpace):
-    A = lin_dyn_sys.a
-    B = lin_dyn_sys.b
+                         A:npt.ArrayLike, B:npt.ArrayLike):
     s_xx_k = Q - (s_xx_kp1 @ BRinvBT @ s_xx_kp1) + (s_xx_kp1 @ A) + (A.T @ s_xx_kp1) # type: ignore
     s_x_k  = -(Q @ x_des_k) + ((A.T - s_xx_kp1 @ BRinvBT) @ s_x_kp1) + (s_xx_kp1 @ B @ u_des_k) # type: ignore
     s_0_k  = (x_des_k.T @ Q @ x_des_k) - (s_x_kp1.T @ BRinvBT @ s_x_kp1) + 2 * (s_x_kp1.T @ B @ u_des_k) # type: ignore
     return s_xx_k, s_x_k, s_0_k
-
 
 def verify_backstep_params(s_xx_seq, s_x_seq, s_0_seq):
     is_valid_seqs_bool = True
