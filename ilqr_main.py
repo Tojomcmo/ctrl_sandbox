@@ -8,12 +8,13 @@ import src.ilqr_funcs as ilqr
 import src.dyn_functions as dyn
 import src.cost_functions as cost
 import src.analyze_ilqr_output_funcs as analyze
+import src.gen_ctrl_funcs as gen_ctrl
 
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[1.,0],[0.,1.]]) * 1,
-                          'R'  : jnp.array([[1.]]),
+   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 1,
+                          'R'  : jnp.array([[.01]]),
                           'Qf' : jnp.array([[1.,0],[0.,1.]]) * 1}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
@@ -37,7 +38,7 @@ if __name__ == "__main__":
    
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 10
+   len_seq    = 30
 
    #---------- define plotting condition ----------#
    plot_ctrl_output_bool = False
@@ -45,14 +46,14 @@ if __name__ == "__main__":
 
    #---------- create desired trajectory ----------#
    traj_gen_dyn_func_params = {'g' : 9.81,
-                               'b' : 1.0,
+                               'b' : 5.0,
                                'l' : 1.0}
    x_tg_init_vec = np.array([[0.1],[0.1]])
-   u_tg_seq      = np.ones([len_seq-1,1,1])*(5)
+   u_tg_seq      = np.ones([len_seq-1,1,1])*(15)
 
    #create curried dynamics function for simulation
    traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,t,x,u)
-   x_des_seq         = ilqr.simulate_forward_dynamics(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
+   x_des_seq         = gen_ctrl.simulate_forward_dynamics(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec
@@ -86,7 +87,7 @@ if __name__ == "__main__":
       ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
       ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
       ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
-      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, xlabel = 'angPos', ylabel = 'angVel')
+      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, quiverwidth=0.0015, xlabel = 'angPos', ylabel = 'angVel')
       analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control') # type: ignore 
       analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
       plt.tight_layout()
@@ -99,6 +100,7 @@ if __name__ == "__main__":
       x_plot_seq_names = []
       x_plot_seq_styles_dot = []
       x_plot_seq_styles_quiver = []
+      x_plot_seq_quiverwidth   = []
       n = len(x_plot_seqs)
       # set color map
       colormap = cm.get_cmap('rainbow')
@@ -106,22 +108,29 @@ if __name__ == "__main__":
       for idx in range(len(x_plot_seqs)):
          if idx == 0:
             x_plot_seq_names.append('seed state seq')
-            x_plot_seq_styles_quiver.append('purple')       
+            x_plot_seq_styles_quiver.append('purple')
+            x_plot_seq_quiverwidth.append(0.0015)            
          elif idx == n-1:
             x_plot_seq_names.append('target state seq')
-            x_plot_seq_styles_quiver.append('red')    
+            x_plot_seq_styles_quiver.append('red')
+            x_plot_seq_quiverwidth.append(0.0015)         
+         elif idx == n-2:   
+            x_plot_seq_names.append(f'seq iter {idx}')
+            x_plot_seq_styles_quiver.append('orange')
+            x_plot_seq_quiverwidth.append(0.0015)  
+         elif idx == 1:
+            x_plot_seq_names.append('target state seq')
+            x_plot_seq_styles_quiver.append('blue')    
+            x_plot_seq_quiverwidth.append(0.0015)                                   
          else:   
             x_plot_seq_names.append(f'seq iter {idx}')
-            x_plot_seq_styles_quiver.append('black')    
+            x_plot_seq_styles_quiver.append('gray')
+            x_plot_seq_quiverwidth.append(0.001)  
          c = next(color)           
          x_plot_seq_styles_dot.append(c) 
       gs = gridspec.GridSpec(1, 1)
       fig = plt.figure(figsize=(12,8))
       ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
-      # ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
-      # ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
-      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, xlabel = 'angPos', ylabel = 'angVel')
-      # analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control')
-      # analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
+      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, x_plot_seq_quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
       plt.tight_layout()
       plt.show()

@@ -1,15 +1,10 @@
 import unittest
-import numpy as np
 from jax import numpy as jnp
+import numpy as np
 
-import src.ilqr_funcs as ilqr
-import src.ilqr_utils as util
 import src.gen_ctrl_funcs as gen_ctrl
-
-# for each input
-#   test one known case
-#   if discrete change of behavior (abs value add, check pos and neg)
-#   check edge cases (NaN, overflow, string, divide by zero)
+import src.ilqr_utils as util
+ 
 
 class shared_unit_test_data_and_funcs:
     def __init__(self) -> None:
@@ -220,7 +215,7 @@ class stateSpace_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.stateSpace(A,B,C,D)
+        ss = gen_ctrl.stateSpace(A,B,C,D)
         self.assertEqual(ss.a.tolist(), A.tolist())
         self.assertEqual(ss.b.tolist(), B.tolist())
         self.assertEqual(ss.c.tolist(), C.tolist())
@@ -233,7 +228,7 @@ class stateSpace_tests(unittest.TestCase):
         B = jnp.array([[1,1],[0,1],[0,0]])
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
-        ss = ilqr.stateSpace(A,B,C,D, time_step = 0.1)
+        ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 0.1)
         self.assertEqual(ss.a.tolist(), A.tolist())
         self.assertEqual(ss.b.tolist(), B.tolist())
         self.assertEqual(ss.c.tolist(), C.tolist())
@@ -247,7 +242,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A matrix must be square')
 
     def test_state_space_rejects_A_and_B_matrix_n_dim_mismatch(self):
@@ -256,7 +251,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and B matrices must have same n(state) dimension')        
 
     def test_state_space_rejects_A_and_C_matrix_m_dim_mismatch(self):
@@ -265,7 +260,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0]])
         D = jnp.array([[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'A and C matrices must have same m(state) dimension')        
 
     def test_state_space_rejects_B_and_D_matrix_m_dim_mismatch(self):
@@ -274,7 +269,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'B and D matrices must have the same m(control) dimension')  
  
     def test_state_space_rejects_C_and_D_matrix_n_dim_mismatch(self):
@@ -283,7 +278,7 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,],[0,0]])
         with self.assertRaises(Exception) as assert_error:
-            ss = ilqr.stateSpace(A,B,C,D) 
+            ss = gen_ctrl.stateSpace(A,B,C,D) 
         self.assertEqual(str(assert_error.exception), 'C and D matrices must have the same n(measurement) dimension')  
 
     def test_state_space_rejects_invalid_timestep_input(self):
@@ -292,135 +287,17 @@ class stateSpace_tests(unittest.TestCase):
         C = jnp.array([[1,0,1]])
         D = jnp.array([[0,0,]])
         with self.assertRaises(Exception) as assert_error_negative:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = -0.1) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = -0.1) 
         self.assertEqual(str(assert_error_negative.exception), 'invalid time step definition -0.1. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_string:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = 'lettuce') 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 'lettuce') 
         self.assertEqual(str(assert_error_string.exception), 'invalid time step definition lettuce. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_zero:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = 0) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = 0) 
         self.assertEqual(str(assert_error_zero.exception), 'invalid time step definition 0. time_step must be a positive float or None')
         with self.assertRaises(Exception) as assert_error_NaN:
-            ss = ilqr.stateSpace(A,B,C,D, time_step = float("nan")) 
+            ss = gen_ctrl.stateSpace(A,B,C,D, time_step = float("nan")) 
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
-
-class ilqrConfiguredFuncs_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        self.assertEqual(True,True)  
-
-class ilqrControllerState_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        self.assertEqual(True,True)
-
-class initialize_ilqr_controller_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        config_funcs, x_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state) 
-        self.assertEqual((np.abs(cost_float-prev_cost_float) > ilqr_config['converge_crit']), True)   
-
-class run_ilqr_controller_tests(unittest.TestCase):
-    def test_accepts_valid_linear_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
-        ctrl_state.x_seq = state_seq
-        ctrl_state.cost_float = cost_float
-        ctrl_state.prev_cost_float = prev_cost_float
-        ctrl_state.cost_seq = cost_seq
-        ctrl_state = ilqr.run_ilqr_controller(ilqr_config, config_funcs, ctrl_state)
-        self.assertEqual(True,True)
-
-    def test_accepts_valid_nl_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config_nl_pend
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_nl_pend,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
-        ctrl_state.x_seq = state_seq
-        ctrl_state.cost_float = cost_float
-        ctrl_state.prev_cost_float = prev_cost_float
-        ctrl_state = ilqr.run_ilqr_controller(ilqr_config, config_funcs, ctrl_state)
-        self.assertEqual(True,True)
-
-class calculate_backwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_linear_dyn_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        ctrl_state.x_seq = data_and_funcs.x_seq
-        config_funcs = ilqr.ilqrConfiguredFuncs(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                                ctrl_state)
-        
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                                                            config_funcs, ctrl_state)
-        self.assertEqual(len(k_seq),data_and_funcs.len_seq-1)
-        self.assertEqual(len(d_seq),data_and_funcs.len_seq-1)
-        self.assertEqual(len(Del_V_vec_seq),data_and_funcs.len_seq-1) 
-        self.assertEqual(jnp.shape(k_seq[0]),(data_and_funcs.u_len, data_and_funcs.x_len))                  
-        self.assertEqual(jnp.shape(d_seq[0]),(data_and_funcs.u_len, 1))                       
-        self.assertEqual(jnp.shape(Del_V_vec_seq[0]),(2,)) 
-
-class calculate_forwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_linear_dyn_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_lin_pend_unit_cost,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
-        ctrl_state.x_seq = state_seq
-        ctrl_state.cost_float = cost_float
-        ctrl_state.prev_cost_float = prev_cost_float
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(ilqr_config, config_funcs, ctrl_state)
-        ctrl_state.K_seq         = k_seq
-        ctrl_state.d_seq         = d_seq
-        ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
-        # ctrl_state.K_seq         = data_and_funcs.K_seq
-        # ctrl_state.d_seq         = data_and_funcs.d_seq
-        # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new,cost_seq_new,line_search_factor, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
-        self.assertEqual(True,True)
-
-    def test_accepts_valid_nl_dyn_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        ilqr_config = data_and_funcs.ilqr_config_lin_pend_unit_cost
-        ctrl_state = ilqr.ilqrControllerState(data_and_funcs.ilqr_config_nl_pend,
-                                              data_and_funcs.seed_x_vec,
-                                              data_and_funcs.u_seq,
-                                              data_and_funcs.x_des_seq,
-                                              data_and_funcs.u_des_seq)
-        config_funcs, state_seq, cost_float, prev_cost_float, cost_seq = ilqr.initialize_ilqr_controller(ilqr_config, ctrl_state)
-        ctrl_state.x_seq = state_seq
-        ctrl_state.cost_float = cost_float
-        ctrl_state.prev_cost_float = prev_cost_float
-        k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(ilqr_config, config_funcs, ctrl_state)
-        ctrl_state.K_seq         = k_seq
-        ctrl_state.d_seq         = d_seq
-        ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
-        # ctrl_state.K_seq         = data_and_funcs.K_seq
-        # ctrl_state.d_seq         = data_and_funcs.d_seq
-        # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
-        state_seq_new, control_seq_new, cost_float_new,cost_seq_new,line_search_factor, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, config_funcs, ctrl_state)
-        self.assertEqual(True,True)
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
     def pend_unit_dyn_func(self, time, state, control):
@@ -441,7 +318,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         control_seq     = np.ones([4,1,1])
         time_step       = 0.1
         state_init      = np.array([[1.],[1.]])
-        state_seq       = ilqr.simulate_forward_dynamics(self.pend_unit_dyn_func, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(self.pend_unit_dyn_func, 
                                                          state_init, control_seq, time_step, 
                                                          sim_method = 'euler')
         # calculate expected output
@@ -464,7 +341,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = ilqr.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'euler')
         self.assertEqual(len(state_seq), len_seq)
@@ -478,7 +355,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = ilqr.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'solve_ivp_zoh')
         self.assertEqual(len(state_seq), len_seq)
@@ -495,7 +372,7 @@ class linearize_dynamics_tests(unittest.TestCase):
         x_len           = data_and_funcs.x_len
         u_len           = data_and_funcs.u_len
         k_step          = 1
-        a_lin, b_lin    = ilqr.linearize_dynamics(data_and_funcs.pend_unit_dyn_func_curried,
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_dyn_func_curried,
                                                   time_seq[k_step],
                                                   state_seq[k_step],
                                                   control_seq[k_step])
@@ -524,7 +401,7 @@ class linearize_dynamics_tests(unittest.TestCase):
         x_len           = data_and_funcs.x_len
         u_len           = data_and_funcs.u_len
         k_step          = 1
-        a_lin, b_lin    = ilqr.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
                                                   time_seq[k_step],
                                                   state_seq[k_step],
                                                   control_seq[k_step])
@@ -547,14 +424,14 @@ class linearize_dynamics_tests(unittest.TestCase):
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
-    def discretize_ss_simple(self, input_state_space:ilqr.stateSpace):
+    def discretize_ss_simple(self, input_state_space:gen_ctrl.stateSpace):
         time_step = 0.1
         n  = input_state_space.a.shape[0] 
         a_d = jnp.eye(n) + (input_state_space.a * time_step)
         b_d = input_state_space.b * time_step
         c_d = input_state_space.c
         d_d = input_state_space.d
-        d_state_space = ilqr.stateSpace(a_d, b_d, c_d, d_d, time_step)
+        d_state_space = gen_ctrl.stateSpace(a_d, b_d, c_d, d_d, time_step)
         return d_state_space
     
     def pend_unit_dyn_func(self, time, state, control):
@@ -574,7 +451,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         time_step      = 0.1
         control_seq    = [jnp.array([[1.]])] * (len_seq-1)
         state_seq      = [jnp.array([[1.],[1.]])] * (len_seq)
-        A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.pend_unit_dyn_func,
+        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.pend_unit_dyn_func,
                                                                              self.discretize_ss_simple, 
                                                                              state_seq, 
                                                                              control_seq, 
@@ -600,7 +477,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         u_len          = len(data_and_funcs.u_seq[0])
         control_seq    = data_and_funcs.u_seq
         state_seq      = data_and_funcs.x_seq
-        A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(data_and_funcs.pend_unit_dyn_func_curried,
+        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(data_and_funcs.pend_unit_dyn_func_curried,
                                                                              self.discretize_ss_simple, 
                                                                              state_seq, 
                                                                              control_seq, 
@@ -615,7 +492,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls, 2))
     #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_dim_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_dim_error.exception), 'state or control sequence is incorrect array dimension. sequences must be 2d arrays')
 
     # def test_calculate_linearized_state_space_seq_rejects_invalid_sequence_lengths(self):
@@ -626,7 +503,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls))
     #     state_seq    = jnp.ones((num_steps+2, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_len_error.exception), 'state and control sequences are incompatible lengths. state seq must be control seq length +1')
 
     # def test_calculate_linearized_state_space_seq_rejects_invalid_time_step(self):
@@ -637,7 +514,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     #     control_seq  = jnp.ones((num_steps, num_controls))
     #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
     #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = ilqr.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
+    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
     #     self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
 
 class discretize_state_space_tests(unittest.TestCase):
@@ -647,11 +524,11 @@ class discretize_state_space_tests(unittest.TestCase):
         B = np.array([[1,1],[0,1],[0,0]])
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
-        ss_c = ilqr.stateSpace(A,B,C,D)
+        ss_c = gen_ctrl.stateSpace(A,B,C,D)
         time_step = 0.1
         c2d_methods = ['euler', 'zoh', 'zohCombined']
         for c2d_method  in c2d_methods:
-            ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method)
+            ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method)
             self.assertEqual(ss.a.shape, A.shape)
             self.assertEqual(ss.b.shape, B.shape)
             self.assertEqual(ss.c.shape, C.shape)
@@ -664,9 +541,9 @@ class discretize_state_space_tests(unittest.TestCase):
         B = np.array([[1.,1.],[0.,1.],[0.,0.]])
         C = np.array([[1.,0.,1.]])
         D = np.array([[0.,0.]])
-        ss_c = ilqr.stateSpace(A,B,C,D)
+        ss_c = gen_ctrl.stateSpace(A,B,C,D)
         time_step = 0.1
-        ss = ilqr.discretize_state_space(ss_c,time_step,c2d_method='euler')
+        ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method='euler')
         A_d_expected = np.eye(3) + (A * time_step)
         B_d_expected = B * time_step
         C_d_expected = C
@@ -688,9 +565,9 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D, time_step)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D, time_step)
         with self.assertRaises(Exception) as assert_error_discrete:
-            ss = ilqr.discretize_state_space(ss_d,time_step)
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step)
         self.assertEqual(str(assert_error_discrete.exception), 'input state space is already discrete')
     
     def test_descritize_state_space_rejects_invalid_c2d_method(self):
@@ -699,9 +576,9 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_c2d_method:
-            ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
         self.assertEqual(str(assert_error_c2d_method.exception), 'invalid discretization method')
      
     def test_descritize_state_space_rejects_singular_A_matrix_for_zoh(self):
@@ -710,39 +587,11 @@ class discretize_state_space_tests(unittest.TestCase):
         C = np.array([[1,0,1]])
         D = np.array([[0,0]])
         time_step = 0.1   
-        ss_d = ilqr.stateSpace(A,B,C,D)
+        ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_singular_A_zoh:
-            ss = ilqr.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
+            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
         self.assertEqual(str(assert_error_singular_A_zoh.exception), 'determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid'
 )
-
-class initialize_backwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        len_seq = data_and_funcs.len_seq
-        x_len   = data_and_funcs.x_len
-        u_len   = data_and_funcs.u_len
-        p_N     = np.ones([x_len, 1])
-        P_N     = np.ones([x_len, x_len])
-        P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq)
-        self.assertEqual(P_kp1.shape, (x_len, x_len))
-        self.assertEqual(p_kp1.shape, (x_len, 1))
-        self.assertEqual(K_seq.shape, ((len_seq-1), u_len, x_len))           
-        self.assertEqual(d_seq.shape, ((len_seq-1), u_len, 1))        
-        self.assertEqual(Del_V_vec_seq.shape, (len_seq-1, 2)) 
-
-class initialize_forwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        seed_state_vec    = shared_data_funcs.seed_x_vec
-        u_len             = shared_data_funcs.u_len
-        x_len             = shared_data_funcs.x_len
-        len_seq           = shared_data_funcs.len_seq
-        state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, in_bounds_bool = ilqr.initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
-        self.assertEqual(len(state_seq_updated), len_seq)
-        self.assertEqual(len(control_seq_updated), len_seq-1)
-        self.assertEqual(cost_float_updated, 0)
-        self.assertEqual(in_bounds_bool, False)
 
 class calculate_total_cost_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -750,7 +599,7 @@ class calculate_total_cost_tests(unittest.TestCase):
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
         x_seq = np.ones([3,2,1])
         u_seq = jnp.ones([3,1,1])
-        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
         total_cost_expect = (0.5*(2+1)) + (0.5*(2+1)) + (0.5*(2+0))
         self.assertEqual(total_cost, total_cost_expect)        
         # TODO add assert for matching expected value
@@ -764,290 +613,59 @@ class calculate_total_cost_tests(unittest.TestCase):
         Qf    = shared_data_funcs.pend_unit_cost_func_params['Qf']
         x_seq = shared_data_funcs.x_seq
         u_seq = shared_data_funcs.u_seq
-        total_cost, cost_seq = ilqr.calculate_total_cost(cost_func, x_seq, u_seq)
+        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
         # (len-1)*0.5*(x.T Q x + u.T R u) + 0.5*(x.T Qf x)
         total_cost_expect = 9*(0.5*(1+4) + (0.5*(1))) + (0.5*(4+1))       
         self.assertEqual(total_cost, total_cost_expect)      
 
-class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()        
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        x_k = np.array([[1.],[1.]])
-        u_k = np.array([[1.]])
-        x_len = len(x_k)
-        u_len = len(u_k)
-        A_lin_k = np.array([[0,1],[1,1]])     
-        B_lin_k = np.array([[0],[1]])
-        p_kp1   = np.ones([x_len, 1])
-        P_kp1   = np.ones([x_len, x_len])
-        k_step  = 1
-        ro_reg  = 1
-        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
-                                                                            cost_func, 
-                                                                            A_lin_k, 
-                                                                            B_lin_k, 
-                                                                            x_k, 
-                                                                            u_k, 
-                                                                            P_kp1, p_kp1,
-                                                                            ro_reg, 
-                                                                            k_step)
-        self.assertEqual(np.shape(q_x),  (x_len, 1))
-        self.assertEqual(np.shape(q_u),  (u_len, 1))
-        self.assertEqual(np.shape(q_xx), (x_len,x_len))
-        self.assertEqual(np.shape(q_uu), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
-        self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
-
-    def test_accepts_valid_inputs_from_shared(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()        
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        x_seq = shared_data_funcs.x_seq
-        u_seq = shared_data_funcs.u_seq
-        x_len = len(x_seq[0])
-        u_len = len(u_seq[0])
-        A_lin_k = np.array([[1,1],[0,1]])     
-        B_lin_k = np.array([[0],[1]])
-        p_kp1   = np.ones([x_len, 1])
-        P_kp1   = np.ones([x_len, x_len])
-        k_step  = 1
-        ro_reg = 1.0
-        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
-                                                                            cost_func, 
-                                                                            A_lin_k, 
-                                                                            B_lin_k, 
-                                                                            x_seq[k_step], 
-                                                                            u_seq[k_step], 
-                                                                            P_kp1, p_kp1,
-                                                                            ro_reg, 
-                                                                            k_step)
-        self.assertEqual(np.shape(q_x),  (x_len, 1))
-        self.assertEqual(np.shape(q_u),  (u_len, 1))
-        self.assertEqual(np.shape(q_xx), (x_len,x_len))
-        self.assertEqual(np.shape(q_uu), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
-        self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
-
-class calculate_final_ctg_approx_tests(unittest.TestCase):
-    def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):
+class taylor_expand_cost_tests(unittest.TestCase):      
+    def test_taylor_expand_cost_accepts_list_of_arrays(self):
         shared_data_funcs = shared_unit_test_data_and_funcs()
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        x_N = np.array(([1.0],[2.0]))
-        u_N = np.array(([1.0]))
-        P_N, p_N = ilqr.calculate_final_ctg_approx(cost_func,x_N,len(u_N))
-        p_N_expected = shared_data_funcs.pend_unit_cost_func_params['Qf'] @ x_N
-        P_N_expected = shared_data_funcs.pend_unit_cost_func_params['Qf']
-        self.assertEqual(p_N.tolist(), p_N_expected.tolist())
-        self.assertEqual(P_N.tolist(), P_N_expected.tolist())
-
-class calculate_backstep_ctg_approx_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        x_len = data_and_funcs.x_len
-        u_len = data_and_funcs.u_len
-        q_x   = np.ones([x_len,1])
-        q_u   = np.ones([u_len,1])
-        q_xx  = np.ones([x_len, x_len])
-        q_uu  = np.ones([u_len, u_len])
-        q_ux  = np.ones([u_len, x_len])
-        K_k   = np.ones([u_len, x_len])
-        d_k   = np.ones([u_len, 1])
-        P_k, p_k, Del_V_vec_k = ilqr.calculate_backstep_ctg_approx(q_x, q_u, 
-                                                                   q_xx, q_uu, q_ux, 
-                                                                   K_k, d_k)
-        P_k_expect = np.ones([x_len,x_len]) * 4.
-        p_k_expect = np.ones([x_len, 1]) * 4.
-        Del_V_vec_k_expect = np.array([1.0, 0.5])
-        self.assertEqual(np.shape(P_k), (x_len, x_len))
-        self.assertEqual(np.shape(p_k), (x_len, 1))  
-        self.assertEqual(np.shape(Del_V_vec_k), (2, ))      
-        self.assertEqual(P_k.tolist(), P_k_expect.tolist())
-        self.assertEqual(p_k.tolist(), p_k_expect.tolist()) 
-        self.assertEqual(Del_V_vec_k.tolist(), Del_V_vec_k_expect.tolist())
-
-class calculate_optimal_gains_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        q_uu = np.array([[1.,1.],[0,1.]])
-        q_ux = np.array([[1.,1.],[0,1.]])
-        q_u  = np.array([[1.],[1.]])
-        K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
-        # print(jnp.linalg.inv(q_uu))
-        K_k_expected = -np.linalg.inv(q_uu) @ q_ux
-        d_k_expected = -np.linalg.inv(q_uu) @ q_u
-        K_k_expected = -(np.array([[1.,-1.],[0,1.]])) @ (np.array([[1.,1.],[0,1.]]))
-        d_k_expected = -(np.array([[1.,-1.],[0,1.]])) @ (np.array([[1.],[1.]]))
-        self.assertEqual(K_k.tolist(), K_k_expected.tolist())
-        self.assertEqual(d_k.tolist(), d_k_expected.tolist())
-
-    def test_accepts_valid_inputs_from_shared(self):
-        q_uu = np.array([[1.,1.],[0,1.]])
-        q_ux = np.array([[0.1,0.2,0.3,0.4],[1., 2., 3., 4.]])
-        q_u  = np.array([[1],[2]])
-        K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
-        K_k_expected = -np.linalg.inv(q_uu) @ q_ux
-        d_k_expected = -np.linalg.inv(q_uu) @ q_u
-        self.assertEqual(K_k.tolist(), K_k_expected.tolist())
-        self.assertEqual(d_k.tolist(), d_k_expected.tolist())    
-
-class calculate_u_k_new_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
+        cost_func_params = shared_data_funcs.pend_unit_cost_func_params
+        x_seq = shared_data_funcs.x_seq
+        u_seq = shared_data_funcs.u_seq
         k_step = 1
-        u_nom_k = np.array([[1.0], [2.0]])
-        x_nom_k = np.array([[1.0], [1.0]])
-        x_new_k = x_nom_k + 1.0
-        K_k     = np.ones([2, 2])
-        d_k     = np.ones([2, 1]) * 2.0
-        line_search_factor = 1
-        u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-        # u_k_expected = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
-        u_k_expected = np.array([[1. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.],
-                                 [2. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.]])
-        self.assertEqual(u_k_updated_new.tolist(), u_k_expected.tolist())
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,
+                                                            x_seq[k_step],
+                                                            u_seq[k_step],
+                                                            k_step)
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.x_des_seq[k_step])
+        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.u_des_seq[k_step])
+        l_xx_expected = cost_func_params['Q']
+        l_uu_expected = cost_func_params['R']  
+        # print('l_x: ', l_x)  
+        # print('l_x_expected: ',l_x_expected)    
+        # print('state_length: ', len(x_seq[0]))
+        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
+        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
+        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
+        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
+        self.assertEqual(l_ux.tolist(), np.zeros([len(u_seq[0]),len(x_seq[0])]).tolist())            
 
-    def test_reject_invalid_K_k_dimension(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
+    def test_taylor_expand_cost_accepts_list_of_np_arrays(self):
+        shared_data_funcs = shared_unit_test_data_and_funcs()
+        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
+        cost_func_params = shared_data_funcs.pend_unit_cost_func_params
+        x_seq = [np.array([[1.],[2.]])] * 3
+        u_seq = [np.array([[3.]])] * 3
         k_step = 1
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
-        x_new_k = x_nom_k + 1.0
-        K_k     = np.ones([3, 2])
-        d_k     = np.ones([2, 1]) * 2.0
-        line_search_factor = 1
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-           u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))')
-
-    def test_reject_invalid_d_k_dimension(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        k_step = 1
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
-        x_new_k = x_nom_k + 1.0
-        K_k     = np.ones([2, 2])
-        d_k     = np.ones([2, 2]) * 2.0
-        line_search_factor = 1
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-           u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'd_k incorrect shape, must be (len(u_nom_k), 1)')
-
-    def test_reject_invalid_x_new_k_dimension(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        k_step = 1
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
-        x_new_k = np.array([1.0, 2.0, 3.0])
-        K_k     = np.ones([2, 2])
-        d_k     = np.ones([2, 1]) * 2.0
-        line_search_factor = 1
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-           u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'x_nom_k and x_new_k must be the same length')
-
-    def test_reject_invalid_x_dimension(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        k_step = 1
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
-        x_new_k = np.array([1.0, 2.0])
-        K_k     = np.ones([2, 2])
-        d_k     = np.ones([2, 1]) * 2.0
-        line_search_factor = 1
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-           u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'x_nom_k must be column vector (n,1)')
-
-
-    def test_accepts_valid_inputs_with_shared_data(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        k_step = 1
-        u_nom_k = data_and_funcs.u_seq[k_step]
-        x_nom_k = data_and_funcs.x_seq[k_step]
-        x_new_k = x_nom_k + 0.1
-        K_k     = data_and_funcs.K_seq[k_step]
-        d_k     = data_and_funcs.d_seq[k_step]
-        line_search_factor = 0.5
-        u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
-                                                 K_k, d_k, line_search_factor)
-
-        K_k_mult = K_k @ (x_new_k - x_nom_k)
-        u_k_expected = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
-        self.assertEqual(u_k_updated_new, u_k_expected)    
-
-class calculate_cost_decrease_ratio_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        prev_cost_float = 100.0
-        new_cost_float  = 70.0
-        Del_V_vec_seq = np.ones([3,2])
-        Del_V_vec_seq[:,1] *= 2.0
-        line_search_factor = 2.0
-        cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
-                                                                 new_cost_float,
-                                                                 Del_V_vec_seq,
-                                                                 line_search_factor)
-        del_V_sum_exp = ((1+1+1) * line_search_factor) + ((2+2+2) * line_search_factor**2)
-        expected_output = np.array((1 / -del_V_sum_exp) * (prev_cost_float - new_cost_float))
-        self.assertEqual(cost_decrease_ratio, expected_output)
-
-    def test_rejects_invalid_input_dimension(self):
-        prev_cost_float = 100.0
-        new_cost_float  = 70.0
-        Del_V_vec_seq = np.ones([3,3])
-        Del_V_vec_seq[:,1] *= 2.0
-        line_search_factor = 2
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
-                                                                 new_cost_float,
-                                                                 Del_V_vec_seq,
-                                                                 line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'Del_V_vec_seq is not the right shape, must be (:,2)')
-
-class calculate_expected_cost_decrease_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        # Del_V_vec_seq = np.array([[1,2],[1,2],[1,2]]) 
-        # Del_V_vec_seq = Del_V_vec_seq[:, np.newaxis]
-        Del_V_vec_seq = np.ones([3,2])
-        Del_V_vec_seq[:,1] *= 2.0
-        line_search_factor = 2.0
-        Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
-        expected_output = ((1+1+1) * line_search_factor) + ((2+2+2) * line_search_factor**2)
-        self.assertEqual(Del_V_sum, expected_output)
-
-    def test_reject_invalid_array_shape(self):
-        Del_V_vec_seq = np.ones([3,3]) 
-        line_search_factor = 2
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'Del_V_vec_seq is not the right shape, must be (:,2)')
-
-class analyze_cost_decrease_tests(unittest.TestCase):
-    def test_returns_true_for_in_bound_inputs(self):
-        data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
-        cost_decrease_ratio = bounds[0] + (bounds[0] + bounds[1]) * 0.5
-        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
-        self.assertEqual(in_bounds_bool, True)
- 
-    def test_returns_false_for_input_too_high(self):
-        data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
-        cost_decrease_ratio = bounds[1] + 1
-        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
-        self.assertEqual(in_bounds_bool, False)
-
-    def test_returns_false_for_input_too_low(self):
-        data_and_funcs      = shared_unit_test_data_and_funcs()
-        bounds              = data_and_funcs.ilqr_config_lin_pend_unit_cost['cost_ratio_bounds']
-        cost_decrease_ratio = bounds[0] - 1
-        in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
-        self.assertEqual(in_bounds_bool, False)
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,
+                                                            x_seq[k_step], # type: ignore
+                                                            u_seq[k_step], # type: ignore
+                                                            k_step)
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.x_des_seq[k_step])
+        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.u_des_seq[k_step])
+        l_xx_expected = cost_func_params['Q']
+        l_uu_expected = cost_func_params['R']  
+        # print('l_x: ', l_x)  
+        # print('l_x_expected: ',l_x_expected)    
+        # print('state_length: ', len(x_seq[0]))
+        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
+        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
+        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
+        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
+        self.assertEqual(l_ux.tolist(), jnp.zeros([len(u_seq[0]),len(x_seq[0])]).tolist()) 
 
 class prep_xu_vecs_for_diff_tests(unittest.TestCase):
     def test_accepts_valid_np_col_inputs(self):
@@ -1055,7 +673,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1],[2],[3]])
         u_k = np.array([[4],[5]])
         #test function
-        xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+        xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         # create expected output
         xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
         xu_k_len_expected = 5
@@ -1071,7 +689,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1,2,3]])
         u_k = np.array([[4,5]])
         with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         self.assertEqual(str(assert_seq_len_error.exception), 'x_vector must be column vector (n,1)')
 
     def test_rejects_np_row_u_inputs(self):
@@ -1079,7 +697,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
         x_k = np.array([[1],[2],[3]])
         u_k = np.array([[4,5]])
         with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = ilqr.prep_xu_vec_for_diff(x_k, u_k)
+            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         self.assertEqual(str(assert_seq_len_error.exception), 'u_vector must be column vector (m,1)')
 
 if __name__ == '__main__':

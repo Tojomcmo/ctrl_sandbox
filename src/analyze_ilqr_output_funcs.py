@@ -22,7 +22,7 @@ def plot_2d_state_scatter_sequences(x_seq, xlabel="state 1", ylabel="state 2", t
     plt.grid(True)
     plt.show()
 
-def plot_2d_state_quiver(figure, axes, x_seq, legend_name= 'sequence', xlabel="state 1", ylabel="state 2", title="state plot", color='b.'):
+def plot_2d_state_quiver(figure, axes, x_seq, legend_name= 'sequence', xlabel="state 1", ylabel="state 2", title="state plot", color='b.', width = 0.0015):
     """
     Plot XY data using Matplotlib from JAX arrays.
     # Convert JAX arrays to NumPy arrays for plotting
@@ -46,7 +46,7 @@ def plot_2d_state_quiver(figure, axes, x_seq, legend_name= 'sequence', xlabel="s
     #axes[axis_num].plot(x_seq_array[0], x_seq_array[1], color,linestyle='--', label=legend_name)
     plt.figure(figure) 
     axes.quiver(x_start, y_start, del_x, del_y, color=color, 
-                scale_units='xy', angles='xy', scale=1, width = 0.0015, headwidth=4, headlength = 6, headaxislength = 5)
+                scale_units='xy', angles='xy', scale=1, width = width, headwidth=4, headlength = 6, headaxislength = 5)
     axes.set_xlabel(xlabel)
     axes.set_ylabel(ylabel)
     axes.set_title(title)
@@ -78,9 +78,9 @@ def plot_compare_state_sequences(plot_func, figure, axes, axis_num, x_seqs, x_na
     plt.legend()
     return
 
-def plot_compare_state_sequences_quiver_dot(figure, axes, x_seqs, x_names, x_styles_quiver,x_styles_dot, xlabel="state 1", ylabel="state 2", title="state plot"):
+def plot_compare_state_sequences_quiver_dot(figure, axes, x_seqs, x_names, x_styles_quiver,x_styles_dot, quiverwidth, xlabel="state 1", ylabel="state 2", title="state plot"):
     for idx in range(len(x_seqs)):
-        plot_2d_state_quiver(figure, axes, x_seqs[idx], x_names[idx], xlabel, ylabel, title, color = x_styles_quiver[idx])
+        plot_2d_state_quiver(figure, axes, x_seqs[idx], x_names[idx], xlabel, ylabel, title, color = x_styles_quiver[idx], width = quiverwidth[idx])
         plot_2d_state_dot(figure, axes, x_seqs[idx], x_names[idx], xlabel, ylabel, title, color = x_styles_dot[idx])
     plt.legend()
     return
