@@ -1,48 +1,37 @@
-# import numpy as np
+import numpy as np
 
-# import src.gen_ctrl_funcs as gen_ctrl
-# import src.ttlqr_funcs as ttlqr
+import src.gen_ctrl_funcs as gen_ctrl
+import src.ttlqr_funcs as ttlqr
+import src.dyn_functions as dyn
 
 
+if __name__ == '__main__':
+    # Define system paramaters
+    lti_ss_params = {'g':1.0, 'b':1.0, 'l':1.0}
+    config_dict = {'lti_ss'        : dyn.lti_pend_ss_cont,
+                    'lti_ss_params' : lti_ss_params,
+                    'time_step'     : 0.1,
+                    'Q'             : np.array([[1.,0.],[0.,1.]]),
+                    'R'             : np.array([[1.]]),
+                    'Qf'            : np.array([[2.,0.],[0.,2.]]),
+                    'c2d_method'    : 'euler'}
+    len_seq        = 20
+    u_traj_gen_seq = np.ones([len_seq-1, 1, 1])
+    x_init_vec     = np.array([[1.],[1.]])
+    # Define trajectory
+    lin_dyn_func = gen_ctrl.ss_2_dyn_func(dyn.lti_pend_ss_cont(config_dict['lti_ss_params']))
+    x_des_seq = gen_ctrl.simulate_forward_dynamics(lin_dyn_func, x_init_vec, u_traj_gen_seq, config_dict['time_step'])
 
-# # Define system paramaters
-# lin_dyn_sys_generic = 
-# lin_dyn_sys_params = 
-# quad_cost_func_params = {Q,R,Qf}
-# time_step = 
-# len_seq = 
+    print(x_des_seq)
+    # Initialize controller with system and parameters
+    ctrl_config = ttlqr.ttlqrControllerConfig(config_dict, x_des_seq, u_traj_gen_seq)
+    ctrl_state  = ttlqr.ttlqrControllerState(ctrl_config)
 
-# # Define trajectory
-# x_init_vec = 
-# u_traj_gen_seq = 
-# x_des_seq = gen_ctrl.simulate_forward_dynamics(lin_dyn_sys, x_init_vec, u_traj_gen_seq, time_step)
+    # Run controller
+    ctrl_state.s_xx_seq, ctrl_state.s_x_seq, ctrl_state.s_0_seq, ctrl_state.g_ff_seq, ctrl_state.g_fb_seq = ttlqr.calculate_ttlqr_seq(ctrl_config) # type: ignore
 
-# # Initialize controller with system and parameters
-# class ttlqrControllerConfig
-#     cost_func_w_params
-#     lin_dyn_sys_w_params
-#     u_des_seq = u_traj_gen_seq
-#     len_seq
-#     time_step
-#     x_init_vec
+    # simulate system response
 
-# class ttlqrConfigFuncs
-#     cost_func_w_params
-#     lin_dyn_sys_w_params
+    # simulate system response with disturbance
 
-# class ttlqrControllerState
-#     P_k_seq
-#     p_k_seq
-#     K_gain_seq
-#     cost_seq
-
-# # Run controller
-#     S_xx_N, s_x_N = ttlqr.calculate_final_ctg_params
-#     S_xx_seq, s_x_seq, s_0_seq =  def calculate_ctg_params_seq
-#     is_valid_calc_bool = verify_ctg_parameters  # J must be uniformly positive
-#     u_output_params_seq = def calculate_u_params(R, B, S_xx_k, s_x_k)
-# # simulate system response
-
-# # simulate system response with disturbance
-
-# # plot / analyze output
+    # plot / analyze output

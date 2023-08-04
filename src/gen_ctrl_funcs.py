@@ -203,3 +203,5 @@ def prep_xu_vec_for_diff(x_k,u_k):
     xu_k_jax     = jnp.array(xu_k)
     return xu_k_jax, xu_k_len, x_k_len
 
+def ss_2_dyn_func(ss_cont:stateSpace):
+    return lambda t, x, u: ss_cont.a @ x + ss_cont.b @ u
