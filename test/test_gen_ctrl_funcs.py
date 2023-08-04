@@ -318,7 +318,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         control_seq     = np.ones([4,1,1])
         time_step       = 0.1
         state_init      = np.array([[1.],[1.]])
-        state_seq       = gen_ctrl.simulate_forward_dynamics(self.pend_unit_dyn_func, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(self.pend_unit_dyn_func, 
                                                          state_init, control_seq, time_step, 
                                                          sim_method = 'euler')
         # calculate expected output
@@ -341,7 +341,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'euler')
         self.assertEqual(len(state_seq), len_seq)
@@ -355,7 +355,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_len           = len(data_and_funcs.x_seq[0])
         u_len           = len(data_and_funcs.u_seq[0])
         len_seq         = data_and_funcs.len_seq
-        state_seq       = gen_ctrl.simulate_forward_dynamics(dyn_func, state_init, 
+        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(dyn_func, state_init, 
                                                          control_seq, time_step, 
                                                          sim_method = 'solve_ivp_zoh')
         self.assertEqual(len(state_seq), len_seq)

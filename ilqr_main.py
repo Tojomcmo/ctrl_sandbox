@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
    #create curried dynamics function for simulation
    traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,t,x,u)
-   x_des_seq         = gen_ctrl.simulate_forward_dynamics(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
+   x_des_seq         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec

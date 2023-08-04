@@ -11,19 +11,19 @@ if __name__ == '__main__':
     # Define system paramaters
     gen_lin_dyn_sys = dyn.lti_pend_ss_cont
     lti_ss_params = {'g':10.0, 'b':1.0, 'l':1.0}
-    time_step = 0.01
+    time_step = 0.1
 
     config_dict = {'lti_ss'         : gen_lin_dyn_sys,
                     'lti_ss_params' : lti_ss_params,
                     'time_step'     : time_step,
-                    'Q'             : np.array([[10.,0.],[0.,10.]]),
-                    'R'             : np.array([[0.10]]),
-                    'Qf'            : np.array([[1.,0.],[0.,1.]]),
+                    'Q'             : np.array([[1.,0.],[0.,1.]]),
+                    'R'             : np.array([[1.]]),
+                    'Qf'            : np.array([[2.,0.],[0.,2.]]),
                     'c2d_method'    : 'zohCombined'}
     
-    len_seq        = 100
-    u_traj_gen_seq = np.ones([len_seq-1, 1, 1]) * 5.0
-    x_init_vec     = np.array([[1.],[1.]])
+    len_seq        = 50
+    u_traj_gen_seq = np.ones([len_seq-1, 1, 1]) * 0.1
+    x_init_vec     = np.array([[0],[0]])
     # Define trajectory
 
     traj_gen_ss_cont     = gen_lin_dyn_sys(lti_ss_params)
@@ -54,11 +54,10 @@ if __name__ == '__main__':
     x_sim_seq = np.zeros([len_seq, len(x_init_vec), 1])
     u_sim_seq = np.zeros([len_seq-1, 1, 1])    
     x_sim_seq[0] = x_init_vec
-    disturbance  = np.array([[0], [0.01]])
     for k in range(len_seq-1):
-        u_sim_seq[k]   = ttlqr.calculate_u_opt_k(ctrl_state.g_ff_seq[k], ctrl_state.g_fb_seq[k], ctrl_state.s_x_seq[k+1], x_sim_seq[k], u_traj_gen_seq[k], x_des_seq[k])      # type: ignore
-        x_sim_seq[k+1] = sim_ss_discrete.a @ x_sim_seq[k] + sim_ss_discrete.b @ u_sim_seq[k] 
-   
+        u_sim_seq[k]   = ttlqr.calculate_u_opt_k(ctrl_state.g_ff_seq[k], ctrl_state.g_fb_seq[k], ctrl_state.s_x_seq[k+1], x_sim_seq[k])      # type: ignore
+        x_sim_seq[k+1] = traj_gen_ss_discrete.a @ x_sim_seq[k] + traj_gen_ss_discrete.b @ u_sim_seq[k]
+  
     # sim_config_dict = config_dict
     # sim_config_dict['lti_ss_params'] = {'g':1.0, 'b':1.0, 'l':1.0}
     # sim_config_dict['c2d_method']    = 'zoh'   
@@ -74,6 +73,6 @@ if __name__ == '__main__':
     # plot / analyze output
     plt.figure()
     plt.plot(x_des_seq[:,0], x_des_seq[:,1], color= 'blue', label = 'desired_trajectory')
-    plt.plot(x_sim_seq[:,0], x_sim_seq[:,1], color = 'red', label = 'output_trajectory', linestyle = '--')
+    plt.plot(x_sim_seq[:,0], x_sim_seq[:,1],color = 'red', label = 'output_trajectory')
     plt.legend()
     plt.show()

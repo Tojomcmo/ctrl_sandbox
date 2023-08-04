@@ -34,15 +34,14 @@ class ttlqrControllerConfig():
                          'lti_ss_params',
                          'time_step',
                          'c2d_method']
-        if not (config_dict['Q']).any() or not (config_dict['R']).any() or not (config_dict['Qf']).any():
-            raise ValueError("config_dict requires keys 'Q', 'R', and 'Qf' with np.arrays of dimension (n,n), (m,m), and (n,n), respectively")
+        # if not (config_dict['Q']).any() or not (config_dict['R']).any() or not (config_dict['Qf']).any():
+        #     raise ValueError("config_dict requires keys 'Q', 'R', and 'Qf' with np.arrays of dimension (n,n), (m,m), and (n,n), respectively")
         if not config_dict['lti_ss'] or not config_dict['lti_ss_params']:
             raise ValueError("config_dict requires keys 'lti_ss' and 'lti_ss_params' with dynamics func and paired parameter set")
         if not config_dict['time_step']:
             raise ValueError("config_dict requires key 'time_step' with system descritization timestep float")
         if not config_dict['c2d_method']:
             raise ValueError("config_dict requires key 'c2d_method' of val 'euler', 'zoh', or 'zohCombineed' for descritization method")
-
 
     def verify_input_des_seqs(self, u_des_seq, x_des_seq):    
         return
@@ -56,12 +55,12 @@ class ttlqrControllerConfig():
         # create statespace from provided general statespace
         ss_cont               = gen_lin_dyn_sys(lin_dyn_sys_params)
         ss_discrete           = self.c2d_func(ss_cont)
-        curried_lin_dyn_func  = lambda t, x, u: (ss_discrete.a @ x + ss_discrete @ u)
+        curried_lin_dyn_func  = lambda t, x, u: (ss_discrete.a @ (x.reshape(-1)) + ss_discrete.b @ (u.reshape(-1)))
         return ss_discrete, curried_lin_dyn_func
     
     def curry_ctg_params_func(self):
-        ctg_params_func = lambda xdk,sxxk,sxk,s0k: calculate_ctg_params(self.Q, self.R, xdk, sxxk, sxk, s0k,
-                                                                            self.ss_discrete.a, self.ss_discrete.b)
+        ctg_params_func = lambda xdt,udt,sxxt,sxt,s0t: calculate_ctg_params_dot(self.Q, self.R, xdt,udt, self.BRinvBT, sxxt, sxt, s0t,
+                                                                                 self.ss_discrete.a, self.ss_discrete.b)
         return ctg_params_func
 
 class ttlqrControllerState():
@@ -76,11 +75,15 @@ def calculate_ttlqr_seq(ctrl_config:ttlqrControllerConfig):
     s_xx_seq, s_x_seq, s_0_seq, g_fb_seq, g_ff_seq = initialize_ttlqr_seqs(ctrl_config.len_seq, ctrl_config.x_len, ctrl_config.u_len)    
     s_xx_seq[-1], s_x_seq[-1], s_0_seq[-1]         = calculate_final_ctg_params(ctrl_config.Qf, ctrl_config.x_des_seq[-1])
     for idx in range(ctrl_config.len_seq-1):
-        k_step = - (idx + 2)
-        s_xx_seq[k_step], s_x_seq[k_step], s_0_seq[k_step], g_ff_seq[k_step+1], g_fb_seq[k_step+1] = ctrl_config.ctg_params_func(ctrl_config.x_des_seq[k_step],
-                                                                                                                                 s_xx_seq[k_step+1],
-                                                                                                                                 s_x_seq[k_step+1],
-                                                                                                                                 s_0_seq[k_step+1])
+        k = - (idx + 2)
+        s_xx_dot, s_x_dot, s_0_dot          = ctrl_config.ctg_params_func(ctrl_config.x_des_seq[k],
+                                                                          ctrl_config.u_des_seq[k+1],
+                                                                          s_xx_seq[k+1], s_x_seq[k+1], s_0_seq[k+1])
+        s_xx_seq[k], s_x_seq[k], s_0_seq[k] = back_integrate_euler_ctg_params(s_xx_dot, s_x_dot, s_0_dot, 
+                                                                              s_xx_seq[k+1], s_x_seq[k+1], s_0_seq[k+1],
+                                                                              ctrl_config.time_step) 
+        g_ff_seq[k+1], g_fb_seq[k+1]        = calculate_u_ff_fb_gains_at_k(s_xx_seq[k], s_x_seq[k], ctrl_config.RinvBT)  
+
     # if not verify_backstep_params(s_xx_seq, s_x_seq, s_0_seq):
     #     raise ValueError('invalid sequence of backstepped parameters, J(x,t)')
     return s_xx_seq, s_x_seq, s_0_seq, g_ff_seq, g_fb_seq
@@ -92,7 +95,7 @@ def calculate_final_ctg_params(Qf:npt.ArrayLike, x_des_N:npt.ArrayLike):
     s_0_N  = x_des_N.T @ Qf @ x_des_N  # type: ignore
     return s_xx_N, s_x_N, s_0_N
 
-def calculate_ctg_params(Q:npt.ArrayLike, R:npt.ArrayLike, x_des_k:npt.ArrayLike, 
+def calculate_ctg_params_disc(Q:npt.ArrayLike, R:npt.ArrayLike, x_des_k:npt.ArrayLike, 
                          s_xx_kp1:npt.ArrayLike, s_x_kp1:npt.ArrayLike, s_0_kp1:npt.ArrayLike, 
                          A:npt.ArrayLike, B:npt.ArrayLike):
     
@@ -101,12 +104,30 @@ def calculate_ctg_params(Q:npt.ArrayLike, R:npt.ArrayLike, x_des_k:npt.ArrayLike
     s_xx_k = Q + (A.T @ s_xx_kp1 @ A) - (A.T @ s_xx_kp1 @ B @ U_kp1 @ B.T @ s_xx_kp1 @ A) # type: ignore
     s_x_k  = (A.T @ s_x_kp1) - (A.T @ s_xx_kp1 @ B @ U_kp1 @ B.T @ s_x_kp1) - (Q @ x_des_k) # type: ignore
     s_0_k  = s_0_kp1 - ((0.5) * s_x_kp1.T @ B @ U_kp1 @ B.T @ s_x_kp1) + ((0.5) * x_des_k.T @ Q @ x_des_k)  # type: ignore
-    g_fb_k = -U_kp1 @ B.T  # type: ignore
+    g_fb_k = -U_kp1 @ B.T # type: ignore
     g_ff_k = U_kp1 @ B.T @ s_xx_kp1 @ A # type: ignore
-    # s_xx_k = Q - (s_xx_kp1 @ BRinvBT @ s_xx_kp1) + (s_xx_kp1 @ A) + (A.T @ s_xx_kp1) # type: ignore
-    # s_x_k  = -(Q @ x_des_k) + ((A.T - s_xx_kp1 @ BRinvBT) @ s_x_kp1) + (s_xx_kp1 @ B @ u_des_k) # type: ignore
-    # s_0_k  = (x_des_k.T @ Q @ x_des_k) - (s_x_kp1.T @ BRinvBT @ s_x_kp1) + 2 * (s_x_kp1.T @ B @ u_des_k) # type: ignore
     return s_xx_k, s_x_k, s_0_k, g_ff_k, g_fb_k
+
+def calculate_ctg_params_dot(Q:npt.ArrayLike, R:npt.ArrayLike, x_des_t:npt.ArrayLike, u_des_t:npt.ArrayLike,
+                         BRinvBT:npt.ArrayLike, s_xx_t:npt.ArrayLike, s_x_t:npt.ArrayLike, s_0_t:npt.ArrayLike, 
+                         A:npt.ArrayLike, B:npt.ArrayLike):
+    
+    # continuous version optimal tracking (Tedrake Underact chapter 8.2.4)
+    s_xx_dot = -(Q - (s_xx_t @ BRinvBT @ s_xx_t) + (s_xx_t @ A) + (A.T @ s_xx_t)) # type: ignore
+    s_x_dot  = -(-(Q @ x_des_t) + ((A.T - s_xx_t @ BRinvBT) @ s_x_t) + (s_xx_t @ B @ u_des_t)) # type: ignore
+    s_0_dot  = -((x_des_t.T @ Q @ x_des_t) - (s_x_t.T @ BRinvBT @ s_x_t) + 2 * (s_x_t.T @ B @ u_des_t)) # type: ignore
+    return s_xx_dot, s_x_dot, s_0_dot
+
+def back_integrate_euler_ctg_params(s_xx_dot,s_x_dot, s_0_dot, s_xx_t, s_x_t, s_0_t, time_step):
+    s_xx_tm1 = s_xx_t - s_xx_dot * time_step
+    s_x_tm1  = s_x_t  - s_x_dot  * time_step
+    s_0_tm1  = s_0_t  - s_0_dot  * time_step
+    return s_xx_tm1, s_x_tm1, s_0_tm1
+
+def calculate_u_ff_fb_gains_at_k(s_xx_k, s_x_k, RinvBT):
+    g_ff_k = -RinvBT @ s_x_k
+    g_fb_k =  RinvBT @ s_xx_k
+    return g_ff_k, g_fb_k 
 
 def verify_backstep_params(s_xx_seq, s_x_seq, s_0_seq):
     is_valid_seqs_bool = True
@@ -121,17 +142,27 @@ def initialize_ttlqr_seqs(len_seq, x_len, u_len):
     s_x_seq  = np.zeros([len_seq, x_len, 1    ]) 
     s_0_seq  = np.zeros([len_seq, 1])       
     g_fb_seq = np.zeros([len_seq-1, u_len, x_len])
-    g_ff_seq = np.zeros([len_seq-1, u_len, x_len]) 
+    g_ff_seq = np.zeros([len_seq-1, u_len, u_len]) 
     return s_xx_seq, s_x_seq, s_0_seq, g_fb_seq, g_ff_seq
 
-
-def calculate_u_opt_k(g_ff_k, g_fb_k, s_x_kp1, x_k):
-    u_opt_k = g_ff_k @ s_x_kp1 - g_fb_k @ x_k
+def calculate_u_opt_k(g_ff_k, g_fb_k, x_k, u_des_k, x_des_k):
+    ff_corr =   g_ff_k
+    fb_corr =   g_fb_k @ (x_k)
+    u_opt_k = u_des_k + ff_corr - fb_corr
     return u_opt_k
 
+def simulate_ttlqr_controller(sim_dyn_func, ctrl_state:ttlqrControllerState, ctrl_config:ttlqrControllerConfig):
+    x_output_seq = np.zeros([ctrl_config.len_seq, ctrl_config.x_len, 1])
+    u_output_seq = np.zeros([ctrl_config.len_seq-1, ctrl_config.u_len, 1])
+    x_output_seq[0] = ctrl_config.x_des_seq[0]
+    for k_step in range(ctrl_config.len_seq-1):
+        u_opt_k = calculate_u_opt_k(ctrl_state.g_ff_seq[k_step],ctrl_state.g_ff_seq[k_step], ctrl_state.s_x_seq[k_step], x_output_seq[k_step]) # type: ignore
+        x_kp1   = sim_dyn_func(x_output_seq[k_step], u_opt_k) 
+        x_output_seq[k_step+1] = x_kp1
+        u_output_seq[k_step]   = u_opt_k
+    return x_output_seq, u_output_seq
 
-def simulate_ttlqr_controller(sim_dyn_func, ctrl_state, ctrl_config):
-    return
+
 # Tedrake notes calculate u --- 
 # def calculate_u(RinvBT, u_des_k, S_xx_k, s_x_k, x_k):
 #     u_k = u_des_k - RinvBT @ (S_xx_k @ x_k + s_x_k)
