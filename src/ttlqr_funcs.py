@@ -72,6 +72,14 @@ class ttlqrControllerState():
         g_fb_seq = np.zeros([ctrl_config.len_seq-1, ctrl_config.u_len, ctrl_config.x_len])
 
 def calculate_ttlqr_seq(ctrl_config:ttlqrControllerConfig):
+    """
+    [IN]  - ctrl_config - ttlqr controller configuration class
+    [OUT] - s_xx_seq    - np array (len_seq, x_len, x_len) of quadratic state weights for cost-to-go steps
+    [OUT] - s_x_seq     - np array (len_seq, x_len, 1) of linear state weights cost-to-go steps
+    [OUT] - s_0_seq     - np_array (len_seq, 1) of cost dc offset steps
+    [OUT] - g_ff_seq    - np_array (len_seq-1, u_len, u_len) of feedforward gains at each step
+    [OUT] - g_fb_seq    - np_array (len_seq-1, u_len, x_len) of feedback gains at each step
+    """
     s_xx_seq, s_x_seq, s_0_seq, g_fb_seq, g_ff_seq = initialize_ttlqr_seqs(ctrl_config.len_seq, ctrl_config.x_len, ctrl_config.u_len)    
     s_xx_seq[-1], s_x_seq[-1], s_0_seq[-1]         = calculate_final_ctg_params(ctrl_config.Qf, ctrl_config.x_des_seq[-1])
     for idx in range(ctrl_config.len_seq-1):
@@ -146,6 +154,9 @@ def initialize_ttlqr_seqs(len_seq, x_len, u_len):
     return s_xx_seq, s_x_seq, s_0_seq, g_fb_seq, g_ff_seq
 
 def calculate_u_opt_k(g_ff_k, g_fb_k, x_k, u_des_k, x_des_k):
+    """
+    g_ff_k - param in - np array(ulen, ulen)
+    """
     ff_corr =   g_ff_k
     fb_corr =   g_fb_k @ (x_k)
     u_opt_k = u_des_k + ff_corr - fb_corr

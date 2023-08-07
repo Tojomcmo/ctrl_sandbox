@@ -13,9 +13,9 @@ import src.gen_ctrl_funcs as gen_ctrl
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 1,
-                          'R'  : jnp.array([[.01]]),
-                          'Qf' : jnp.array([[1.,0],[0.,1.]]) * 1}
+   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 10,
+                          'R'  : jnp.array([[.1]]),
+                          'Qf' : jnp.array([[1.,0],[0.,1.]]) * 100}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
@@ -38,7 +38,7 @@ if __name__ == "__main__":
    
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 30
+   len_seq    = 10
 
    #---------- define plotting condition ----------#
    plot_ctrl_output_bool = False
