@@ -36,7 +36,7 @@ class stateSpace:
             else:
                 raise ValueError(f'invalid time step definition {time_step}. time_step must be a positive float or None')
 
-def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_method = 'euler'):
+def simulate_forward_dynamics_seq(dyn_func, state_init, control_seq, time_step, sim_method = 'euler'):
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
     # dyn_func[in]     - dynamics function (pre-populated with *params) for integration
     # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
@@ -66,6 +66,29 @@ def simulate_forward_dynamics(dyn_func, state_init, control_seq, time_step, sim_
     else:
         raise ValueError("invalid simulation method")
     return state_seq
+
+def simulate_forward_dynamics_step(dyn_func, x_k, u_k, time_step, sim_method = 'euler'):
+    # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
+    # dyn_func[in]     - dynamics function (pre-populated with *params) for integration
+    # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
+    # state_init[in]   - starting state for integration (vector, must match dyn_func state dim)
+    # time_step[in]    - time interval between sequence points (scalar > 0)
+    # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
+    # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
+    x_len      = len(x_k)  
+    x_kp1      = np.zeros([x_len, 1])
+    if sim_method == 'euler':
+        x_k_dot    = dyn_func(time_step, x_k, u_k)
+        x_kp1      = x_k + x_k_dot * time_step
+    elif sim_method == 'solve_ivp_zoh':
+        time_span    = (0,time_step)
+        dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, u_k.reshape(-1)))
+        y_0          = (x_k).reshape(-1)
+        result_ivp   = solve_ivp(dyn_func_zoh, time_span, y_0)
+        x_kp1        = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
+    else:
+        raise ValueError("invalid simulation method")
+    return x_kp1
 
 def linearize_dynamics(dyn_func,t_k, x_k, u_k):
 # Linearizes the dynamics function about the primals x and u
@@ -203,3 +226,5 @@ def prep_xu_vec_for_diff(x_k,u_k):
     xu_k_jax     = jnp.array(xu_k)
     return xu_k_jax, xu_k_len, x_k_len
 
+def ss_2_dyn_func(ss_cont:stateSpace):
+    return lambda t, x, u: ss_cont.a @ x + ss_cont.b @ u

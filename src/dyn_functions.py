@@ -1,5 +1,7 @@
 from jax import numpy as jnp
+import numpy as np
 import src.ilqr_utils as util
+import src.gen_ctrl_funcs as gen_ctrl
 
 def pend_dyn_nl(params, time, state, control):
 # continuous time dynamic equation for simple pendulum 
@@ -35,3 +37,16 @@ def pend_dyn_lin(params, time, state, control):
                 -((b/l) * vel) - ((g/l) * pos) + tq
                 ])
     return state_dot
+
+
+def lti_pend_ss_cont(params):
+    g = params['g']
+    l = params['l']
+    b = params['b']
+    A = np.array([[   0,    1],
+                  [-g/l, -b/l]])
+    B = np.array([[0],[1]])
+    C = np.eye(2)
+    D = np.zeros([2,1])
+    ss_cont = gen_ctrl.stateSpace(A, B, C, D)
+    return ss_cont

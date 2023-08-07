@@ -115,7 +115,7 @@ class ilqrConfiguredFuncs:
     def create_curried_simulate_dyn_func(self, ilqr_config):
         sim_method       = ilqr_config['sim_method']
         time_step        = ilqr_config['time_step']
-        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics(self.state_trans_func, x_init, u_seq, time_step, sim_method)
+        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.state_trans_func, x_init, u_seq, time_step, sim_method)
         return sim_func_curried 
     
     def create_curried_c2d_ss_func(self, ilqr_config):
