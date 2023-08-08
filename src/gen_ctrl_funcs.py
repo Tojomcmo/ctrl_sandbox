@@ -228,3 +228,8 @@ def prep_xu_vec_for_diff(x_k,u_k):
 
 def ss_2_dyn_func(ss_cont:stateSpace):
     return lambda t, x, u: ss_cont.a @ x + ss_cont.b @ u
+
+
+def calculate_s_xx_dot(Q_t, A_t, BRinvBT_t, s_xx_t):
+    s_xx_dt = -(Q_t - (s_xx_t @ BRinvBT_t @ s_xx_t) + (s_xx_t @ A_t) + (A_t.T @ s_xx_t))
+    return s_xx_dt

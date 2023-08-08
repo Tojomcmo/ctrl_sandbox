@@ -1,8 +1,8 @@
 import numpy as np
 from numpy import typing as npt
 
-import src.gen_ctrl_funcs as gen_ctrl
-import src.ilqr_utils as util
+from . import gen_ctrl_funcs as gen_ctrl
+from . import ilqr_utils as util
 
 class ttlqrControllerConfig():
     def __init__(self, config_dict, x_des_seq, u_des_seq):
@@ -99,7 +99,7 @@ def calculate_ttlqr_seq(ctrl_config:ttlqrControllerConfig):
 def calculate_final_ctg_params(Qf:npt.ArrayLike, x_des_N:npt.ArrayLike):
     # Calculate final cost to go
     s_xx_N = Qf
-    s_x_N  = -(Qf @ x_des_N)  # type: ignore
+    s_x_N  = - 2 * (Qf @ x_des_N)  # type: ignore
     s_0_N  = x_des_N.T @ Qf @ x_des_N  # type: ignore
     return s_xx_N, s_x_N, s_0_N
 
@@ -121,20 +121,20 @@ def calculate_ctg_params_dot(Q:npt.ArrayLike, R:npt.ArrayLike, x_des_t:npt.Array
                          A:npt.ArrayLike, B:npt.ArrayLike):
     
     # continuous version optimal tracking (Tedrake Underact chapter 8.2.4)
-    s_xx_dot = -(Q - (s_xx_t @ BRinvBT @ s_xx_t) + (s_xx_t @ A) + (A.T @ s_xx_t)) # type: ignore
-    s_x_dot  = -(-(Q @ x_des_t) + ((A.T - s_xx_t @ BRinvBT) @ s_x_t) + (s_xx_t @ B @ u_des_t)) # type: ignore
+    s_xx_dot = Q - (s_xx_t @ BRinvBT @ s_xx_t) + (s_xx_t @ A) + (A.T @ s_xx_t) # type: ignore
+    s_x_dot  = -(2* Q @ x_des_t) + ((A.T - s_xx_t @ BRinvBT) @ s_x_t) + (2 * s_xx_t @ B @ u_des_t) # type: ignore
     s_0_dot  = -((x_des_t.T @ Q @ x_des_t) - (s_x_t.T @ BRinvBT @ s_x_t) + 2 * (s_x_t.T @ B @ u_des_t)) # type: ignore
     return s_xx_dot, s_x_dot, s_0_dot
 
 def back_integrate_euler_ctg_params(s_xx_dot,s_x_dot, s_0_dot, s_xx_t, s_x_t, s_0_t, time_step):
-    s_xx_tm1 = s_xx_t - s_xx_dot * time_step
-    s_x_tm1  = s_x_t  - s_x_dot  * time_step
-    s_0_tm1  = s_0_t  - s_0_dot  * time_step
+    s_xx_tm1 = s_xx_t + s_xx_dot * time_step
+    s_x_tm1  = s_x_t  + s_x_dot  * time_step
+    s_0_tm1  = s_0_t  + s_0_dot  * time_step
     return s_xx_tm1, s_x_tm1, s_0_tm1
 
 def calculate_u_ff_fb_gains_at_k(s_xx_k, s_x_k, RinvBT):
-    g_ff_k = -RinvBT @ s_x_k
-    g_fb_k =  RinvBT @ s_xx_k
+    g_ff_k = RinvBT @ ((0.5) * s_x_k)
+    g_fb_k = RinvBT @ s_xx_k
     return g_ff_k, g_fb_k 
 
 def verify_backstep_params(s_xx_seq, s_x_seq, s_0_seq):
@@ -157,9 +157,9 @@ def calculate_u_opt_k(g_ff_k, g_fb_k, x_k, u_des_k, x_des_k):
     """
     g_ff_k - param in - np array(ulen, ulen)
     """
-    ff_corr =   g_ff_k
-    fb_corr =   g_fb_k @ (x_k)
-    u_opt_k = u_des_k + ff_corr - fb_corr
+    ff_corr = g_ff_k * 0
+    fb_corr = g_fb_k @ (x_k-x_des_k)
+    u_opt_k = u_des_k - (fb_corr + ff_corr)
     return u_opt_k
 
 def simulate_ttlqr_controller(sim_dyn_func, ctrl_state:ttlqrControllerState, ctrl_config:ttlqrControllerConfig):

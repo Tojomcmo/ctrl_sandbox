@@ -10,20 +10,20 @@ import src.analyze_ilqr_output_funcs as analyze
 if __name__ == '__main__':
     # Define system paramaters
     gen_lin_dyn_sys = dyn.lti_pend_ss_cont
-    lti_ss_params = {'g':10.0, 'b':1.0, 'l':1.0}
+    lti_ss_params = {'g':10.0, 'b':.7, 'l':1.0}
     time_step = 0.01
 
     config_dict = {'lti_ss'         : gen_lin_dyn_sys,
                     'lti_ss_params' : lti_ss_params,
                     'time_step'     : time_step,
-                    'Q'             : np.array([[10.,0.],[0.,10.]]),
-                    'R'             : np.array([[0.10]]),
-                    'Qf'            : np.array([[1.,0.],[0.,1.]]),
+                    'Q'             : np.array([[10.,0.],[0.,10.]]) *1,
+                    'R'             : np.array([[1.]]),
+                    'Qf'            : np.array([[1.,0.],[0.,1.]])*1,
                     'c2d_method'    : 'zohCombined'}
     
-    len_seq        = 100
-    u_traj_gen_seq = np.ones([len_seq-1, 1, 1]) * 5.0
-    x_init_vec     = np.array([[1.],[1.]])
+    len_seq        = 300
+    u_traj_gen_seq = np.ones([len_seq-1, 1, 1]) * 20.0
+    x_init_vec     = np.array([[0.1],[0.1]])
     # Define trajectory
 
     traj_gen_ss_cont     = gen_lin_dyn_sys(lti_ss_params)
@@ -48,15 +48,16 @@ if __name__ == '__main__':
 
     # initialize simulation parameters
 
-    lti_ss_sim_params = {'g':10.0, 'b':1.0, 'l':1.0}
+    lti_ss_sim_params = {'g':10.0, 'b':0.5, 'l':1.0}
     sim_ss_cont       = gen_lin_dyn_sys(lti_ss_sim_params)
     sim_ss_discrete   = gen_ctrl.discretize_state_space(sim_ss_cont, time_step, c2d_method = 'zohCombined') 
     x_sim_seq = np.zeros([len_seq, len(x_init_vec), 1])
     u_sim_seq = np.zeros([len_seq-1, 1, 1])    
     x_sim_seq[0] = x_init_vec
+    x_sim_seq[0] = np.array([[-0.25],[-0.25]])
     disturbance  = np.array([[0], [0.01]])
     for k in range(len_seq-1):
-        u_sim_seq[k]   = ttlqr.calculate_u_opt_k(ctrl_state.g_ff_seq[k], ctrl_state.g_fb_seq[k], ctrl_state.s_x_seq[k+1], x_sim_seq[k], u_traj_gen_seq[k], x_des_seq[k])      # type: ignore
+        u_sim_seq[k]   = ttlqr.calculate_u_opt_k(ctrl_state.g_ff_seq[k], ctrl_state.g_fb_seq[k], x_sim_seq[k], u_traj_gen_seq[k], x_des_seq[k])      # type: ignore
         x_sim_seq[k+1] = sim_ss_discrete.a @ x_sim_seq[k] + sim_ss_discrete.b @ u_sim_seq[k] 
    
     # sim_config_dict = config_dict

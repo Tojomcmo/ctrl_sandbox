@@ -1,7 +1,7 @@
 from jax import numpy as jnp
 import numpy as np
-import src.ilqr_utils as util
-import src.gen_ctrl_funcs as gen_ctrl
+from . import ilqr_utils as util
+from . import gen_ctrl_funcs as gen_ctrl
 
 def pend_dyn_nl(params, time, state, control):
 # continuous time dynamic equation for simple pendulum 

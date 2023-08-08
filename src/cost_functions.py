@@ -1,5 +1,5 @@
 from jax import numpy as jnp
-import src.ilqr_utils as util
+from . import ilqr_utils as util
 
 def cost_func_quad_state_and_control(cost_func_params:dict, state_vec, control_vec, k_step, state_des_seq, control_des_seq, is_final_bool=False):
 # This function calculates a quadratic cost wrt state and control
