@@ -44,12 +44,12 @@ def simulate_forward_dynamics_seq(dyn_func, state_init, control_seq, time_step, 
     # time_step[in]    - time interval between sequence points (scalar > 0)
     # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
-    len_seq        = len(control_seq)
-    state_len      = len(state_init)
-    control_len    = len(control_seq[0])    
-    state_seq      = np.zeros([(len_seq+1),state_len, 1])
-    state_seq[0]   = state_init
-    time_seq       = np.arange(len_seq) * time_step
+    len_seq: int             = len(control_seq)
+    state_len: int           = len(state_init)
+    control_len: int         = len(control_seq[0])    
+    state_seq: npt.ArrayLike = np.zeros([(len_seq+1),state_len, 1])
+    time_seq: npt.ArrayLike  = np.arange(len_seq) * time_step    
+    state_seq[0]   = state_init # type: ignore
     if sim_method == 'euler':
         for idx in range(len_seq):
             state_dot_row    = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
@@ -172,8 +172,8 @@ def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_me
 
         elif c2d_method=='zohCombined':
         #   create combined A B matrix e^([[A, B],[0,0]]
-            a_b_c  = np.concatenate((jnp.concatenate((input_state_space.a, input_state_space.b),axis=1),jnp.zeros((m,n + m))), axis=0)
-            a_b_d  = scipy.linalg.expm(a_b_c * time_step)
+            a_b_c:npt.ArrayLike  = np.concatenate((np.concatenate((input_state_space.a, input_state_space.b),axis=1),np.zeros((m,n + m))), axis=0)
+            a_b_d:npt.ArrayLike  = scipy.linalg.expm(a_b_c * time_step)
             a_d   = a_b_d[:n,:n]
             b_d   = a_b_d[:n,n:]
             c_d   = input_state_space.c

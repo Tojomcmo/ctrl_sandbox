@@ -22,14 +22,14 @@ if __name__ == '__main__':
 
     # define general system paramters
     time_step = 0.01
-    len_seq   = 300
+    len_seq   = 200
 
     x_init    = np.array([[1.],[1.]])
-    u_nom_seq = np.ones([len_seq-1, 1, 1]) * 50
+    u_nom_seq = np.ones([len_seq-1, 1, 1]) * 5
 
-    Q  = np.array([[10.,0.],[0.,10.]])
+    Q  = np.array([[1.,0.],[0.,1.]]) * 10
     R  = np.array([[0.1]])
-    Qf = np.array([[10.,0.],[0.,10.]])
+    Qf = np.array([[1.,0.],[0.,1.]]) * 10
 
     ctrl_config = tvlqr.ctrlConfig(time_step, len_seq, len(x_init), len(u_nom_seq[0]), Q, R, Qf)
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     # run system forward
     lti_ss_sim_params    = {'g':10.0, 'b':1.0, 'l':1.0}
-    x_sim_init           = np.array([[-1.],[-5.]])
+    x_sim_init           = np.array([[1.1],[1.1]])
     ss_sim_cont          = dyn.lti_pend_ss_cont(lti_ss_sim_params)
     x_sim_seq, u_sim_seq = tvlqr.simulate_lti_tvlqr(ctrl_config, ctrl_out, x_sim_init, ss_sim_cont)
 
