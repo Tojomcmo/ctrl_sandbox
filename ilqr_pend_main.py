@@ -13,9 +13,9 @@ import src.gen_ctrl_funcs as gen_ctrl
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 10,
+   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,20.]]) * 10,
                           'R'  : jnp.array([[.1]]),
-                          'Qf' : jnp.array([[1.,0],[0.,1.]]) * 100}
+                          'Qf' : jnp.array([[10.,0],[0.,10.]]) * 10}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
@@ -28,17 +28,18 @@ if __name__ == "__main__":
                     'c2d_method'                : 'zohCombined',# 'euler', "zoh", 'zohCombined'
                     'max_iter'                  : 10,
                     'time_step'                 : 0.1,
-                    'converge_crit'             : 1e-4,
+                    'converge_crit'             : 1e-5,
+                    'ff_gain_tol'               : 1e-4,
                     'cost_ratio_bounds'         : [1e-6, 10],
                     'ro_reg_start'              : 0.0,
-                    'ro_reg_change'             : 0.25,
-                    'fp_max_iter'               : 5,
+                    'ro_reg_change'             : 0.5,
+                    'fp_max_iter'               : 10,
                     'log_ctrl_history'          : True
                  }
    
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 10
+   len_seq    = 40
 
    #---------- define plotting condition ----------#
    plot_ctrl_output_bool = False
@@ -57,7 +58,7 @@ if __name__ == "__main__":
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec
-   u_init_seq = np.zeros([len_seq-1, 1,1])
+   u_init_seq = np.ones([len_seq-1, 1,1]) * (5)
    u_des_seq  = u_tg_seq
    # u_des_seq  = np.zeros([len_seq-1, 1, 1])
    # x_des_seq  = np.zeros([len_seq, 2, 1])
@@ -80,20 +81,20 @@ if __name__ == "__main__":
                      controller_state.x_des_seq,
                      controller_output.x_seq]
       x_plot_seq_names = ['initial_seq', 'desired_seq', 'output_seq']
-      x_plot_seq_styles_dot = ['r.', 'g.', 'b.']
+      x_plot_seq_styles_dot = ['r', 'g', 'b']
       x_plot_seq_styles_quiver = ['red', 'green', 'blue']
+      quiverwidth = [0.0015] * len(x_plot_seqs)
       gs = gridspec.GridSpec(2, 2)
       fig = plt.figure(figsize=(14,6))
       ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
       ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
       ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
-      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, quiverwidth=0.0015, xlabel = 'angPos', ylabel = 'angVel')
+      analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs, x_plot_seq_names, x_plot_seq_styles_quiver, x_plot_seq_styles_dot, quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
       analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control') # type: ignore 
       analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost')
       plt.tight_layout()
-      plt.show()
 
-   elif plot_ctrl_history_bool is True:
+   if plot_ctrl_history_bool is True:
       x_plot_seqs = controller_output.x_seq_history
       x_plot_seqs.insert(0,controller_output.seed_x_seq)
       x_plot_seqs.append(controller_output.x_des_seq)
@@ -109,28 +110,33 @@ if __name__ == "__main__":
          if idx == 0:
             x_plot_seq_names.append('seed state seq')
             x_plot_seq_styles_quiver.append('purple')
-            x_plot_seq_quiverwidth.append(0.0015)            
+            x_plot_seq_quiverwidth.append(0.0015)    
+         elif idx == 1:
+            x_plot_seq_names.append(f'seq iter {idx}')
+            x_plot_seq_styles_quiver.append('blue')    
+            x_plot_seq_quiverwidth.append(0.0015)           
+         elif idx == n-2:   
+            x_plot_seq_names.append(f'seq iter final')
+            x_plot_seq_styles_quiver.append('orange')
+            x_plot_seq_quiverwidth.append(0.0015)                                   
          elif idx == n-1:
             x_plot_seq_names.append('target state seq')
             x_plot_seq_styles_quiver.append('red')
-            x_plot_seq_quiverwidth.append(0.0015)         
-         elif idx == n-2:   
-            x_plot_seq_names.append(f'seq iter {idx}')
-            x_plot_seq_styles_quiver.append('orange')
-            x_plot_seq_quiverwidth.append(0.0015)  
-         elif idx == 1:
-            x_plot_seq_names.append('target state seq')
-            x_plot_seq_styles_quiver.append('blue')    
-            x_plot_seq_quiverwidth.append(0.0015)                                   
+            x_plot_seq_quiverwidth.append(0.0015)                                     
          else:   
             x_plot_seq_names.append(f'seq iter {idx}')
             x_plot_seq_styles_quiver.append('gray')
             x_plot_seq_quiverwidth.append(0.001)  
          c = next(color)           
          x_plot_seq_styles_dot.append(c) 
-      gs = gridspec.GridSpec(1, 1)
-      fig = plt.figure(figsize=(12,8))
+      gs = gridspec.GridSpec(2, 2)
+      fig = plt.figure(figsize=(14,6))
       ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
+      ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
+      ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
       analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, x_plot_seq_quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
+      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control', color= 'r.') # type: ignore 
+      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost', color= 'r.')
       plt.tight_layout()
-      plt.show()
+
+plt.show()

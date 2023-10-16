@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     Q  = np.array([[1.,0.],[0.,1.]]) * 10
     R  = np.array([[0.1]])
-    Qf = np.array([[1.,0.],[0.,1.]]) * 10
+    Qf = np.array([[0.1,0.],[0., 1.]]) * 10
 
     ctrl_config = tvlqr.ctrlConfig(time_step, len_seq, len(x_init), len(u_nom_seq[0]), Q, R, Qf)
 
@@ -43,8 +43,8 @@ if __name__ == '__main__':
     x_nom_seq    = np.zeros([len_seq, ctrl_config.x_len, 1])
     x_nom_seq[0] = x_init
     for k in range(len_seq-1):
-        x_nom_dt_k     = A_mat_cont @ x_nom_seq[k] + B_mat_cont @ u_nom_seq[k]
-        x_nom_seq[k+1] = x_nom_seq[k] + x_nom_dt_k * ctrl_config.time_step
+        x_nom_dt_func_k  = lambda time, x_nom, u_nom:A_mat_cont @ x_nom + B_mat_cont @ u_nom
+        x_nom_seq[k+1]   = gen_ctrl.simulate_forward_dynamics_step(x_nom_dt_func_k, x_nom_seq[k], u_nom_seq[k],ctrl_config.time_step, sim_method='solve_ivp_zoh')
 
     # create A and B sequences from lti dynamic system
     A_cont_seq    = np.zeros([len_seq-1, A_mat_cont.shape[0], A_mat_cont.shape[1]])

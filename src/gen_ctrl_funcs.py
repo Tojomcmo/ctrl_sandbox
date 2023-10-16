@@ -52,17 +52,17 @@ def simulate_forward_dynamics_seq(dyn_func, state_init, control_seq, time_step, 
     state_seq[0]   = state_init # type: ignore
     if sim_method == 'euler':
         for idx in range(len_seq):
-            state_dot_row    = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
-            state_next       = state_seq[idx] + state_dot_row * time_step
-            state_seq[idx+1] = state_next
+            state_dot_row    = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx]) # type: ignore
+            state_next       = state_seq[idx] + state_dot_row * time_step # type: ignore
+            state_seq[idx+1] = state_next # type: ignore
     elif sim_method == 'solve_ivp_zoh':
         time_span = (0,time_step)
         for idx in range(len_seq):
             dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx].reshape(-1)))
-            y_0 = (state_seq[idx]).reshape(-1)
+            y_0 = (state_seq[idx]).reshape(-1) # type: ignore
             result_ivp       = solve_ivp(dyn_func_zoh, time_span, y_0)
             state_next       = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
-            state_seq[idx+1] = state_next
+            state_seq[idx+1] = state_next # type: ignore
     else:
         raise ValueError("invalid simulation method")
     return state_seq
@@ -173,9 +173,9 @@ def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_me
         elif c2d_method=='zohCombined':
         #   create combined A B matrix e^([[A, B],[0,0]]
             a_b_c:npt.ArrayLike  = np.concatenate((np.concatenate((input_state_space.a, input_state_space.b),axis=1),np.zeros((m,n + m))), axis=0)
-            a_b_d:npt.ArrayLike  = scipy.linalg.expm(a_b_c * time_step)
-            a_d   = a_b_d[:n,:n]
-            b_d   = a_b_d[:n,n:]
+            a_b_d:npt.ArrayLike  = scipy.linalg.expm(a_b_c * time_step) # type: ignore
+            a_d   = a_b_d[:n,:n] # type: ignore
+            b_d   = a_b_d[:n,n:] # type: ignore
             c_d   = input_state_space.c
             d_d   = input_state_space.d
         else:

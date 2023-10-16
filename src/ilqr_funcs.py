@@ -28,7 +28,9 @@ class ilqrControllerState:
         self.cost_float         = 0.0
         self.prev_cost_float    = 0.0
         self.iter_int           = 0 
+        self.ff_gain_avg        = 0.0        
         self.ro_reg             = 0.0
+        self.lsf_float          = 1.0
         self.ro_reg_change_bool = False    
         
         # dependent parameter population
@@ -89,6 +91,17 @@ class ilqrControllerState:
     
     def get_num_controls(self):
         return len(self.seed_u_seq[0]) # type: ignore
+    
+    def append_controller_seqs(self):
+        self.u_seq_history.append(self.u_seq)
+        self.x_seq_history.append(self.x_seq)
+        self.cost_seq_history.append(self.cost_seq) 
+        self.cost_float_history.append(self.cost_float)
+        self.lsf_float_history.append(self)
+        self.K_seq_history.append(self.K_seq) 
+        self.d_seq_history.append(self.d_seq)
+        self.Del_V_vec_seq_history.append(self.Del_V_vec_seq)   
+
 
 class ilqrConfiguredFuncs:
     def __init__(self, ilqr_config, controller_state:ilqrControllerState):
@@ -154,29 +167,29 @@ def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerStat
         # perform backwards pass to calculate gains and expected value function change
         local_ctrl_state.K_seq, local_ctrl_state.d_seq, local_ctrl_state.Del_V_vec_seq, local_ctrl_state.ro_reg = calculate_backwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.cost_seq, line_search_factor, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
+        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.cost_seq, local_ctrl_state.lsf_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         
-        if ilqr_config['log_ctrl_history'] is True and local_ctrl_state.ro_reg == ilqr_config['ro_reg_start']:
-            local_ctrl_state.u_seq_history.append(local_ctrl_state.u_seq)
-            local_ctrl_state.x_seq_history.append(local_ctrl_state.x_seq)
-            local_ctrl_state.cost_seq_history.append(local_ctrl_state.cost_seq) 
-            local_ctrl_state.cost_float_history.append(local_ctrl_state.cost_float)
-            local_ctrl_state.lsf_float_history.append(line_search_factor)
-            local_ctrl_state.K_seq_history.append(local_ctrl_state.K_seq) 
-            local_ctrl_state.d_seq_history.append(local_ctrl_state.d_seq)
-            local_ctrl_state.Del_V_vec_seq_history.append(local_ctrl_state.Del_V_vec_seq)                     
-        # calculate convergence measure
+        # log iteration output
+        if ilqr_config['log_ctrl_history'] is True and local_ctrl_state.ro_reg_change_bool is False:
+            local_ctrl_state.append_controller_seqs()                  
+        # calculate convergence measures
+        avg_ff_gain = calculate_avg_ff_gains(local_ctrl_state.len_seq, local_ctrl_state.d_seq, local_ctrl_state.u_seq)
         converge_measure = jnp.abs(local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)/ctrl_state.cost_float
         # print controller info
         print('iteration number: ', local_ctrl_state.iter_int)
         print('converge_measure: ', converge_measure)
+        print('ff_gain_avg_measure: ', avg_ff_gain)        
         print('ro_reg_value: ', local_ctrl_state.ro_reg)
         print('need to increase ro?: ', local_ctrl_state.ro_reg_change_bool)
         if (converge_measure < ilqr_config['converge_crit']) and (local_ctrl_state.ro_reg_change_bool is False):
             converge_reached = True
             print('controller converged')
+        elif avg_ff_gain < ilqr_config['ff_gain_tol']:
+            converge_reached = True    
+            print('controller ff gains below convergence tolerance')            
         elif local_ctrl_state.iter_int == ilqr_config['max_iter']:  
             print('controller reached iteration limit')
+
     return local_ctrl_state
 
 def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
@@ -217,7 +230,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
     is_valid_q_uu = False
     while is_valid_q_uu is False:
         for idx in range(ctrl_state.len_seq - 1):
-            k_step = -(idx + 1)
+            # k_step = -(idx + 1)
+            k_step = ctrl_state.len_seq - (idx + 2)
             is_valid_q_uu = True
             q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
                                                                         config_funcs.cost_func,
@@ -264,7 +278,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
                                         ctrl_state.d_seq[k_step], 
                                         line_search_factor)
             # calculate updated next state with dynamics function
-            x_kp1_new = (config_funcs.simulate_dyn_func(state_seq_new[k_step], u_k_new))[-1]
+            x_kp1_new = (config_funcs.simulate_dyn_func(state_seq_new[k_step], u_k_new))[-1] # type: ignore
             
             # populate state and control sequences
             control_seq_new[k_step]  = u_k_new # type: ignore
@@ -280,10 +294,10 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_new, ctrl_state.Del_V_vec_seq, line_search_factor) 
         in_bounds_bool = config_funcs.analyze_cost_dec_func(cost_decrease_ratio)
 
-        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
-        if (norm_cost_decrease < ilqr_config['converge_crit']) and (iter_count < 3):
-            break
-        elif in_bounds_bool:
+        # if (norm_cost_decrease < ilqr_config['converge_crit']) and (iter_count < max_iter-1):
+        #     # TODO check statement. if cost decrease is sufficiently small?
+        #     break
+        if in_bounds_bool:
             break    
         elif (iter_count == max_iter-1):
             iter_count     += 1  
@@ -291,7 +305,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
             control_seq_new = ctrl_state.u_seq
             cost_float_new  = ctrl_state.cost_float
             ro_reg_change_bool = True
-        else:
+        else:        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
             state_seq_new,control_seq_new,cost_float_new, cost_seq_new, in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
                                                                                            ctrl_state.seed_x_vec, ctrl_state.len_seq)
             line_search_factor *= line_search_scale_param
@@ -368,7 +382,7 @@ def calculate_backstep_ctg_approx(q_x:npt.ArrayLike, q_u:npt.ArrayLike, q_xx:npt
     p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k) # type: ignore
     # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
     # Del_V_vec_k = jnp.array([[-jnp.abs((d_kt @ q_u))],[-jnp.abs((0.5) * (d_kt @ q_uu @ d_k))]]).reshape(1,-1)
-    Del_V_vec_k = np.array([(d_kt.T @ q_u),((0.5) * (d_kt.T @ q_uu @ d_k))]).reshape(1,-1)
+    Del_V_vec_k = np.array([(d_k.T @ q_u),((0.5) * (d_k.T @ q_uu @ d_k))]).reshape(1,-1) # type: ignore
     return P_k, p_k, Del_V_vec_k[0]
 
 def calculate_optimal_gains(q_uu_reg, q_ux, q_u):
@@ -409,3 +423,13 @@ def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
     else:
         in_bounds_bool = False            
     return in_bounds_bool
+
+def calculate_avg_ff_gains(iter_int, d_seq, U_seq):
+
+    # TODO check whether U_seq norm is norm 1 or norm 2
+    norm_factor = 1 / (iter_int - 1)
+    norm_gain_sum = 0.0
+    for k in range(iter_int-1):
+        norm_gain_sum += (abs(max(d_seq[k])) / (np.linalg.norm(U_seq[k]) + 1)).item()
+    avg_ff_gains = norm_factor * norm_gain_sum
+    return avg_ff_gains

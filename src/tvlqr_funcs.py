@@ -51,7 +51,7 @@ def calculate_u_star(k_fb_k, u_des_k, x_des_k, x_k):
     u_star = u_des_k - k_fb_k @ (x_k - x_des_k)
     return u_star
 
-def simulate_lti_tvlqr(ctrl_config:ctrlConfig, ctrl_out, x_sim_init, ss_sim_cont):
+def simulate_lti_tvlqr(ctrl_config:ctrlConfig, ctrl_out, x_sim_init, ss_sim_cont, sim_method = 'solve_ivp_zoh'):
     A_sim_cont = ss_sim_cont.a
     B_sim_cont = ss_sim_cont.b
     A_sim_cont_seq = np.zeros([ctrl_config.len_seq-1, A_sim_cont.shape[0], A_sim_cont.shape[1]])
@@ -62,9 +62,10 @@ def simulate_lti_tvlqr(ctrl_config:ctrlConfig, ctrl_out, x_sim_init, ss_sim_cont
     u_sim_seq  = np.zeros([ctrl_config.len_seq-1, ctrl_config.u_len, 1])
     x_sim_seq[0] = x_sim_init    
     for k in range(ctrl_config.len_seq-1):
-        u_sim_seq[k]   = calculate_u_star(ctrl_out.k_fb_seq[k], ctrl_out.u_nom_seq[k], ctrl_out.x_nom_seq[k], x_sim_seq[k])
-        x_sim_dt_k     = A_sim_cont_seq[k] @ x_sim_seq[k] + B_sim_cont_seq[k] @ u_sim_seq[k]
-        x_sim_seq[k+1] = x_sim_seq[k] + x_sim_dt_k * ctrl_config.time_step
+        u_sim_seq[k]     = calculate_u_star(ctrl_out.k_fb_seq[k], ctrl_out.u_nom_seq[k], ctrl_out.x_nom_seq[k], x_sim_seq[k])
+        x_dyn_func_k  = lambda time, x_nom, u_nom:A_sim_cont @ x_nom + B_sim_cont @ u_nom
+        x_sim_seq[k+1]   = gen_ctrl.simulate_forward_dynamics_step(x_dyn_func_k, x_sim_seq[k], u_sim_seq[k],ctrl_config.time_step, sim_method=sim_method)
+
     return x_sim_seq,u_sim_seq
 
 def plot_2d_state_and_control(x_nom_seq, ctrl_out, x_sim_seq, u_sim_seq, time_seq, ax1, ax2):

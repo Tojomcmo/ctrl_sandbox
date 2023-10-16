@@ -1049,38 +1049,19 @@ class analyze_cost_decrease_tests(unittest.TestCase):
         in_bounds_bool      = ilqr.analyze_cost_decrease(cost_decrease_ratio, bounds)
         self.assertEqual(in_bounds_bool, False)
 
-class prep_xu_vecs_for_diff_tests(unittest.TestCase):
-    def test_accepts_valid_np_col_inputs(self):
+
+class calculate_avg_ff_gains_tests(unittest.TestCase):
+    def test_accepts_valid_inputs(self):
         #create test conditions
-        x_k = np.array([[1],[2],[3]])
-        u_k = np.array([[4],[5]])
+        int_iter = 5
+        d_seq = np.ones((4,2,1))
+        u_seq = np.ones((4,2,1))
         #test function
-        xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
+        ff_avg_gains = ilqr.calculate_avg_ff_gains(int_iter, d_seq, u_seq)
         # create expected output
-        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
-        xu_k_len_expected = 5
-        x_k_len_expected  = 3
+        ff_avg_gains_expect = 1 / (5-1) * (1 / (np.sqrt(2) + 1)) * 4
         #compare outputs
-        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
-        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
-        self.assertEqual(xu_k_len, xu_k_len_expected)
-        self.assertEqual(x_k_len, x_k_len_expected)
-
-    def test_rejects_np_row_x_inputs(self):
-        #create test conditions
-        x_k = np.array([[1,2,3]])
-        u_k = np.array([[4,5]])
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
-        self.assertEqual(str(assert_seq_len_error.exception), 'x_vector must be column vector (n,1)')
-
-    def test_rejects_np_row_u_inputs(self):
-        #create test conditions
-        x_k = np.array([[1],[2],[3]])
-        u_k = np.array([[4,5]])
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
-        self.assertEqual(str(assert_seq_len_error.exception), 'u_vector must be column vector (m,1)')
+        self.assertEqual(ff_avg_gains, ff_avg_gains_expect)
 
 if __name__ == '__main__':
     unittest.main()
