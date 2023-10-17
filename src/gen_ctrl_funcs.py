@@ -206,10 +206,11 @@ def taylor_expand_cost(cost_func, x_k:float, u_k:float, k_step):
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
     cost_func_xu = lambda xu_k: cost_func(xu_k[:x_k_len], xu_k[x_k_len:], k_step)
+    cost_func_for_diff = prep_cost_func_for_diff(cost_func_xu)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax)).reshape(xu_k_len)
+    jac_cat      = (jax.jacfwd(cost_func_for_diff)(xu_k_jax)).reshape(xu_k_len)
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax)).reshape(xu_k_len,xu_k_len)
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_for_diff))(xu_k_jax)).reshape(xu_k_len,xu_k_len)
     l_x = np.array((jac_cat[:x_k_len]).reshape(-1,1))
     l_u = np.array((jac_cat[x_k_len:]).reshape(-1,1))
     l_xx = np.array((hessian_cat[:x_k_len,:x_k_len]))
@@ -233,3 +234,11 @@ def ss_2_dyn_func(ss_cont:stateSpace):
 def calculate_s_xx_dot(Q_t, A_t, BRinvBT_t, s_xx_t):
     s_xx_dt = -(Q_t - (s_xx_t @ BRinvBT_t @ s_xx_t) + (s_xx_t @ A_t) + (A_t.T @ s_xx_t))
     return s_xx_dt
+
+def prep_cost_func_for_diff(cost_func):
+    # Function for reducing generic cost function output to single queried value
+    # useful for preparing functions for jax differentiation
+    def cost_func_for_diff(vec):
+        cost_out = cost_func(vec)
+        return cost_out[0]
+    return cost_func_for_diff

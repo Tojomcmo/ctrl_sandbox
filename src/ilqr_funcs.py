@@ -14,6 +14,7 @@ from typing import Optional
 import scipy 
 from scipy.integrate import solve_ivp
 
+from . import cost_functions as cost
 from . import ilqr_utils as util
 from . import gen_ctrl_funcs as gen_ctrl
 
@@ -356,10 +357,12 @@ def calculate_final_ctg_approx(cost_func, x_N, u_len):
     xu_N_jax, xu_N_len, x_N_len = gen_ctrl.prep_xu_vec_for_diff(x_N, np.zeros([u_len,1]))
     # create lambda function of reduced inputs to only a single vector
     cost_func_xu = lambda xu_N: cost_func(xu_N[:x_N_len], xu_N[x_N_len:], -1, is_final_bool=True)
+    cost_func_for_diff = cost.prep_cost_func_for_diff(cost_func_xu)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_N_jax)).reshape(xu_N_len)
+   #jac_cat      = (jax.jacfwd(cost_func_xu)(xu_N_jax)).reshape(xu_N_len)
+    jac_cat      = (jax.jacfwd(cost_func_for_diff)(xu_N_jax)).reshape(xu_N_len)
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_N_jax)).reshape(xu_N_len,xu_N_len)
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_for_diff))(xu_N_jax)).reshape(xu_N_len,xu_N_len)
     p_N          = np.array((jac_cat[:(len(x_N))]).reshape(-1,1))
     P_N          = np.array(hessian_cat[:(len(x_N)),:(len(x_N))])
     return P_N, p_N

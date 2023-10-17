@@ -13,9 +13,9 @@ import src.gen_ctrl_funcs as gen_ctrl
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,20.]]) * 10,
-                          'R'  : jnp.array([[.1]]),
-                          'Qf' : jnp.array([[10.,0],[0.,10.]]) * 10}
+   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 10,
+                          'R'  : jnp.array([[.01]]),
+                          'Qf' : jnp.array([[10.,0],[0.,10.]]) * 50}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
@@ -24,12 +24,12 @@ if __name__ == "__main__":
                     'state_trans_func_params'   : state_trans_params,
                     'cost_func'                 : cost.cost_func_quad_state_and_control,
                     'cost_func_params'          : cost_func_params,
-                    'sim_method'                : 'solve_ivp_zoh', # 'euler', "solve_ivp_zoh"
-                    'c2d_method'                : 'zohCombined',# 'euler', "zoh", 'zohCombined'
+                    'sim_method'                : 'euler', # 'euler', "solve_ivp_zoh"
+                    'c2d_method'                : 'euler',# 'euler', "zoh", 'zohCombined'
                     'max_iter'                  : 10,
                     'time_step'                 : 0.1,
-                    'converge_crit'             : 1e-5,
-                    'ff_gain_tol'               : 1e-4,
+                    'converge_crit'             : 1e-6,
+                    'ff_gain_tol'               : 1e-5,
                     'cost_ratio_bounds'         : [1e-6, 10],
                     'ro_reg_start'              : 0.0,
                     'ro_reg_change'             : 0.5,
@@ -39,32 +39,38 @@ if __name__ == "__main__":
    
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 40
+   len_seq    = 30
 
    #---------- define plotting condition ----------#
    plot_ctrl_output_bool = False
    plot_ctrl_history_bool = True
 
-   #---------- create desired trajectory ----------#
+   #---------- create desired trajectory system ----------#
    traj_gen_dyn_func_params = {'g' : 9.81,
-                               'b' : 5.0,
+                               'b' : 10.0,
                                'l' : 1.0}
    x_tg_init_vec = np.array([[0.1],[0.1]])
    u_tg_seq      = np.ones([len_seq-1,1,1])*(15)
 
-   #create curried dynamics function for simulation
+   #---------- create simulation system ----------#
+   sim_dyn_func_params = {'g' : 9.81,
+                          'b' : 10.0,
+                          'l' : 1.0}
+   x_sim_init_vec = np.array([[0.1],[0.1]])
+
+   #---- generate desired trajectory from traj gen system----#
    traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,t,x,u)
    x_des_seq         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_dyn_func,x_tg_init_vec, u_tg_seq,time_step, sim_method='solve_ivp_zoh')
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec
-   u_init_seq = np.ones([len_seq-1, 1,1]) * (5)
+   u_init_seq = np.ones([len_seq-1, 1,1]) * (-1)
    u_des_seq  = u_tg_seq
    # u_des_seq  = np.zeros([len_seq-1, 1, 1])
    # x_des_seq  = np.zeros([len_seq, 2, 1])
    # x_des_seq[:,0] = np.pi
 
-
+   #----- Run iLQR algorithm -----#
    controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq, x_des_seq=x_des_seq, u_des_seq=u_des_seq)
    # initialize controller state and configured functions
    config_funcs, controller_state.x_seq, controller_state.cost_float, controller_state.prev_cost_float, controller_state.cost_seq \
@@ -75,6 +81,12 @@ if __name__ == "__main__":
    controller_output = ilqr.run_ilqr_controller(ilqr_config, config_funcs, controller_state)
 
 
+   #------- Simulate controller output --------#
+
+
+
+
+   #------- plot simulation and controller outputs ------#
 
    if plot_ctrl_output_bool is True:
       x_plot_seqs = [controller_state.seed_x_seq,
