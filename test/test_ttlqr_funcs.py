@@ -42,7 +42,7 @@ class calculate_final_ctg_params_tests(unittest.TestCase):
         s_xx_N_expect = np.array([[1,0,0],
                                   [0,1,0],
                                   [0,0,1]])
-        s_x_N_expect = - s_xx_N_expect @ np.array([[1],[1],[1]])
+        s_x_N_expect = - 2 * s_xx_N_expect @ np.array([[1],[1],[1]])
         s_0_N_expect = np.array([[1,1,1]]) @ s_xx_N_expect @ np.array([[1],[1],[1]])
         self.assertEqual(s_xx_N.tolist(), s_xx_N_expect.tolist()) # type: ignore
         self.assertEqual(s_x_N.tolist() , s_x_N_expect.tolist())
