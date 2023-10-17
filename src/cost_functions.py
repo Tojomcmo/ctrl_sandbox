@@ -5,13 +5,6 @@ from . import ilqr_utils as util
 # Cost functions may return multiple values:
 #  - first value MUST be the float value of calculated query cost
 
-def prep_cost_func_for_diff(cost_func):
-    # Function for reducing generic cost function output to single queried value
-    # useful for preparing functions for jax differentiation
-    def cost_func_for_diff(vec):
-        cost_out = cost_func(vec)
-        return cost_out[0]
-    return cost_func_for_diff
 
 def cost_func_quad_state_and_control(cost_func_params:dict, state_vec, control_vec, k_step, state_des_seq, control_des_seq, is_final_bool=False):
 # This function calculates a quadratic cost wrt state and control
@@ -37,4 +30,4 @@ def cost_func_quad_state_and_control(cost_func_params:dict, state_vec, control_v
         state_cost   = (0.5) * (jnp.transpose(x_k_corr) @ Q  @ x_k_corr)
         control_cost = (0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr)
     cost_float = state_cost + control_cost    
-    return cost_float#, state_cost, control_cost                   
+    return cost_float, state_cost, control_cost                   

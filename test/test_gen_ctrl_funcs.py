@@ -700,5 +700,31 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
             xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         self.assertEqual(str(assert_seq_len_error.exception), 'u_vector must be column vector (m,1)')
 
+
+class prep_cost_func_for_diff_tests(unittest.TestCase):
+    def test_cost_func(self, vec_1_and_2): 
+        cost_val_1 = np.sum(vec_1_and_2)
+        cost_val_2 = np.sum(vec_1_and_2) + 2
+        combined_cost = cost_val_1 + cost_val_2
+        return combined_cost, cost_val_1, cost_val_2        
+    
+    def test_accepts_valid_cost_func_inputs(self):
+        #create test conditions
+        x_k = np.array([[1],[2]])
+        u_k = np.array([[3],[4]])
+        xu_k = np.stack([x_k, u_k], axis=0)
+        #test function
+        cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.test_cost_func)
+        combined_cost = cost_func_for_diff(xu_k)
+        _, cost_val_1, cost_val_2 = self.test_cost_func(xu_k)
+        # create expected output
+        combined_cost_expected = 22
+        cost_val_1_expected = 10
+        cost_val_2_expected  = 12
+        #compare outputs
+        self.assertEqual(combined_cost, combined_cost_expected)
+        self.assertEqual(cost_val_1, cost_val_1_expected)
+        self.assertEqual(cost_val_2, cost_val_2_expected)
+
 if __name__ == '__main__':
     unittest.main()

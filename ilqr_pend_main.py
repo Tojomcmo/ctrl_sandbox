@@ -50,13 +50,13 @@ if __name__ == "__main__":
                                'b' : 10.0,
                                'l' : 1.0}
    x_tg_init_vec = np.array([[0.1],[0.1]])
-   u_tg_seq      = np.ones([len_seq-1,1,1])*(15)
+   u_tg_seq      = np.ones([len_seq-1,1,1])*(20)
 
    #---------- create simulation system ----------#
    sim_dyn_func_params = {'g' : 9.81,
-                          'b' : 10.0,
+                          'b' : 1.0,
                           'l' : 1.0}
-   x_sim_init_vec = np.array([[0.1],[0.1]])
+   x_sim_init_vec = np.array([[0.1],[0.1]])*0.5
 
    #---- generate desired trajectory from traj gen system----#
    traj_gen_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,t,x,u)
@@ -83,8 +83,8 @@ if __name__ == "__main__":
 
    #------- Simulate controller output --------#
 
-
-
+   sim_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(sim_dyn_func_params,t,x,u)
+   x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(sim_dyn_func, controller_output, x_sim_init_vec, sim_method='solve_ivp_zoh')
 
    #------- plot simulation and controller outputs ------#
 
@@ -109,6 +109,7 @@ if __name__ == "__main__":
    if plot_ctrl_history_bool is True:
       x_plot_seqs = controller_output.x_seq_history
       x_plot_seqs.insert(0,controller_output.seed_x_seq)
+      x_plot_seqs.append(x_sim_seq)
       x_plot_seqs.append(controller_output.x_des_seq)
       x_plot_seq_names = []
       x_plot_seq_styles_dot = []
@@ -124,17 +125,21 @@ if __name__ == "__main__":
             x_plot_seq_styles_quiver.append('purple')
             x_plot_seq_quiverwidth.append(0.0015)    
          elif idx == 1:
-            x_plot_seq_names.append(f'seq iter {idx}')
+            x_plot_seq_names.append(f'iter {idx}')
             x_plot_seq_styles_quiver.append('blue')    
-            x_plot_seq_quiverwidth.append(0.0015)           
-         elif idx == n-2:   
-            x_plot_seq_names.append(f'seq iter final')
+            x_plot_seq_quiverwidth.append(0.0015)    
+         elif idx == n-3:   
+            x_plot_seq_names.append(f'ctrl final prediction')
             x_plot_seq_styles_quiver.append('orange')
-            x_plot_seq_quiverwidth.append(0.0015)                                   
+            x_plot_seq_quiverwidth.append(0.0015)                         
+         elif idx == n-2:   
+            x_plot_seq_names.append(f'simulation_output')
+            x_plot_seq_styles_quiver.append('black')
+            x_plot_seq_quiverwidth.append(0.0025)                                   
          elif idx == n-1:
             x_plot_seq_names.append('target state seq')
             x_plot_seq_styles_quiver.append('red')
-            x_plot_seq_quiverwidth.append(0.0015)                                     
+            x_plot_seq_quiverwidth.append(0.0025)                                     
          else:   
             x_plot_seq_names.append(f'seq iter {idx}')
             x_plot_seq_styles_quiver.append('gray')

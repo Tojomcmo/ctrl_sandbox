@@ -199,13 +199,13 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
         cost_seq[idx] = incremental_cost
     return total_cost, cost_seq
 
-def taylor_expand_cost(cost_func, x_k:float, u_k:float, k_step):
+def taylor_expand_cost(cost_func, x_k:npt.ArrayLike, u_k:npt.ArrayLike, k_step:int, is_final_bool=False):
 # This function creates a quadratic approximation of the cost function Using taylor expansion
 # Expansion is approximated about the rolled out trajectory
     # create concatenated state and control vector of primal points
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu = lambda xu_k: cost_func(xu_k[:x_k_len], xu_k[x_k_len:], k_step)
+    cost_func_xu = lambda xu_k: cost_func(xu_k[:x_k_len], xu_k[x_k_len:], k_step, is_final_bool)
     cost_func_for_diff = prep_cost_func_for_diff(cost_func_xu)
     # calculate the concatenated jacobian vector for the cost function at the primal point
     jac_cat      = (jax.jacfwd(cost_func_for_diff)(xu_k_jax)).reshape(xu_k_len)

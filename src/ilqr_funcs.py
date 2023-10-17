@@ -14,7 +14,6 @@ from typing import Optional
 import scipy 
 from scipy.integrate import solve_ivp
 
-from . import cost_functions as cost
 from . import ilqr_utils as util
 from . import gen_ctrl_funcs as gen_ctrl
 
@@ -220,7 +219,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
     
     P_N, p_N = calculate_final_ctg_approx(config_funcs.cost_func, 
                                                         ctrl_state.x_seq[-1], 
-                                                        ctrl_state.u_len)
+                                                        ctrl_state.u_len,
+                                                        ctrl_state.len_seq)
     
     P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N, ctrl_state.x_len,
                                                                           ctrl_state.u_len, ctrl_state.len_seq)
@@ -351,20 +351,12 @@ def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp
     q_ux_reg = l_ux + B_lin_k.T @ P_kp1_reg @ A_lin_k
     return q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg
 
-def calculate_final_ctg_approx(cost_func, x_N, u_len):
+def calculate_final_ctg_approx(cost_func, x_N:npt.ArrayLike, u_len:int, len_seq:int):
     # approximates the final step cost-to-go as only the state with no control input
     # create concatenated state and control vector of primal points
-    xu_N_jax, xu_N_len, x_N_len = gen_ctrl.prep_xu_vec_for_diff(x_N, np.zeros([u_len,1]))
-    # create lambda function of reduced inputs to only a single vector
-    cost_func_xu = lambda xu_N: cost_func(xu_N[:x_N_len], xu_N[x_N_len:], -1, is_final_bool=True)
-    cost_func_for_diff = cost.prep_cost_func_for_diff(cost_func_xu)
-    # calculate the concatenated jacobian vector for the cost function at the primal point
-   #jac_cat      = (jax.jacfwd(cost_func_xu)(xu_N_jax)).reshape(xu_N_len)
-    jac_cat      = (jax.jacfwd(cost_func_for_diff)(xu_N_jax)).reshape(xu_N_len)
-    # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_for_diff))(xu_N_jax)).reshape(xu_N_len,xu_N_len)
-    p_N          = np.array((jac_cat[:(len(x_N))]).reshape(-1,1))
-    P_N          = np.array(hessian_cat[:(len(x_N)),:(len(x_N))])
+    u_N = np.zeros([u_len,1], dtype=float)
+    k_step = len_seq - 1
+    p_N, _, P_N, _, _ = gen_ctrl.taylor_expand_cost(cost_func, x_N, u_N, k_step, is_final_bool=True)
     return P_N, p_N
 
 def calculate_backstep_ctg_approx(q_x:npt.ArrayLike, q_u:npt.ArrayLike, q_xx:npt.ArrayLike, q_uu:npt.ArrayLike, q_ux:npt.ArrayLike, K_k:npt.ArrayLike, d_k:npt.ArrayLike):
@@ -436,3 +428,19 @@ def calculate_avg_ff_gains(iter_int, d_seq, U_seq):
         norm_gain_sum += (abs(max(d_seq[k])) / (np.linalg.norm(U_seq[k]) + 1)).item()
     avg_ff_gains = norm_factor * norm_gain_sum
     return avg_ff_gains
+
+
+def calculate_u_star(k_fb_k, u_des_k, x_des_k, x_k):
+    u_star = u_des_k + k_fb_k @ (x_k - x_des_k)
+    return u_star
+
+
+def simulate_ilqr_output(dyn_func, ctrl_out:ilqrControllerState, x_sim_init, sim_method = 'solve_ivp_zoh'):
+    x_sim_seq  = np.zeros([ctrl_out.len_seq, ctrl_out.x_len, 1])
+    u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len, 1])
+    x_sim_seq[0] = x_sim_init    
+    for k in range(ctrl_out.len_seq-1):
+        u_sim_seq[k]     = calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k])
+        x_sim_seq[k+1]   = gen_ctrl.simulate_forward_dynamics_step(dyn_func, x_sim_seq[k], u_sim_seq[k],ctrl_out.time_step, sim_method=sim_method)
+
+    return x_sim_seq,u_sim_seq
