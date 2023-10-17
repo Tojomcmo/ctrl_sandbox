@@ -18,8 +18,8 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         control        = jnp.array([[1, 0.1]])
         state_des      = jnp.array([[0.1, 1, 10]]) * 2
         control_des    = jnp.array([[1, 0.1]]) *2       
-        k_step = 0
-        j              = cfuncs.cost_func_quad_state_and_control(cost_func_params,
+        k_step = 1
+        j,j_state,j_control = cfuncs.cost_func_quad_state_and_control(cost_func_params,
                                                                  state, control,
                                                                  k_step,
                                                                  state_des, control_des)
@@ -42,8 +42,8 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         control        = jnp.array([[0, 0]])
         state_des      = jnp.array([[0.1, 1, 10]]) * 2
         control_des    = jnp.array([[0, 0]])      
-        k_step = 0
-        j              = cfuncs.cost_func_quad_state_and_control(cost_func_params,
+        k_step = 1
+        j,j_state,j_control = cfuncs.cost_func_quad_state_and_control(cost_func_params,
                                                                  state, control,
                                                                  k_step,
                                                                  state_des, control_des,is_final_bool=True)

@@ -702,7 +702,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
 
 
 class prep_cost_func_for_diff_tests(unittest.TestCase):
-    def test_cost_func(self, vec_1_and_2): 
+    def cost_func(self, vec_1_and_2): 
         cost_val_1 = np.sum(vec_1_and_2)
         cost_val_2 = np.sum(vec_1_and_2) + 2
         combined_cost = cost_val_1 + cost_val_2
@@ -714,9 +714,9 @@ class prep_cost_func_for_diff_tests(unittest.TestCase):
         u_k = np.array([[3],[4]])
         xu_k = np.stack([x_k, u_k], axis=0)
         #test function
-        cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.test_cost_func)
+        cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.cost_func)
         combined_cost = cost_func_for_diff(xu_k)
-        _, cost_val_1, cost_val_2 = self.test_cost_func(xu_k)
+        _, cost_val_1, cost_val_2 = self.cost_func(xu_k)
         # create expected output
         combined_cost_expected = 22
         cost_val_1_expected = 10

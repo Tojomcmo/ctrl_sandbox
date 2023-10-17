@@ -48,6 +48,7 @@ class shared_unit_test_data_and_funcs:
             'max_iter'                  : 20,
             'time_step'                 : 0.1,
             'converge_crit'             : 1e-5,
+            'ff_gain_tol'               : 1e-5,
             'cost_ratio_bounds'         : [1e-6, 20],
             'ro_reg_start'              : 0.25,
             'ro_reg_change'             : 0.25,
@@ -64,6 +65,7 @@ class shared_unit_test_data_and_funcs:
             'max_iter'                  : 20,
             'time_step'                 : 0.1,
             'converge_crit'             : 1e-5,
+            'ff_gain_tol'               : 1e-5,            
             'cost_ratio_bounds'         : [1e-6, 20],
             'ro_reg_start'              : 0.25,
             'ro_reg_change'             : 0.25,
@@ -836,7 +838,7 @@ class calculate_final_ctg_approx_tests(unittest.TestCase):
         cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
         x_N = np.array(([1.0],[2.0]))
         u_N = np.array(([1.0]))
-        P_N, p_N = ilqr.calculate_final_ctg_approx(cost_func,x_N,len(u_N))
+        P_N, p_N = ilqr.calculate_final_ctg_approx(cost_func,x_N,len(u_N),len_seq = 1)
         p_N_expected = shared_data_funcs.pend_unit_cost_func_params['Qf'] @ x_N
         P_N_expected = shared_data_funcs.pend_unit_cost_func_params['Qf']
         self.assertEqual(p_N.tolist(), p_N_expected.tolist())
