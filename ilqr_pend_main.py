@@ -13,9 +13,9 @@ import src.gen_ctrl_funcs as gen_ctrl
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,10.]]) * 10,
-                          'R'  : jnp.array([[.01]]),
-                          'Qf' : jnp.array([[10.,0],[0.,10.]]) * 50}
+   cost_func_params    = {'Q'  : jnp.array([[1.,0],[0.,1.]]) * 100,
+                          'R'  : jnp.array([[.1]]),
+                          'Qf' : jnp.array([[1.,0],[0.,1.]]) * 1000}
    state_trans_params  = {'b'  : 1.0,
                           'l'  : 1.0,
                           'g'  : 9.81}
@@ -28,8 +28,8 @@ if __name__ == "__main__":
                     'c2d_method'                : 'euler',# 'euler', "zoh", 'zohCombined'
                     'max_iter'                  : 10,
                     'time_step'                 : 0.1,
-                    'converge_crit'             : 1e-6,
-                    'ff_gain_tol'               : 1e-5,
+                    'converge_crit'             : 1e-5,
+                    'ff_gain_tol'               : 1e-4,
                     'cost_ratio_bounds'         : [1e-6, 10],
                     'ro_reg_start'              : 0.0,
                     'ro_reg_change'             : 0.5,
@@ -39,7 +39,7 @@ if __name__ == "__main__":
    
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 30
+   len_seq    = 20
 
    #---------- define plotting condition ----------#
    plot_ctrl_output_bool = False
@@ -47,10 +47,10 @@ if __name__ == "__main__":
 
    #---------- create desired trajectory system ----------#
    traj_gen_dyn_func_params = {'g' : 9.81,
-                               'b' : 10.0,
+                               'b' : 5.0,
                                'l' : 1.0}
    x_tg_init_vec = np.array([[0.1],[0.1]])
-   u_tg_seq      = np.ones([len_seq-1,1,1])*(20)
+   u_tg_seq      = np.ones([len_seq-1,1,1])*(10)
 
    #---------- create simulation system ----------#
    sim_dyn_func_params = {'g' : 9.81,
@@ -130,11 +130,11 @@ if __name__ == "__main__":
             x_plot_seq_quiverwidth.append(0.0015)    
          elif idx == n-3:   
             x_plot_seq_names.append(f'ctrl final prediction')
-            x_plot_seq_styles_quiver.append('orange')
+            x_plot_seq_styles_quiver.append('green')
             x_plot_seq_quiverwidth.append(0.0015)                         
          elif idx == n-2:   
             x_plot_seq_names.append(f'simulation_output')
-            x_plot_seq_styles_quiver.append('black')
+            x_plot_seq_styles_quiver.append('orange')
             x_plot_seq_quiverwidth.append(0.0025)                                   
          elif idx == n-1:
             x_plot_seq_names.append('target state seq')
@@ -152,8 +152,11 @@ if __name__ == "__main__":
       ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
       ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
       analyze.plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, x_plot_seq_quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
-      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control', color= 'r.') # type: ignore 
-      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost', color= 'r.')
+      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control nominal', title = "control", color= 'r.') # type: ignore 
+      analyze.plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], u_sim_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control simulated', title = "control", color= 'b.') # type: ignore 
+      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost',datalabel='cost pred', title = "cost", color= 'r.')
+      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.x_cost_seq, xlabel='Time', ylabel='cost',datalabel='state cost pred', title = "cost", color= 'b.')
+      analyze.plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.u_cost_seq, xlabel='Time', ylabel='cost',datalabel='control cost pred', title = "cost", color= 'g.')
       plt.tight_layout()
 
 plt.show()

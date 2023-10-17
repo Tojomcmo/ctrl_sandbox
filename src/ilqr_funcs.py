@@ -47,6 +47,9 @@ class ilqrControllerState:
         self.d_seq         = np.zeros([self.len_seq-1, self.u_len,          1])
         self.Del_V_vec_seq = np.zeros([self.len_seq-1, 2])
         self.cost_seq      = np.zeros([self.len_seq])
+        self.x_cost_seq    = np.zeros([self.len_seq])
+        self.u_cost_seq    = np.zeros([self.len_seq])        
+
         if ilqr_config['log_ctrl_history'] is True:
             self.u_seq_history = []
             self.x_seq_history = []
@@ -54,6 +57,8 @@ class ilqrControllerState:
             self.d_seq_history = []
             self.Del_V_vec_seq_history = []
             self.cost_seq_history = []
+            self.x_cost_seq_history = []                  
+            self.u_cost_seq_history = []
             self.cost_float_history = []
             self.lsf_float_history = []
 
@@ -96,6 +101,8 @@ class ilqrControllerState:
         self.u_seq_history.append(self.u_seq)
         self.x_seq_history.append(self.x_seq)
         self.cost_seq_history.append(self.cost_seq) 
+        self.x_cost_seq_history.append(self.x_cost_seq) 
+        self.u_cost_seq_history.append(self.u_cost_seq) 
         self.cost_float_history.append(self.cost_float)
         self.lsf_float_history.append(self)
         self.K_seq_history.append(self.K_seq) 
@@ -150,7 +157,7 @@ def initialize_ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
                                                ctrl_state.seed_u_seq)
 
     # calculate initial cost
-    cost_float, cost_seq = gen_ctrl.calculate_total_cost(config_funcs.cost_func, state_seq, ctrl_state.u_seq)
+    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(config_funcs.cost_func, state_seq, ctrl_state.u_seq)
     # ensure seed_cost is initialized with larger differential than convergence bound
     prev_cost_float = cost_float + (1 + ilqr_config['converge_crit'])
     # while within iteration limit and while cost has not converged    
@@ -167,7 +174,9 @@ def run_ilqr_controller(ilqr_config, config_funcs, ctrl_state:ilqrControllerStat
         # perform backwards pass to calculate gains and expected value function change
         local_ctrl_state.K_seq, local_ctrl_state.d_seq, local_ctrl_state.Del_V_vec_seq, local_ctrl_state.ro_reg = calculate_backwards_pass(ilqr_config, config_funcs, local_ctrl_state)
         # perform forwards pass to calculate new trajectory and trajectory cost
-        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.cost_seq, local_ctrl_state.lsf_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, config_funcs, local_ctrl_state)
+        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.cost_seq,local_ctrl_state.x_cost_seq, local_ctrl_state.u_cost_seq, local_ctrl_state.lsf_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, 
+                                                                                                                                                                                                                                                                   config_funcs, 
+                                                                                                                                                                                                                                                                   local_ctrl_state)
         
         # log iteration output
         if ilqr_config['log_ctrl_history'] is True and local_ctrl_state.ro_reg_change_bool is False:
@@ -261,7 +270,7 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
 
 def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_state:ilqrControllerState):
     #initialize updated state vec, updated control_vec, line search factor
-    state_seq_new,control_seq_new,cost_float_new, cost_seq_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
+    state_seq_new,control_seq_new,cost_float_new, cost_seq_new,x_cost_seq_new,u_cost_seq_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
                                                                                            ctrl_state.seed_x_vec, ctrl_state.len_seq)
     line_search_factor = 1
     line_search_scale_param = 0.5
@@ -287,7 +296,7 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
 
         # shift sequences for cost calculation wrt desired trajectories
         # calculate new trajectory cost    
-        cost_float_new, cost_seq_new = gen_ctrl.calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
+        cost_float_new, cost_seq_new, x_cost_seq_new, u_cost_seq_new = gen_ctrl.calculate_total_cost(config_funcs.cost_func, state_seq_new, control_seq_new)
         # calculate the ratio between the expected cost decrease and actual cost decrease
         actual_cost_decrease = cost_float_new - ctrl_state.cost_float
         norm_cost_decrease = jnp.abs(actual_cost_decrease)/ctrl_state.cost_float
@@ -307,11 +316,11 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
             cost_float_new  = ctrl_state.cost_float
             ro_reg_change_bool = True
         else:        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
-            state_seq_new,control_seq_new,cost_float_new, cost_seq_new, in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
+            state_seq_new,control_seq_new,cost_float_new, cost_seq_new,x_cost_seq_new,u_cost_seq_new, in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
                                                                                            ctrl_state.seed_x_vec, ctrl_state.len_seq)
             line_search_factor *= line_search_scale_param
             iter_count += 1
-    return state_seq_new, control_seq_new, cost_float_new, cost_seq_new, line_search_factor, ro_reg_change_bool
+    return state_seq_new, control_seq_new, cost_float_new, cost_seq_new,x_cost_seq_new, u_cost_seq_new, line_search_factor, ro_reg_change_bool
 
 def initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq):
     K_seq         = np.zeros([(len_seq-1), u_len, x_len])
@@ -326,9 +335,11 @@ def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:npt.ArrayLike,
     state_seq_updated       = np.zeros([(len_seq),  x_len, 1])
     state_seq_updated[0][:] = seed_state_vec
     cost_float_updated      = 0.0
-    cost_seq_updated            = np.zeros([len_seq, 1])
+    cost_seq_updated        = np.zeros([len_seq, 1])
+    x_cost_seq_updated      = np.zeros([len_seq, 1])   
+    u_cost_seq_updated      = np.zeros([len_seq, 1]) 
     in_bounds_bool          = False
-    return state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, in_bounds_bool
+    return state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, x_cost_seq_updated,u_cost_seq_updated,in_bounds_bool
 
 def taylor_expand_pseudo_hamiltonian(cost_func, A_lin_k, B_lin_k, x_k, u_k, P_kp1, p_kp1, ro_reg, k_step):
 

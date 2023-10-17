@@ -189,15 +189,19 @@ def calculate_total_cost(cost_func, state_seq, control_seq):
     len_seq    = len(state_seq)
     u_len      = len(control_seq[0])
     cost_seq   = np.zeros([len_seq,1])
+    x_cost_seq = np.zeros([len_seq,1])    
+    u_cost_seq = np.zeros([len_seq,1])
     total_cost = 0
     for idx in range(len_seq):
         if (idx == len_seq-1):
-            incremental_cost = np.array(cost_func(state_seq[idx], np.zeros([u_len,1]), idx, is_final_bool=True))[0][0]
+            inc_cost, inc_x_cost, inc_u_cost = cost_func(state_seq[idx], np.zeros([u_len,1]), idx, is_final_bool=True)
         else:
-            incremental_cost = np.array(cost_func(state_seq[idx], control_seq[idx], idx))[0][0]
-        total_cost += incremental_cost 
-        cost_seq[idx] = incremental_cost
-    return total_cost, cost_seq
+            inc_cost, inc_x_cost, inc_u_cost = cost_func(state_seq[idx], control_seq[idx], idx)
+        total_cost += inc_cost 
+        cost_seq[idx] = inc_cost
+        x_cost_seq[idx] = inc_x_cost
+        u_cost_seq[idx] = inc_u_cost        
+    return total_cost, cost_seq, x_cost_seq, u_cost_seq
 
 def taylor_expand_cost(cost_func, x_k:npt.ArrayLike, u_k:npt.ArrayLike, k_step:int, is_final_bool=False):
 # This function creates a quadratic approximation of the cost function Using taylor expansion

@@ -85,7 +85,7 @@ def plot_compare_state_sequences_quiver_dot(figure, axes, x_seqs, x_names, x_sty
     plt.legend()
     return
 
-def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="state 2", title="state plot", color = 'b.'):
+def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="state 2", datalabel = 'data', title="state plot", color = 'b.'):
     """
     Plot XY data using Matplotlib from JAX arrays.
     # Convert JAX arrays to NumPy arrays for plotting
@@ -96,7 +96,7 @@ def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="sta
     plt.figure(figure) 
     x_seq.reshape(-1)
     y_seq.reshape(-1)
-    axes.plot(x_seq, y_seq, color,linestyle='-')
+    axes.plot(x_seq, y_seq, color,linestyle='-',label=datalabel)
     axes.set_xlabel(xlabel)
     axes.set_ylabel(ylabel)
     axes.set_title(title)
