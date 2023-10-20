@@ -273,11 +273,10 @@ def calculate_forwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl_
     state_seq_new,control_seq_new,cost_float_new, cost_seq_new,x_cost_seq_new,u_cost_seq_new,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
                                                                                            ctrl_state.seed_x_vec, ctrl_state.len_seq)
     line_search_factor = 1
-    line_search_scale_param = 0.5
+    line_search_scale_param = ilqr_config['ls_scale_alpha_param']
     iter_count = 0
     max_iter   = ilqr_config['fp_max_iter']
     ro_reg_change_bool = False
-    norm_cost_decrease = ilqr_config['converge_crit'] + 1
     while not in_bounds_bool and (iter_count < max_iter):
         for k_step in range(ctrl_state.len_seq-1):
             # calculate updated control value
@@ -387,7 +386,6 @@ def calculate_backstep_ctg_approx(q_x:npt.ArrayLike, q_u:npt.ArrayLike, q_xx:npt
     P_k         = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k) # type: ignore
     p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k) # type: ignore
     # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
-    # Del_V_vec_k = jnp.array([[-jnp.abs((d_kt @ q_u))],[-jnp.abs((0.5) * (d_kt @ q_uu @ d_k))]]).reshape(1,-1)
     Del_V_vec_k = np.array([(d_k.T @ q_u),((0.5) * (d_k.T @ q_uu @ d_k))]).reshape(1,-1) # type: ignore
     return P_k, p_k, Del_V_vec_k[0]
 
@@ -412,15 +410,22 @@ def calculate_u_k_new(u_nom_k ,x_nom_k ,x_new_k, K_k, d_k, line_search_factor):
     return u_k_updated
 
 def calculate_cost_decrease_ratio(prev_cost_float, new_cost_float, Del_V_vec_seq, line_search_factor):
+    """
+    Calculates the ratio between the expected cost decrease from approximated dynamics and cost functions, and the calculated
+    cost from the forward pass shooting method. The cost decrease is expected to be positive, as the Del_V_sum should be a negative
+    expected value, and the new cost should be smaller than the previous cost.
+    """
     Del_V_sum = calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
-    cost_decrease_ratio = (1 / -Del_V_sum) * (prev_cost_float - new_cost_float)
+    cost_decrease_ratio = (1 / Del_V_sum) * (new_cost_float - prev_cost_float)
     return cost_decrease_ratio
 
 def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
     assert (Del_V_vec_seq.shape)[1] == 2, "Del_V_vec_seq is not the right shape, must be (:,2)" 
     Del_V_sum = 0
     for idx in range(len(Del_V_vec_seq)):
-        Del_V_sum = Del_V_sum + ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
+        Del_V_sum += ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
+    if Del_V_sum > 0:
+        a = 1
     return Del_V_sum    
 
 def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
@@ -451,7 +456,7 @@ def simulate_ilqr_output(dyn_func, ctrl_out:ilqrControllerState, x_sim_init, sim
     u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len, 1])
     x_sim_seq[0] = x_sim_init    
     for k in range(ctrl_out.len_seq-1):
-        u_sim_seq[k]     = calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k])
+        u_sim_seq[k]     = calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k]) # type: ignore
         x_sim_seq[k+1]   = gen_ctrl.simulate_forward_dynamics_step(dyn_func, x_sim_seq[k], u_sim_seq[k],ctrl_out.time_step, sim_method=sim_method)
 
     return x_sim_seq,u_sim_seq

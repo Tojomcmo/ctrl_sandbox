@@ -1,6 +1,9 @@
-import matplotlib.pyplot as plt
 import jax.numpy as jnp
 import numpy as np
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import matplotlib.gridspec as gridspec
 
 def plot_2d_state_scatter_sequences(x_seq, xlabel="state 1", ylabel="state 2", title="state plot"):
     """
@@ -102,3 +105,57 @@ def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="sta
     axes.set_title(title)
     axes.legend()
     axes.grid(True)
+
+
+def plot_ilqr_iter_sim_ctrl_cost(controller_output, x_sim_seq, u_sim_seq):
+    x_plot_seqs = controller_output.x_seq_history
+    x_plot_seqs.insert(0,controller_output.seed_x_seq)
+    x_plot_seqs.append(x_sim_seq)
+    x_plot_seqs.append(controller_output.x_des_seq)
+    x_plot_seq_names = []
+    x_plot_seq_styles_dot = []
+    x_plot_seq_styles_quiver = []
+    x_plot_seq_quiverwidth   = []
+    n = len(x_plot_seqs)
+      # set color map
+    colormap = cm.get_cmap('rainbow')
+    color = iter(colormap(np.linspace(0, 1, n)))
+    for idx in range(len(x_plot_seqs)):
+       if idx == 0:
+          x_plot_seq_names.append('seed state seq')
+          x_plot_seq_styles_quiver.append('purple')
+          x_plot_seq_quiverwidth.append(0.0015)    
+       elif idx == 1:
+          x_plot_seq_names.append(f'iter {idx}')
+          x_plot_seq_styles_quiver.append('blue')    
+          x_plot_seq_quiverwidth.append(0.0015)    
+       elif idx == n-3:   
+          x_plot_seq_names.append(f'ctrl final prediction')
+          x_plot_seq_styles_quiver.append('green')
+          x_plot_seq_quiverwidth.append(0.0015)                         
+       elif idx == n-2:   
+          x_plot_seq_names.append(f'simulation_output')
+          x_plot_seq_styles_quiver.append('orange')
+          x_plot_seq_quiverwidth.append(0.0025)                                   
+       elif idx == n-1:
+          x_plot_seq_names.append('target state seq')
+          x_plot_seq_styles_quiver.append('red')
+          x_plot_seq_quiverwidth.append(0.0025)                                     
+       else:   
+          x_plot_seq_names.append(f'seq iter {idx}')
+          x_plot_seq_styles_quiver.append('gray')
+          x_plot_seq_quiverwidth.append(0.001)  
+       c = next(color)           
+       x_plot_seq_styles_dot.append(c) 
+    gs = gridspec.GridSpec(2, 2)
+    fig = plt.figure(figsize=(14,6))
+    ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
+    ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
+    ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
+    plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, x_plot_seq_quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
+    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control nominal', title = "control plot", color= 'r.') # type: ignore 
+    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], u_sim_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control simulated', title = "control plot", color= 'b.') # type: ignore 
+    plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost',datalabel='cost pred', title = "cost plot", color= 'r.')
+    plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.x_cost_seq, xlabel='Time', ylabel='cost',datalabel='state cost pred', title = "cost plot", color= 'b.')
+    plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.u_cost_seq, xlabel='Time', ylabel='cost',datalabel='control cost pred', title = "cost plot", color= 'g.')
+    plt.tight_layout()
