@@ -16,9 +16,10 @@ from scipy.integrate import solve_ivp
 
 from . import ilqr_utils as util
 from . import gen_ctrl_funcs as gen_ctrl
+from . import mujoco_funcs as mj_funcs
 
 class ilqrControllerState:
-    def __init__(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike = np.zeros([1,1]), u_des_seq:npt.ArrayLike = np.zeros([1,1])):
+    def __init__(self,ilqr_config, seed_x_vec:npt.ArrayLike, seed_u_seq:npt.ArrayLike, x_des_seq:npt.ArrayLike = np.zeros([1,1]), u_des_seq:npt.ArrayLike = np.zeros([1,1]), mj_data = None):
         # direct parameter population
         seed_x_des_seq, seed_u_des_seq = self.populate_des_seqs(x_des_seq, u_des_seq, seed_x_vec, seed_u_seq)
         self.validate_input_data(ilqr_config, seed_x_vec, seed_u_seq, seed_x_des_seq, seed_u_des_seq)          
@@ -50,6 +51,8 @@ class ilqrControllerState:
         self.x_cost_seq    = np.zeros([self.len_seq])
         self.u_cost_seq    = np.zeros([self.len_seq])        
 
+        if ilqr_config['mj_ctrl'] is True:
+            self.mj_data = mj_data
         if ilqr_config['log_ctrl_history'] is True:
             self.u_seq_history = []
             self.x_seq_history = []
@@ -109,15 +112,17 @@ class ilqrControllerState:
         self.d_seq_history.append(self.d_seq)
         self.Del_V_vec_seq_history.append(self.Del_V_vec_seq)   
 
-
 class ilqrConfiguredFuncs:
     def __init__(self, ilqr_config, controller_state:ilqrControllerState):
         self.cost_func               = self.create_curried_cost_func(ilqr_config, controller_state)
-        self.state_trans_func        = self.create_curried_state_trans_func(ilqr_config)
-        self.simulate_dyn_func       = self.create_curried_simulate_dyn_func(ilqr_config)
         self.c2d_ss_func             = self.create_curried_c2d_ss_func(ilqr_config)
         self.analyze_cost_dec_func   = self.create_curried_analyze_cost_dec_func(ilqr_config)
-
+        if ilqr_config['mj_ctrl'] == True:
+            self.state_trans_func        = self.create_curried_mj_state_trans_func(ilqr_config)
+            self.simulate_dyn_func       = self.create_curried_mj_simulate_dyn_func(ilqr_config)
+        else:
+            self.state_trans_func        = self.create_curried_state_trans_func(ilqr_config)
+            self.simulate_dyn_func       = self.create_curried_simulate_dyn_func(ilqr_config)
     def create_curried_cost_func(self, ilqr_config, controller_state):
         cost_func         = ilqr_config['cost_func']
         cost_func_params  = ilqr_config['cost_func_params']
@@ -125,18 +130,6 @@ class ilqrConfiguredFuncs:
         control_des_seq   = controller_state.u_des_seq
         cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, state_des_seq, control_des_seq, is_final_bool)
         return cost_func_curried 
-    
-    def create_curried_state_trans_func(self, ilqr_config):
-        state_trans_func         = ilqr_config['state_trans_func']
-        state_trans_func_params  = ilqr_config['state_trans_func_params']
-        state_trans_func_curried = lambda t,x,u=None: state_trans_func(state_trans_func_params,t,x,u)
-        return state_trans_func_curried
-    
-    def create_curried_simulate_dyn_func(self, ilqr_config):
-        sim_method       = ilqr_config['sim_method']
-        time_step        = ilqr_config['time_step']
-        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.state_trans_func, x_init, u_seq, time_step, sim_method)
-        return sim_func_curried 
     
     def create_curried_c2d_ss_func(self, ilqr_config):
         c2d_method              = ilqr_config['c2d_method']
@@ -149,6 +142,30 @@ class ilqrConfiguredFuncs:
         analyze_cost_dec_func_curried  = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds)
         return analyze_cost_dec_func_curried
     
+    def create_curried_mj_state_trans_func(self, ilqr_config):
+        state_trans_func         = ilqr_config['state_trans_func']
+        state_trans_func_params  = ilqr_config['state_trans_func_params']
+        state_trans_func_curried = lambda t,x,u=None: state_trans_func(state_trans_func_params,t,x,u)
+        return state_trans_func_curried
+    
+    def create_curried_mj_simulate_dyn_func(self, ilqr_config):
+        sim_method       = ilqr_config['sim_method']
+        time_step        = ilqr_config['time_step']
+        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.state_trans_func, x_init, u_seq, time_step, sim_method)
+        return sim_func_curried 
+    
+    def create_curried_state_trans_func(self, ilqr_config):
+        state_trans_func         = ilqr_config['state_trans_func']
+        state_trans_func_params  = ilqr_config['state_trans_func_params']
+        state_trans_func_curried = lambda t,x,u=None: state_trans_func(state_trans_func_params,t,x,u)
+        return state_trans_func_curried
+    
+    def create_curried_simulate_dyn_func(self, ilqr_config):
+        sim_method       = ilqr_config['sim_method']
+        time_step        = ilqr_config['time_step']
+        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.state_trans_func, x_init, u_seq, time_step, sim_method)
+        return sim_func_curried 
+
 def initialize_ilqr_controller(ilqr_config, ctrl_state:ilqrControllerState):
     # create object containing preconfigured functions with static parameters (currying and parameter encapsulation)
     config_funcs = ilqrConfiguredFuncs(ilqr_config, ctrl_state)
@@ -219,12 +236,15 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
 #                                             the local linearized coordinate and the local description of the state residual
 #   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
 #   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
-
-    Ad_seq, Bd_seq = gen_ctrl.calculate_linearized_state_space_seq(config_funcs.state_trans_func,
-                                                          config_funcs.c2d_ss_func,
-                                                          ctrl_state.x_seq,
-                                                          ctrl_state.u_seq,
-                                                          ctrl_state.time_seq)
+    if ilqr_config['mj_ctrl'] is True:
+       # Ad_seq, Bd_seq = mj_funcs.linearize_mujoco_model_sequence()
+       raise ValueError('mujoco not configured yet')
+    else:    
+        Ad_seq, Bd_seq = gen_ctrl.calculate_linearized_state_space_seq(config_funcs.state_trans_func,
+                                                                      config_funcs.c2d_ss_func,
+                                                                      ctrl_state.x_seq,
+                                                                      ctrl_state.u_seq,
+                                                                      ctrl_state.time_seq)
     
     P_N, p_N = calculate_final_ctg_approx(config_funcs.cost_func, 
                                                         ctrl_state.x_seq[-1], 

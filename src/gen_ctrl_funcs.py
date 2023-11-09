@@ -246,3 +246,23 @@ def prep_cost_func_for_diff(cost_func):
         cost_out = cost_func(vec)
         return cost_out[0]
     return cost_func_for_diff
+
+
+def convert_d2d_A_B(Ad_1, Bd_1, dt_1, dt_2):
+    I =np.eye(Ad_1.shape[0])
+    A = (1/dt_1)*scipy.linalg.logm(Ad_1)
+    A_inv = np.linalg.inv(A)
+    B = (np.linalg.inv(A_inv @ (np.linalg.inv(Ad_1 - I)))) @ Bd_1
+    
+    Ad_2 = calculate_matrix_power_similarity_transform(Ad_1, dt_2/dt_1)
+    Bd_2 = A_inv @ (Ad_2 - I) @ B
+    Cd_2 = 0
+    Dd_2 = 0
+    return Ad_2, Bd_2
+
+def calculate_matrix_power_similarity_transform(A, exponent):
+    evals, evecs = np.linalg.eig(A)
+    D = np.diag(evals)
+    evecs_inv = np.linalg.inv(evecs)
+    A_to_exponent = evecs @ D**exponent @ evecs_inv
+    return A_to_exponent

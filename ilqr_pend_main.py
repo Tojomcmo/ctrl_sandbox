@@ -36,7 +36,8 @@ if __name__ == "__main__":
                     'ro_reg_change'             : 0.5,
                     'fp_max_iter'               : 8,
                     'ls_scale_alpha_param'      : 0.5,
-                    'log_ctrl_history'          : True
+                    'log_ctrl_history'          : True,
+                    'mj_ctrl'                   : False      
                  }
    
    #----- define timestep and sequence length -----#
@@ -48,7 +49,7 @@ if __name__ == "__main__":
                                'b' : 5.0,
                                'l' : 1.0}
    x_tg_init_vec = np.array([[0.1],[0.1]]) * (-1)
-   u_tg_seq      = np.ones([len_seq-1,1,1])*(10)
+   u_tg_seq      = np.ones([len_seq-1,1,1])*(2)
 
    #---------- create simulation system ----------#
    sim_dyn_func_params = {'g' : 9.81,
@@ -62,12 +63,23 @@ if __name__ == "__main__":
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec
-   # x_des_seq  = np.zeros([len_seq, 2, 1])
-   # x_des_seq[:,0] = np.pi
 
-   u_init_seq = np.ones([len_seq-1, 1,1]) * (-1)
-   u_des_seq  = u_tg_seq
-   # u_des_seq  = np.zeros([len_seq-1, 1, 1])
+   ctrl_target_condition = 1
+
+   if ctrl_target_condition == 1:
+      u_init_seq = np.ones([len_seq-1, 1,1]) * (-1)
+      u_des_seq  = u_tg_seq   
+
+   elif ctrl_target_condition == 2:  
+      x_des_seq  = np.zeros([len_seq, 2, 1])
+      x_des_seq[:,0] = np.pi
+      u_init_seq = np.ones([len_seq-1, 1,1]) * (-1)
+      u_des_seq  = np.zeros([len_seq-1, 1, 1])
+
+   else:
+      raise ValueError('invalid ctrl_target_condition')   
+
+
 
 
 
