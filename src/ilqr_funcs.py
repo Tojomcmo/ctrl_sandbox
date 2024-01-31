@@ -13,6 +13,7 @@ from numpy import typing as npt
 from typing import Optional
 import scipy 
 from scipy.integrate import solve_ivp
+import mujoco as mujoco
 
 from . import ilqr_utils as util
 from . import gen_ctrl_funcs as gen_ctrl
@@ -52,7 +53,10 @@ class ilqrControllerState:
         self.u_cost_seq    = np.zeros([self.len_seq])        
 
         if ilqr_config['mj_ctrl'] is True:
-            self.mj_data = mj_data
+            self.timestep_sim = ilqr_config['timestep_sim']
+            self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(ilqr_config['mjcf_model'])
+            mujoco.mj_forward(self.mj_model, self.mj_data)
+
         if ilqr_config['log_ctrl_history'] is True:
             self.u_seq_history = []
             self.x_seq_history = []
@@ -115,14 +119,13 @@ class ilqrControllerState:
 class ilqrConfiguredFuncs:
     def __init__(self, ilqr_config, controller_state:ilqrControllerState):
         self.cost_func               = self.create_curried_cost_func(ilqr_config, controller_state)
-        self.c2d_ss_func             = self.create_curried_c2d_ss_func(ilqr_config)
         self.analyze_cost_dec_func   = self.create_curried_analyze_cost_dec_func(ilqr_config)
-        if ilqr_config['mj_ctrl'] == True:
-            self.state_trans_func        = self.create_curried_mj_state_trans_func(ilqr_config)
-            self.simulate_dyn_func       = self.create_curried_mj_simulate_dyn_func(ilqr_config)
-        else:
+        if ilqr_config['mj_ctrl'] is True:
+            self.simulate_dyn_func        = self.create_curried_mj_simulate_dyn_func(ilqr_config, controller_state)            
+        else:    
             self.state_trans_func        = self.create_curried_state_trans_func(ilqr_config)
             self.simulate_dyn_func       = self.create_curried_simulate_dyn_func(ilqr_config)
+            self.c2d_ss_func             = self.create_curried_c2d_ss_func(ilqr_config)
     def create_curried_cost_func(self, ilqr_config, controller_state):
         cost_func         = ilqr_config['cost_func']
         cost_func_params  = ilqr_config['cost_func_params']
@@ -148,10 +151,12 @@ class ilqrConfiguredFuncs:
         state_trans_func_curried = lambda t,x,u=None: state_trans_func(state_trans_func_params,t,x,u)
         return state_trans_func_curried
     
-    def create_curried_mj_simulate_dyn_func(self, ilqr_config):
-        sim_method       = ilqr_config['sim_method']
-        time_step        = ilqr_config['time_step']
-        sim_func_curried = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.state_trans_func, x_init, u_seq, time_step, sim_method)
+    def create_curried_mj_simulate_dyn_func(self, ilqr_config, controller_state):
+        mj_model         = controller_state.mj_model
+        mj_data          = controller_state.mj_data
+        ts_ctrl          = ilqr_config['time_step']
+        ts_sim           = ilqr_config['timestep_sim']
+        sim_func_curried = lambda x_init, u_seq: mj_funcs.fwd_sim_mj_w_ctrl(mj_model, mj_data, x_init, u_seq, ts_sim, ts_ctrl)
         return sim_func_curried 
     
     def create_curried_state_trans_func(self, ilqr_config):
@@ -237,8 +242,7 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
 #   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
 #   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
     if ilqr_config['mj_ctrl'] is True:
-       # Ad_seq, Bd_seq = mj_funcs.linearize_mujoco_model_sequence()
-       raise ValueError('mujoco not configured yet')
+        Ad_seq, Bd_seq = mj_funcs.linearize_mj_seq(ctrl_state.mj_model, ctrl_state.mj_data, ctrl_state.x_seq, ctrl_state.u_seq, ctrl_state.time_step)
     else:    
         Ad_seq, Bd_seq = gen_ctrl.calculate_linearized_state_space_seq(config_funcs.state_trans_func,
                                                                       config_funcs.c2d_ss_func,
@@ -445,7 +449,7 @@ def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
     for idx in range(len(Del_V_vec_seq)):
         Del_V_sum += ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
     if Del_V_sum > 0:
-        a = 1
+        # TODO include some logic or statement here that flags a failed decrease? may be unnecessary given the line search factor catch
     return Del_V_sum    
 
 def analyze_cost_decrease(cost_decrease_ratio, cost_ratio_bounds):
@@ -471,12 +475,11 @@ def calculate_u_star(k_fb_k, u_des_k, x_des_k, x_k):
     return u_star
 
 
-def simulate_ilqr_output(dyn_func, ctrl_out:ilqrControllerState, x_sim_init, sim_method = 'solve_ivp_zoh'):
+def simulate_ilqr_output(sim_dyn_func_step, ctrl_out:ilqrControllerState, x_sim_init):
     x_sim_seq  = np.zeros([ctrl_out.len_seq, ctrl_out.x_len, 1])
     u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len, 1])
     x_sim_seq[0] = x_sim_init    
     for k in range(ctrl_out.len_seq-1):
         u_sim_seq[k]     = calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k]) # type: ignore
-        x_sim_seq[k+1]   = gen_ctrl.simulate_forward_dynamics_step(dyn_func, x_sim_seq[k], u_sim_seq[k],ctrl_out.time_step, sim_method=sim_method)
-
+        x_sim_seq[k+1]   = sim_dyn_func_step(x_sim_seq[k], u_sim_seq[k])
     return x_sim_seq,u_sim_seq

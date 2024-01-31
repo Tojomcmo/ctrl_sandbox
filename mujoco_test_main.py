@@ -51,29 +51,29 @@ if __name__ == "__main__":
 
 ####################################
 
-    # fig1, ax1 = plt.subplots()
+    fig1, ax1 = plt.subplots()
 
 ###################################
 
-#     while data.time < duration:
-#         print('state_predict: ', state_next_pred)         
-#         mujoco.mj_step(model, data)
-#         mujoco.mj_getState(model, data,state_get, spec)
-#         state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)      
-#         print('state_actual: ', state_vec)  
-# #        if len(frames) < data.time * framerate:
-#         mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
-#         # print('A: ', A)
-#         # print('B: ', B)    
-#         state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
-#         control_vec = np.array(data.ctrl).reshape(-1,1)
-#         state_next_pred = A @ state_vec + B @   control_vec
-#         mj_funcs.update_plt_frame(renderer, data, frames, img_set)
+    while data.time < duration:
+        print('state_predict: ', state_next_pred)         
+        mujoco.mj_step(model, data)
+        mujoco.mj_getState(model, data,state_get, spec)
+        state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)      
+        print('state_actual: ', state_vec)  
+#        if len(frames) < data.time * framerate:
+        mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+        # print('A: ', A)
+        # print('B: ', B)    
+        state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
+        control_vec = np.array(data.ctrl).reshape(-1,1)
+        state_next_pred = A @ state_vec + B @   control_vec
+        mj_funcs.update_plt_frame(renderer, data, frames, img_set)
 
 
-#     # ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/framerate * 1000))
-#     ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/(1/time_step) * 1000))
-#     plt.show()
+    # ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/framerate * 1000))
+    ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/(1/time_step) * 1000))
+    plt.show()
 
 ###################################
 
@@ -94,15 +94,15 @@ if __name__ == "__main__":
 ###################################
 
 
-    time_step = 0.01
-    u_seq     = np.arange(1,10)*0.1
+    # time_step = 0.01
+    # u_seq     = np.arange(1,10)*0.1
 
-    x_seq = mj_funcs.fwd_sim_mj_w_ctrl(model, data,u_seq, time_step)
+    # x_seq = mj_funcs.fwd_sim_mj_w_ctrl(model, data,u_seq, time_step)
 
-    timestep_lin = 0.1
-    A_seq, B_seq = mj_funcs.linearize_mj_seq(model, data, x_seq, u_seq,timestep_lin)
+    # timestep_lin = 0.1
+    # A_seq, B_seq = mj_funcs.linearize_mj_seq(model, data, x_seq, u_seq,timestep_lin)
 
-    print(x_seq)
-    print(A_seq)
-    print(B_seq)
+    # print(x_seq)
+    # print(A_seq)
+    # print(B_seq)
 
