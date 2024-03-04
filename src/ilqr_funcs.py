@@ -137,7 +137,7 @@ class ilqrConfiguredFuncs:
     def create_curried_c2d_ss_func(self, ilqr_config):
         c2d_method              = ilqr_config['c2d_method']
         time_step               = ilqr_config['time_step']
-        descritize_func_curried = lambda state_space: gen_ctrl.discretize_state_space(state_space, time_step, c2d_method)
+        descritize_func_curried = lambda state_space: gen_ctrl.discretize_continuous_state_space(state_space, time_step, c2d_method)
         return descritize_func_curried
     
     def create_curried_analyze_cost_dec_func(self, ilqr_config):
@@ -264,8 +264,8 @@ def calculate_backwards_pass(ilqr_config, config_funcs:ilqrConfiguredFuncs, ctrl
     is_valid_q_uu = False
     while is_valid_q_uu is False:
         for idx in range(ctrl_state.len_seq - 1):
-            # k_step = -(idx + 1)
-            k_step = ctrl_state.len_seq - (idx + 2)
+            # solve newton-step condition backwards from sequence end
+            k_step = ctrl_state.len_seq - (idx + 2) 
             is_valid_q_uu = True
             q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
                                                                         config_funcs.cost_func,
@@ -449,6 +449,7 @@ def calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor):
     for idx in range(len(Del_V_vec_seq)):
         Del_V_sum += ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
     if Del_V_sum > 0:
+        a = 1
         # TODO include some logic or statement here that flags a failed decrease? may be unnecessary given the line search factor catch
     return Del_V_sum    
 

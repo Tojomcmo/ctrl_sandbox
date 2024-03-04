@@ -528,7 +528,7 @@ class discretize_state_space_tests(unittest.TestCase):
         time_step = 0.1
         c2d_methods = ['euler', 'zoh', 'zohCombined']
         for c2d_method  in c2d_methods:
-            ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method)
+            ss = gen_ctrl.discretize_continuous_state_space(ss_c,time_step,c2d_method)
             self.assertEqual(ss.a.shape, A.shape)
             self.assertEqual(ss.b.shape, B.shape)
             self.assertEqual(ss.c.shape, C.shape)
@@ -543,7 +543,7 @@ class discretize_state_space_tests(unittest.TestCase):
         D = np.array([[0.,0.]])
         ss_c = gen_ctrl.stateSpace(A,B,C,D)
         time_step = 0.1
-        ss = gen_ctrl.discretize_state_space(ss_c,time_step,c2d_method='euler')
+        ss = gen_ctrl.discretize_continuous_state_space(ss_c,time_step,c2d_method='euler')
         A_d_expected = np.eye(3) + (A * time_step)
         B_d_expected = B * time_step
         C_d_expected = C
@@ -567,7 +567,7 @@ class discretize_state_space_tests(unittest.TestCase):
         time_step = 0.1   
         ss_d = gen_ctrl.stateSpace(A,B,C,D, time_step)
         with self.assertRaises(Exception) as assert_error_discrete:
-            ss = gen_ctrl.discretize_state_space(ss_d,time_step)
+            ss = gen_ctrl.discretize_continuous_state_space(ss_d,time_step)
         self.assertEqual(str(assert_error_discrete.exception), 'input state space is already discrete')
     
     def test_descritize_state_space_rejects_invalid_c2d_method(self):
@@ -578,7 +578,7 @@ class discretize_state_space_tests(unittest.TestCase):
         time_step = 0.1   
         ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_c2d_method:
-            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'lettuce')
+            ss = gen_ctrl.discretize_continuous_state_space(ss_d,time_step, c2d_method = 'lettuce')
         self.assertEqual(str(assert_error_c2d_method.exception), 'invalid discretization method')
      
     def test_descritize_state_space_rejects_singular_A_matrix_for_zoh(self):
@@ -589,7 +589,7 @@ class discretize_state_space_tests(unittest.TestCase):
         time_step = 0.1   
         ss_d = gen_ctrl.stateSpace(A,B,C,D)
         with self.assertRaises(Exception) as assert_error_singular_A_zoh:
-            ss = gen_ctrl.discretize_state_space(ss_d,time_step, c2d_method = 'zoh')
+            ss = gen_ctrl.discretize_continuous_state_space(ss_d,time_step, c2d_method = 'zoh')
         self.assertEqual(str(assert_error_singular_A_zoh.exception), 'determinant of A is excessively small (<10E-8), simple zoh method is potentially invalid'
 )
 

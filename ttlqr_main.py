@@ -27,7 +27,7 @@ if __name__ == '__main__':
     # Define trajectory
 
     traj_gen_ss_cont     = gen_lin_dyn_sys(lti_ss_params)
-    traj_gen_ss_discrete = gen_ctrl.discretize_state_space(traj_gen_ss_cont, time_step, c2d_method = 'zohCombined')
+    traj_gen_ss_discrete = gen_ctrl.discretize_continuous_state_space(traj_gen_ss_cont, time_step, c2d_method = 'zohCombined')
     x_des_seq = np.zeros([len_seq, len(x_init_vec), 1])
     x_des_seq[0] = x_init_vec
     for k in range(len_seq-1):
@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     lti_ss_sim_params = {'g':10.0, 'b':0.5, 'l':1.0}
     sim_ss_cont       = gen_lin_dyn_sys(lti_ss_sim_params)
-    sim_ss_discrete   = gen_ctrl.discretize_state_space(sim_ss_cont, time_step, c2d_method = 'zohCombined') 
+    sim_ss_discrete   = gen_ctrl.discretize_continuous_state_space(sim_ss_cont, time_step, c2d_method = 'zohCombined') 
     x_sim_seq = np.zeros([len_seq, len(x_init_vec), 1])
     u_sim_seq = np.zeros([len_seq-1, 1, 1])    
     x_sim_seq[0] = x_init_vec

@@ -3,7 +3,7 @@ import numpy as np
 from . import ilqr_utils as util
 from . import gen_ctrl_funcs as gen_ctrl
 
-def pend_dyn_nl(params, time, state, control):
+def pend_dyn_nl(params, state, control):
 # continuous time dynamic equation for simple pendulum 
 # time[in]       - time component, necessary prarmeter for ode integration
 # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
@@ -19,7 +19,7 @@ def pend_dyn_nl(params, time, state, control):
                 ])
     return state_dot
 
-def pend_dyn_lin(params, time, state, control):
+def pend_dyn_lin(params, state, control):
 # continuous time dynamic equation for simple pendulum 
 # time[in]       - time component, necessary prarmeter for ode integration
 # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero

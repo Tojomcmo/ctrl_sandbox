@@ -36,53 +36,40 @@ class stateSpace:
             else:
                 raise ValueError(f'invalid time step definition {time_step}. time_step must be a positive float or None')
 
-def simulate_forward_dynamics_seq(dyn_func, state_init, control_seq, time_step, sim_method = 'euler'):
+def simulate_forward_dynamics_seq(dyn_func, state_init, control_seq, time_step, sim_method = 'rk4'):
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
-    # dyn_func[in]     - dynamics function (pre-populated with *params) for integration
+    # dyn_func[in]     - continuous dynamics function (pre-populated with *params) for integration
     # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
     # state_init[in]   - starting state for integration (vector, must match dyn_func state dim)
     # time_step[in]    - time interval between sequence points (scalar > 0)
     # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
+    # sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'    
     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
-    len_seq: int             = len(control_seq)
-    state_len: int           = len(state_init)
-    control_len: int         = len(control_seq[0])    
-    state_seq: npt.ArrayLike = np.zeros([(len_seq+1),state_len, 1])
-    time_seq: npt.ArrayLike  = np.arange(len_seq) * time_step    
+    len_seq: int             = len(control_seq)  
+    state_seq: npt.ArrayLike = np.zeros([(len_seq+1),len(state_init), 1])
     state_seq[0]   = state_init # type: ignore
-    if sim_method == 'euler':
-        for idx in range(len_seq):
-            state_dot_row    = dyn_func(time_seq[idx], state_seq[idx], control_seq[idx]) # type: ignore
-            state_next       = state_seq[idx] + state_dot_row * time_step # type: ignore
-            state_seq[idx+1] = state_next # type: ignore
-    elif sim_method == 'solve_ivp_zoh':
-        time_span = (0,time_step)
-        for idx in range(len_seq):
-            dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, control_seq[idx].reshape(-1)))
-            y_0 = (state_seq[idx]).reshape(-1) # type: ignore
-            result_ivp       = solve_ivp(dyn_func_zoh, time_span, y_0)
-            state_next       = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
-            state_seq[idx+1] = state_next # type: ignore
-    else:
-        raise ValueError("invalid simulation method")
+    for idx in range(len_seq):
+        state_next = simulate_forward_dynamics_step(dyn_func, state_seq[idx], control_seq[idx], time_step, sim_method)
+        state_seq[idx+1] = state_next # type: ignore    
     return state_seq
 
-def simulate_forward_dynamics_step(dyn_func, x_k, u_k, time_step, sim_method = 'euler'):
+def simulate_forward_dynamics_step(dyn_func, x_k, u_k, time_step, sim_method = 'rk4'):
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
-    # dyn_func[in]     - dynamics function (pre-populated with *params) for integration
-    # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
-    # state_init[in]   - starting state for integration (vector, must match dyn_func state dim)
-    # time_step[in]    - time interval between sequence points (scalar > 0)
-    # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
-    # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
+    # dyn_func[in]   - continuous dynamics function (pre-populated with *params) for integration
+    # u_k[in]        - control input (scalar or vector depending on control dimension -- must match dyn_func control dim)
+    # x_k[in]        - starting state for integration (vector, must match dyn_func state dim)
+    # time_step[in]  - time interval between sequence points (scalar > 0)
+    # sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'
+    # x_kp1[out]     - array shape[1,state_dim] of state vector at next time step
     x_len      = len(x_k)  
     x_kp1      = np.zeros([x_len, 1])
-    if sim_method == 'euler':
-        x_k_dot    = dyn_func(time_step, x_k, u_k)
-        x_kp1      = x_k + x_k_dot * time_step
+    if   sim_method == 'rk4':
+        x_kp1        = dynamics_rk4(dyn_func, time_step, x_k, u_k)
+    elif sim_method == 'euler':
+        x_kp1      = x_k + dyn_func(x_k, u_k) * time_step
     elif sim_method == 'solve_ivp_zoh':
         time_span    = (0,time_step)
-        dyn_func_zoh = (lambda time_dyn, state: dyn_func(time_dyn, state, u_k.reshape(-1)))
+        dyn_func_zoh = (lambda time_dyn, state: dyn_func(state, u_k.reshape(-1)))
         y_0          = (x_k).reshape(-1)
         result_ivp   = solve_ivp(dyn_func_zoh, time_span, y_0)
         x_kp1        = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
@@ -90,7 +77,7 @@ def simulate_forward_dynamics_step(dyn_func, x_k, u_k, time_step, sim_method = '
         raise ValueError("invalid simulation method")
     return x_kp1
 
-def linearize_dynamics(dyn_func,t_k, x_k, u_k):
+def linearize_dynamics(dyn_func, x_k, u_k):
 # Linearizes the dynamics function about the primals x and u
 # dyn_func  - [in] continuous function of state transition
 # x_primal  - [in] primal state linearization point
@@ -98,11 +85,19 @@ def linearize_dynamics(dyn_func,t_k, x_k, u_k):
 # A_lin     - [out] continuous time linearization of dyn_func wrt state eval at x,u
 # B_lin     - [out] continuous time linearization of dyn_func wrt control eval at x,u
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
-    dyn_func_xu = lambda xu_k: dyn_func(t_k, xu_k[:x_k_len], xu_k[x_k_len:])
+    dyn_func_xu = lambda xu_k: dyn_func(xu_k[:x_k_len], xu_k[x_k_len:])
     ab_lin_cat  = jax.jacfwd(dyn_func_xu)(xu_k_jax[:,0])
     a_lin       = np.array(ab_lin_cat[:x_k_len,:x_k_len])
     b_lin       = np.array(ab_lin_cat[:x_k_len,x_k_len:])
     return a_lin, b_lin
+
+def dynamics_rk4(dyn_func, h, x_k, u_k):
+    #rk4 integration with zero-order hold on u
+    f1 = dyn_func(x_k,u_k)
+    f2 = dyn_func(x_k + 0.5*h*f1, u_k)
+    f3 = dyn_func(x_k + 0.5*h*f2, u_k)
+    f4 = dyn_func(x_k + h*f3, u_k)
+    return x_k + (h/6.0) * (f1 + 2*f2 + 2*f3 + f4)
 
 def calculate_linearized_state_space_seq(dyn_func, c2d_ss_func, state_seq, control_seq, time_seq):
     # walk through state and control sequences
@@ -120,14 +115,14 @@ def calculate_linearized_state_space_seq(dyn_func, c2d_ss_func, state_seq, contr
         c_mat_dummy = jnp.zeros((1,state_len))
         d_mat_dummy = jnp.zeros((1,control_len))
         for idx in range(len_seq-1):
-            a_lin, b_lin             = linearize_dynamics(dyn_func,time_seq[idx], state_seq[idx], control_seq[idx])
+            a_lin, b_lin             = linearize_dynamics(dyn_func, state_seq[idx], control_seq[idx])
             ss_pend_lin_continuous   = stateSpace(a_lin, b_lin, c_mat_dummy, d_mat_dummy)
             ss_pend_lin_discrete     = c2d_ss_func(ss_pend_lin_continuous)
             a_lin_array[idx]         = ss_pend_lin_discrete.a
             b_lin_array[idx]         = ss_pend_lin_discrete.b
     return a_lin_array, b_lin_array
 
-def discretize_state_space(input_state_space:stateSpace, time_step:float, c2d_method='Euler'):
+def discretize_continuous_state_space(input_state_space:stateSpace, time_step:float, c2d_method='Euler'):
 #   A - (nxn) - continuous state transition matrix
 #   B - (nxm) - continuous control matrix
 #   C - (pxn) - continuous state measurement matrix
@@ -233,7 +228,6 @@ def prep_xu_vec_for_diff(x_k,u_k):
 
 def ss_2_dyn_func(ss_cont:stateSpace):
     return lambda t, x, u: ss_cont.a @ x + ss_cont.b @ u
-
 
 def calculate_s_xx_dot(Q_t, A_t, BRinvBT_t, s_xx_t):
     s_xx_dt = -(Q_t - (s_xx_t @ BRinvBT_t @ s_xx_t) + (s_xx_t @ A_t) + (A_t.T @ s_xx_t))

@@ -64,7 +64,7 @@ if __name__ == "__main__":
    
    #----- define timestep and sequence length -----#
    time_step  = ilqr_config['time_step']
-   len_seq    = 100
+   len_seq    = 200
    num_states = 4
    num_controls = 2
 
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
    #------- Simulate controller output --------#
    if ilqr_config['mj_ctrl'] is True:
-      ts_sim = 0.001
+      ts_sim = 0.01
       mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config['mjcf_model'])
       sim_dyn_func_step = lambda x, u: (mj_funcs.fwd_sim_mj_w_ctrl(mjsim_model, mjsim_data, x, u, ts_sim, ilqr_config['time_step']))[-1]
    else:

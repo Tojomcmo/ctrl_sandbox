@@ -48,7 +48,7 @@ class ttlqrControllerConfig():
     
     def curry_c2d_func(self, c2d_method:str):
         time_step  = self.time_step
-        c2d_func   = lambda cont_state_space: gen_ctrl.discretize_state_space(cont_state_space, time_step, c2d_method)
+        c2d_func   = lambda cont_state_space: gen_ctrl.discretize_continuous_state_space(cont_state_space, time_step, c2d_method)
         return c2d_func
 
     def curry_lin_dyn_func(self, lin_dyn_sys_params:dict, gen_lin_dyn_sys):
