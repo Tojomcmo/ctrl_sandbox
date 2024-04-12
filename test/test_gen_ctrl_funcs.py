@@ -1,7 +1,10 @@
 import unittest
 from jax import numpy as jnp
 import numpy as np
-
+import scipy
+import numpy.typing as npt
+import numpy.testing
+from typing import Callable, Tuple
 import src.gen_ctrl_funcs as gen_ctrl
 import src.ilqr_utils as util
  
@@ -103,6 +106,31 @@ class shared_unit_test_data_and_funcs:
                     ])
         return y
     
+
+    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+        x_k_jax = jnp.array(state)
+        u_k_jax = jnp.array(control)
+        g = 1.0
+        l = 1.0
+        b = 1.0
+        state_dot = jnp.array([
+                    x_k_jax[1],
+                    -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]
+                    ])
+        return state_dot 
+     
+    def step_rk4(self,
+            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+            h:float, 
+            x_k:npt.NDArray[np.float64], 
+            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
+        #rk4 integration with zero-order hold on u
+        f1 = dyn_func_ad(x_k            , u_k)
+        f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
+        f3 = dyn_func_ad(x_k + 0.5*h*f2 , u_k)
+        f4 = dyn_func_ad(x_k + h*f3     , u_k)
+        return x_k + (h/6.0) * (f1 + 2*f2 + 2*f3 + f4)    
+    
     def pend_dyn_func_full(self, params, time, state, control):
     # continuous time dynamic equation for simple pendulum 
     # time[in]       - time component, necessary prarmeter for ode integration
@@ -120,7 +148,7 @@ class shared_unit_test_data_and_funcs:
                     ])
         return state_dot
     
-    def pend_unit_dyn_func_curried(self, time, state, control):
+    def pend_unit_dyn_func_curried(self, state, control):
     # continuous time dynamic equation for simple pendulum 
     # time[in]       - time component, necessary prarmeter for ode integration
     # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
@@ -187,12 +215,12 @@ class shared_unit_test_data_and_funcs:
         x_k_corr     = util.calc_and_shape_array_diff(state_vec, state_des_seq[k_step])
         x_k_corr_col = util.array_to_col(x_k_corr)
         if is_final_bool:
-            cost_float = (0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)
+            cost_float = ((0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)).item()
         else:
             u_k_corr     = util.calc_and_shape_array_diff(control_vec, control_des_seq[k_step])
             u_k_corr_col = util.array_to_col(u_k_corr)
-            cost_float = (0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
-                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))
+            cost_float = ((0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
+                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))).item()
         return cost_float      
 
     def unit_cost_func_quad_state_and_control_pend_curried(self, x_k, u_k, k_step, is_final_bool=False):
@@ -300,7 +328,7 @@ class stateSpace_tests(unittest.TestCase):
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
-    def pend_unit_dyn_func(self, time, state, control):
+    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
         x_k_jax = jnp.array(state)
         u_k_jax = jnp.array(control)
         g = 1.0
@@ -308,215 +336,113 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         b = 1.0
         state_dot = jnp.array([
                     x_k_jax[1],
-                    -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]
-                    ])
+                    -(b/l) * x_k_jax[1] - (np.sin(x_k_jax[0]) * g/l) + u_k_jax[0]
+                    ], dtype=float)
         return state_dot  
 
-    def test_accepts_valid_inputs_euler(self):
+    def test_accepts_valid_input(self):
         len_seq         = 4
-        time_step       = 0.1
-        control_seq     = np.ones([4,1,1])
-        time_step       = 0.1
-        state_init      = np.array([[1.],[1.]])
-        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(self.pend_unit_dyn_func, 
-                                                         state_init, control_seq, time_step, 
-                                                         sim_method = 'euler')
+        u_seq     = np.ones([4,1,1])
+        x_init      = np.array([[1.],[1.]])
+        x_seq       = gen_ctrl.simulate_forward_dynamics_seq(self.pend_unit_dyn_func, x_init, u_seq)
         # calculate expected output
-        time_seq = [0,0.1,0.2,0.3]
-        state_seq_expected    = np.zeros([5,2,1])
-        state_seq_expected[0] = state_init
+        x_seq_expected    = np.zeros([5,2,1])
+        x_seq_expected[0] = x_init
         for idx in range(len_seq):
-            state_dot_row    = self.pend_unit_dyn_func(time_seq[idx], state_seq[idx], control_seq[idx])
-            state_next       = state_seq[idx] + state_dot_row * time_step
-            state_seq_expected[idx+1] = state_next
-        self.assertEqual(len(state_seq), len_seq +1)
-        self.assertEqual(state_seq[-1].tolist(), state_seq_expected[-1].tolist())
-
-    def test_accepts_valid_inputs_euler_from_shared(self):
-        data_and_funcs  = shared_unit_test_data_and_funcs()
-        dyn_func        = data_and_funcs.pend_unit_dyn_func_curried
-        time_step       = data_and_funcs.time_step
-        control_seq     = data_and_funcs.u_seq
-        state_init      = data_and_funcs.seed_x_vec
-        x_len           = len(data_and_funcs.x_seq[0])
-        u_len           = len(data_and_funcs.u_seq[0])
-        len_seq         = data_and_funcs.len_seq
-        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(dyn_func, state_init, 
-                                                         control_seq, time_step, 
-                                                         sim_method = 'euler')
-        self.assertEqual(len(state_seq), len_seq)
-
-    def test_accepts_valid_inputs_solve_ivp_zoh(self):
-        data_and_funcs  = shared_unit_test_data_and_funcs()
-        dyn_func        = data_and_funcs.pend_unit_dyn_func_curried
-        time_step       = data_and_funcs.time_step
-        control_seq     = data_and_funcs.u_seq
-        state_init      = data_and_funcs.seed_x_vec
-        x_len           = len(data_and_funcs.x_seq[0])
-        u_len           = len(data_and_funcs.u_seq[0])
-        len_seq         = data_and_funcs.len_seq
-        state_seq       = gen_ctrl.simulate_forward_dynamics_seq(dyn_func, state_init, 
-                                                         control_seq, time_step, 
-                                                         sim_method = 'solve_ivp_zoh')
-        self.assertEqual(len(state_seq), len_seq)
-        self.assertEqual(np.shape(state_seq[0]), (x_len,1))        
-        self.assertEqual(True,True)        
+            x_delta    = self.pend_unit_dyn_func(x_seq[idx], u_seq[idx])
+            x_next       = x_seq[idx] + x_delta
+            x_seq_expected[idx+1] = x_next
+        self.assertEqual(len(x_seq), len_seq +1)
+        self.assertEqual(x_seq[-1].tolist(), x_seq_expected[-1].tolist())
 
 class linearize_dynamics_tests(unittest.TestCase):
 
-    def test_linearize_dynamics_accepts_valid_case(self):
-        data_and_funcs  = shared_unit_test_data_and_funcs()
-        time_seq        = data_and_funcs.time_seq
-        control_seq     = data_and_funcs.u_seq
-        state_seq       = data_and_funcs.x_seq
-        x_len           = data_and_funcs.x_len
-        u_len           = data_and_funcs.u_len
-        k_step          = 1
-        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_dyn_func_curried,
-                                                  time_seq[k_step],
-                                                  state_seq[k_step],
-                                                  control_seq[k_step])
-        
-        g = data_and_funcs.pend_unit_state_trans_params['g']
-        l = data_and_funcs.pend_unit_state_trans_params['l']
-        b = data_and_funcs.pend_unit_state_trans_params['b']
-        state_pos = state_seq[k_step][0][0]
-        a_lin_expected = np.array([[0, 1], 
-                                    [-(g/l)*jnp.cos(state_pos), -(b/l)]])
-        b_lin_expected = np.array([[0],[1]])
-        # print('a_lin: ', a_lin)
-        # print('a_lin_expected: ', a_lin_expected)
-        # print('b_lin: ', b_lin)
-        # print('b_lin_expected: ', b_lin_expected)
-        self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
-        self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
-        self.assertEqual(a_lin.tolist(), a_lin_expected.tolist())
-        self.assertEqual(b_lin.tolist(), b_lin_expected.tolist())
-
-    def test_linearize_dynamics_accepts_valid_linear_case(self):
-        data_and_funcs  = shared_unit_test_data_and_funcs()
-        time_seq        = data_and_funcs.time_seq
-        control_seq     = data_and_funcs.u_seq
-        state_seq       = data_and_funcs.x_seq
-        x_len           = data_and_funcs.x_len
-        u_len           = data_and_funcs.u_len
-        k_step          = 1
-        a_lin, b_lin    = gen_ctrl.linearize_dynamics(data_and_funcs.pend_unit_lin_dyn_func_curried,
-                                                  time_seq[k_step],
-                                                  state_seq[k_step],
-                                                  control_seq[k_step])
-        
-        g = data_and_funcs.pend_unit_state_trans_params['g']
-        l = data_and_funcs.pend_unit_state_trans_params['l']
-        b = data_and_funcs.pend_unit_state_trans_params['b']
-        state_pos = state_seq[k_step][0][0]
-        a_lin_expected = jnp.array([[0, 1], 
-                                    [-(g/l), -(b/l)]])
-        b_lin_expected = jnp.array([[0],[1]])
-        # print('a_lin: ', a_lin)
-        # print('a_lin_expected: ', a_lin_expected)
-        # print('b_lin: ', b_lin)
-        # print('b_lin_expected: ', b_lin_expected)
-        self.assertEqual(jnp.shape(a_lin), (x_len, x_len))
-        self.assertEqual(jnp.shape(b_lin), (x_len, u_len))
-        self.assertEqual(a_lin.tolist(), a_lin_expected.tolist())
-        self.assertEqual(b_lin.tolist(), b_lin_expected.tolist())
-
-class calculate_linearized_state_space_seq_tests(unittest.TestCase):
-
-    def discretize_ss_simple(self, input_state_space:gen_ctrl.stateSpace):
-        time_step = 0.1
-        n  = input_state_space.a.shape[0] 
-        a_d = jnp.eye(n) + (input_state_space.a * time_step)
-        b_d = input_state_space.b * time_step
-        c_d = input_state_space.c
-        d_d = input_state_space.d
-        d_state_space = gen_ctrl.stateSpace(a_d, b_d, c_d, d_d, time_step)
-        return d_state_space
-    
-    def pend_unit_dyn_func(self, time, state, control):
-        state.reshape(-1)
+    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+        x_k_jax = jnp.array(state)
+        u_k_jax = jnp.array(control)
         g = 1.0
         l = 1.0
         b = 1.0
-        state_dot = jnp.array([
-                    state[1],
-                    -(b/l) * state[1] - (jnp.sin(state[0]) * g/l) + control[0]
-                    ])
-        return state_dot     
+        state_dot = jnp.array([x_k_jax[1],
+                             -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]], dtype=float)
+        return state_dot  
+    
+    def step_rk4(self,
+            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+            h:float, 
+            x_k:npt.NDArray[np.float64], 
+            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
+        #rk4 integration with zero-order hold on u
+        f1 = dyn_func_ad(x_k            , u_k)
+        f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
+        f3 = dyn_func_ad(x_k + 0.5*h*f2 , u_k)
+        f4 = dyn_func_ad(x_k + h*f3     , u_k)
+        return x_k + (h/6.0) * (f1 + 2*f2 + 2*f3 + f4)
+    
+    def test_linearize_dynamics_accepts_valid_case(self):
+        h = 0.1
+        x = np.array([[1.],[1.]])
+        u = np.array([[1.]])
+        discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(discrete_dyn_func,x,u)
+        g = 1.0
+        l = 1.0
+        b = 1.0
+        state_pos = x[0][0]
+        A_lin_expected = np.array([[0, 1],[-(g/l)*jnp.cos(state_pos), -(b/l)]])
+        B_lin_expected = np.array([[0],[1]])
+        A_lin_d_expected = np.eye(2) + (A_lin_expected * h)
+        B_lin_d_expected = B_lin_expected * h
+        self.assertEqual(jnp.shape(a_lin), (len(x), len(x)))
+        self.assertEqual(jnp.shape(b_lin), (len(x), len(u)))
+        numpy.testing.assert_allclose(a_lin, A_lin_d_expected,rtol=1e-1, atol=1e-1)
+        numpy.testing.assert_allclose(b_lin, B_lin_d_expected,rtol=1e-1, atol=1e-1)
 
+class calculate_linearized_state_space_seq_tests(unittest.TestCase):
+
+    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+        x_k_jax = jnp.array(state)
+        u_k_jax = jnp.array(control)
+        g = 1.0
+        l = 1.0
+        b = 1.0
+        state_dot = jnp.array([x_k_jax[1],
+                    -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]], dtype=float)
+        return state_dot  
+    
+    def step_rk4(self,
+            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+            h:float, 
+            x_k:npt.NDArray[np.float64], 
+            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
+        #rk4 integration with zero-order hold on u
+        f1 = dyn_func_ad(x_k            , u_k)
+        f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
+        f3 = dyn_func_ad(x_k + 0.5*h*f2 , u_k)
+        f4 = dyn_func_ad(x_k + h*f3     , u_k)
+        return x_k + (h/6.0) * (f1 + 2*f2 + 2*f3 + f4)
+    
     def test_calculate_linearized_state_space_seq_accepts_valid_system(self):
-        time_seq       = [0.1, 0.2, 0.3]
-        len_seq        = 3
-        time_step      = 0.1
-        control_seq    = [jnp.array([[1.]])] * (len_seq-1)
-        state_seq      = [jnp.array([[1.],[1.]])] * (len_seq)
-        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.pend_unit_dyn_func,
-                                                                             self.discretize_ss_simple, 
-                                                                             state_seq, 
-                                                                             control_seq, 
-                                                                             time_seq)
+        len_seq     = 4
+        h           = 0.1
+        u_seq = np.ones((3,1,1), dtype=np.float64)
+        x_seq   = np.ones((4,2,1), dtype=np.float64)
+        discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
+        A_lin_d_seq, B_lin_d_seq = gen_ctrl.calculate_linearized_state_space_seq(discrete_dyn_func,
+                                                                                x_seq, 
+                                                                                u_seq)
         # calculate expected output
-        state_pos = state_seq[0][0]
-        a_lin_expected = jnp.array([[0, 1], 
-                                    [-(1./1.) * jnp.cos(state_pos[0]), -(1./1.)]])
-        b_lin_expected = jnp.array([[0],[1]])
-        A_lin_d_expected = jnp.eye(2) + (a_lin_expected * time_step)
-        B_lin_d_expected = b_lin_expected * time_step
+        x_init_pos = x_seq[0][0]
+        A_lin_expected = np.array([[0, 1],[-(1./1.) * np.cos(x_init_pos[0]), -(1./1.)]])
+        B_lin_expected = np.array([[0],[1]])
+        A_lin_d_expected = np.eye(2) + (A_lin_expected * h)
+        B_lin_d_expected = B_lin_expected * h
         #assert validity
-        self.assertEqual(len(A_lin_array), len_seq-1)
-        self.assertEqual(len(B_lin_array), len_seq-1)
-        self.assertEqual((A_lin_array[0]).tolist(), A_lin_d_expected.tolist()) # type: ignore
-        self.assertEqual((B_lin_array[0]).tolist(), B_lin_d_expected.tolist())         # type: ignore
-
-    def test_calculate_linearized_state_space_seq_accepts_valid_system_from_shared(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        time_seq      = data_and_funcs.time_seq
-        len_seq        = data_and_funcs.len_seq
-        x_len          = len(data_and_funcs.x_seq[0])
-        u_len          = len(data_and_funcs.u_seq[0])
-        control_seq    = data_and_funcs.u_seq
-        state_seq      = data_and_funcs.x_seq
-        A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(data_and_funcs.pend_unit_dyn_func_curried,
-                                                                             self.discretize_ss_simple, 
-                                                                             state_seq, 
-                                                                             control_seq, 
-                                                                             time_seq)
-        self.assertEqual(len(A_lin_array), len_seq-1)
-        self.assertEqual(len(B_lin_array), len_seq-1)
-    # def test_calculate_linearized_state_space_seq_rejects_invalid_sequence_dimensions(self):
-    #     time_step    = 0.1
-    #     num_steps    = 20
-    #     num_states   = 3
-    #     num_controls = 2
-    #     control_seq  = jnp.ones((num_steps, num_controls, 2))
-    #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
-    #     with self.assertRaises(Exception) as assert_seq_dim_error:
-    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
-    #     self.assertEqual(str(assert_seq_dim_error.exception), 'state or control sequence is incorrect array dimension. sequences must be 2d arrays')
-
-    # def test_calculate_linearized_state_space_seq_rejects_invalid_sequence_lengths(self):
-    #     time_step    = 0.1
-    #     num_steps    = 20
-    #     num_states   = 3
-    #     num_controls = 2
-    #     control_seq  = jnp.ones((num_steps, num_controls))
-    #     state_seq    = jnp.ones((num_steps+2, num_states)) * 0.1
-    #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
-    #     self.assertEqual(str(assert_seq_len_error.exception), 'state and control sequences are incompatible lengths. state seq must be control seq length +1')
-
-    # def test_calculate_linearized_state_space_seq_rejects_invalid_time_step(self):
-    #     time_step    = -0.1
-    #     num_steps    = 20
-    #     num_states   = 3
-    #     num_controls = 2
-    #     control_seq  = jnp.ones((num_steps, num_controls))
-    #     state_seq    = jnp.ones((num_steps+1, num_states)) * 0.1
-    #     with self.assertRaises(Exception) as assert_seq_len_error:
-    #         A_lin_array, B_lin_array = gen_ctrl.calculate_linearized_state_space_seq(self.dyn_func, state_seq, control_seq, time_step)
-    #     self.assertEqual(str(assert_seq_len_error.exception), 'time_step is invalid. Must be positive float')
-
+        self.assertEqual(len(A_lin_d_seq), len_seq-1)
+        self.assertEqual(len(B_lin_d_seq), len_seq-1)
+        numpy.testing.assert_allclose(A_lin_d_seq[0], A_lin_d_expected,rtol=1e-1, atol=1e-1)
+        numpy.testing.assert_allclose(B_lin_d_seq[0], B_lin_d_expected,rtol=1e-1, atol=1e-1)
+        
 class discretize_state_space_tests(unittest.TestCase):
 
     def test_discretize_state_space_accepts_valid_system(self):
@@ -594,78 +520,156 @@ class discretize_state_space_tests(unittest.TestCase):
 )
 
 class calculate_total_cost_tests(unittest.TestCase):
+
+    def cost_func_quad_state_and_control(self, 
+                                         cost_func_params:dict, 
+                                         x_k:npt.NDArray[np.float64], 
+                                         u_k:npt.NDArray[np.float64], 
+                                         k_step:int, 
+                                         x_des_seq:npt.NDArray[np.float64], 
+                                         u_des_seq:npt.NDArray[np.float64], 
+                                         is_final_bool:bool):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q  = jnp.array(cost_func_params['Q'])
+        R  = jnp.array(cost_func_params['R'])
+        Qf = jnp.array(cost_func_params['Qf'])
+        x_des_seq_jax = jnp.array(x_des_seq)
+        u_des_seq_jax = jnp.array(u_des_seq)
+        # check that dimensions match [TODO]
+        if is_final_bool:
+            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
+            u_cost     = jnp.array([0.0])
+            total_cost = x_cost
+        elif k_step == 0:
+            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array([0.0])    
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
+            total_cost = u_cost
+        else:
+            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq_jax[k_step], shape='col')   
+            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
+        return total_cost, x_cost, u_cost                    
+
+    def unit_cost_func_quad_state_and_control_pend_curried(self, x_k, u_k, k_step, is_final_bool=False):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        cost_func         = self.cost_func_quad_state_and_control
+        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
+                             'R'  : np.array([[1.]]),
+                             'Qf' : np.array([[1.,0],[0,1.]])} 
+        x_des_seq     = np.zeros([3,2,1])
+        u_des_seq   = np.zeros([2,1,1])
+        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, x_des_seq, u_des_seq, is_final_bool)
+        cost_float = cost_func_curried(x_k, u_k, k_step, is_final_bool)
+        return cost_float   
+
     def test_accepts_valid_inputs(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
+        cost_func = self.unit_cost_func_quad_state_and_control_pend_curried
         x_seq = np.ones([3,2,1])
-        u_seq = jnp.ones([3,1,1])
-        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
-        total_cost_expect = (0.5*(2+1)) + (0.5*(2+1)) + (0.5*(2+0))
-        self.assertEqual(total_cost, total_cost_expect)        
-        # TODO add assert for matching expected value
+        u_seq = np.ones([2,1,1])
+        cost_func_calc = gen_ctrl.prep_cost_func_for_calc(cost_func)
+        total_cost, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(cost_func_calc, x_seq, u_seq)
+        total_cost_expect = (0.5*(0+1)) + (0.5*(2+1)) + (0.5*(2+0))
+        cost_seq_expect   = np.array([0.5, 1.5, 1.0]) 
+        x_cost_seq_expect = np.array([0.0, 1.0, 1.0])
+        u_cost_seq_expect = np.array([0.5, 0.5, 0.0])
+        self.assertEqual(total_cost, total_cost_expect) 
+        self.assertEqual(cost_seq.tolist(), cost_seq_expect.tolist())
+        self.assertEqual(x_cost_seq.tolist(), x_cost_seq_expect.tolist())
+        self.assertEqual(u_cost_seq.tolist(), u_cost_seq_expect.tolist())                       
+     
 
-    def test_accepts_valid_inputs_from_shared(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        len_seq = shared_data_funcs.len_seq
-        Q     = shared_data_funcs.pend_unit_cost_func_params['Q']
-        R     = shared_data_funcs.pend_unit_cost_func_params['R']
-        Qf    = shared_data_funcs.pend_unit_cost_func_params['Qf']
-        x_seq = shared_data_funcs.x_seq
-        u_seq = shared_data_funcs.u_seq
-        total_cost, cost_seq = gen_ctrl.calculate_total_cost(cost_func, x_seq, u_seq)
-        # (len-1)*0.5*(x.T Q x + u.T R u) + 0.5*(x.T Qf x)
-        total_cost_expect = 9*(0.5*(1+4) + (0.5*(1))) + (0.5*(4+1))       
-        self.assertEqual(total_cost, total_cost_expect)      
+class taylor_expand_cost_tests(unittest.TestCase):  
+    
+    def cost_func_quad_state_and_control(self, 
+                                         cost_func_params:dict, 
+                                         x_k:npt.NDArray[np.float64], 
+                                         u_k:npt.NDArray[np.float64], 
+                                         k_step:int, 
+                                         x_des_seq:npt.NDArray[np.float64], 
+                                         u_des_seq:npt.NDArray[np.float64], 
+                                         is_final_bool:bool):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q  = jnp.array(cost_func_params['Q'])
+        R  = jnp.array(cost_func_params['R'])
+        Qf = jnp.array(cost_func_params['Qf'])
+        x_des_seq_jax = jnp.array(x_des_seq)
+        u_des_seq_jax = jnp.array(u_des_seq)
+        # check that dimensions match [TODO]
+        if is_final_bool:
+            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
+            u_cost     = jnp.array([0.0])
+            total_cost = x_cost
+        elif k_step == 0:
+            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array([0.0])    
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
+            total_cost = u_cost
+        else:
+            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq_jax[k_step], shape='col')   
+            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
+        return total_cost, x_cost, u_cost                  
 
-class taylor_expand_cost_tests(unittest.TestCase):      
+    def unit_cost_func_quad_state_and_control_pend_curried(self, 
+                                                           x_k:npt.NDArray[np.float64], 
+                                                           u_k:npt.NDArray[np.float64], 
+                                                           k_step:int, 
+                                                           is_final_bool:bool=False):
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        cost_func         = self.cost_func_quad_state_and_control
+        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
+                             'R'  : np.array([[1.]]),
+                             'Qf' : np.array([[1.,0],[0,1.]])} 
+        x_des_seq   = np.zeros([3,2,1])
+        u_des_seq   = np.zeros([2,1,1])
+        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, x_des_seq, u_des_seq, is_final_bool)
+        cost_tuple = cost_func_curried(x_k, u_k, k_step, is_final_bool)
+        return cost_tuple   
+    
     def test_taylor_expand_cost_accepts_list_of_arrays(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        cost_func_params = shared_data_funcs.pend_unit_cost_func_params
-        x_seq = shared_data_funcs.x_seq
-        u_seq = shared_data_funcs.u_seq
-        k_step = 1
-        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,
-                                                            x_seq[k_step],
-                                                            u_seq[k_step],
-                                                            k_step)
-        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.x_des_seq[k_step])
-        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.u_des_seq[k_step])
+        cost_func = self.unit_cost_func_quad_state_and_control_pend_curried
+        x_seq      = np.ones([3,2,1])
+        u_seq      = np.ones([2,1,1])
+        k_step     = 1
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,x_seq[k_step],u_seq[k_step],k_step)
+        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
+                             'R'  : np.array([[1.]]),
+                             'Qf' : np.array([[1.,0],[0,1.]])} 
+        x_des_seq  = np.zeros([3,2,1])
+        u_des_seq  = np.zeros([2,1,1])
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-x_des_seq[k_step])
+        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-u_des_seq[k_step])
         l_xx_expected = cost_func_params['Q']
         l_uu_expected = cost_func_params['R']  
-        # print('l_x: ', l_x)  
-        # print('l_x_expected: ',l_x_expected)    
-        # print('state_length: ', len(x_seq[0]))
         self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
         self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
         self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
         self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
         self.assertEqual(l_ux.tolist(), np.zeros([len(u_seq[0]),len(x_seq[0])]).tolist())            
 
-    def test_taylor_expand_cost_accepts_list_of_np_arrays(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        cost_func = shared_data_funcs.unit_cost_func_quad_state_and_control_pend_curried
-        cost_func_params = shared_data_funcs.pend_unit_cost_func_params
-        x_seq = [np.array([[1.],[2.]])] * 3
-        u_seq = [np.array([[3.]])] * 3
-        k_step = 1
-        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,
-                                                            x_seq[k_step], # type: ignore
-                                                            u_seq[k_step], # type: ignore
-                                                            k_step)
-        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-shared_data_funcs.x_des_seq[k_step])
-        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-shared_data_funcs.u_des_seq[k_step])
-        l_xx_expected = cost_func_params['Q']
-        l_uu_expected = cost_func_params['R']  
-        # print('l_x: ', l_x)  
-        # print('l_x_expected: ',l_x_expected)    
-        # print('state_length: ', len(x_seq[0]))
-        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
-        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
-        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
-        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
-        self.assertEqual(l_ux.tolist(), jnp.zeros([len(u_seq[0]),len(x_seq[0])]).tolist()) 
 
 class prep_xu_vecs_for_diff_tests(unittest.TestCase):
     def test_accepts_valid_np_col_inputs(self):

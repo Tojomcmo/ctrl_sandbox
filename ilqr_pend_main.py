@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
+import numpy.typing as npt
 
 import src.ilqr_funcs as ilqr
 import src.dyn_functions as dyn
@@ -17,20 +18,19 @@ import src.mujoco_funcs as mj_funcs
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   cost_func_params    = {'Q'  : jnp.array([[10.,0],[0.,1.]]) * 1,
-                          'R'  : jnp.array([[0.1]]),
-                          'Qf' : jnp.array([[10.,0],[0.,1.]]) * 10}
-   state_trans_params  = {'b'  : 1.0,
-                          'l'  : 1.0,
-                          'g'  : 9.81}
-   ilqr_config = {
+   cost_func_params      = {'Q'  : jnp.array([[10.,0],[0.,1.]]) * 1,
+                            'R'  : jnp.array([[0.1]]),
+                            'Qf' : jnp.array([[10.,0],[0.,1.]]) * 10}
+   cont_dyn_func_params  = {'b'  : 1.0,
+                            'l'  : 1.0,
+                            'g'  : 9.81}
+   ilqr_config_cont = {
                     'mj_ctrl'                   : False,   
-                    'state_trans_func'          : dyn.pend_dyn_nl,
-                    'state_trans_func_params'   : state_trans_params,
+                    'cont_dyn_func'             : dyn.pend_dyn_nl,
+                    'cont_dyn_func_params'      : cont_dyn_func_params,
                     'cost_func'                 : cost.cost_func_quad_state_and_control,
                     'cost_func_params'          : cost_func_params,
-                    'sim_method'                : 'solve_ivp_zoh', # 'euler', "solve_ivp_zoh"
-                    'c2d_method'                : 'zohCombined',# 'euler', "zoh", 'zohCombined'
+                    'integrate_func'            : gen_ctrl.step_rk4, # 'step_rk4',"step_euler_forward", "step_solve_ivp"
                     'max_iter'                  : 10,
                     'time_step'                 : 0.1,
                     'converge_crit'             : 1e-4,
@@ -60,8 +60,9 @@ if __name__ == "__main__":
                     'log_ctrl_history'          : True 
                  }
    
-   ilqr_config = ilqr_config_mj
-   
+   # ilqr_config = ilqr_config_mj
+   ilqr_config = ilqr_config_cont
+
    #----- define timestep and sequence length -----#
    time_step  = ilqr_config['time_step']
    len_seq    = 30
@@ -123,7 +124,7 @@ if __name__ == "__main__":
       mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config['mjcf_model'])
       sim_dyn_func_step = lambda x, u: (mj_funcs.fwd_sim_mj_w_ctrl(mjsim_model, mjsim_data, x, u, ts_sim, ilqr_config['time_step']))[-1]
    else:
-      sim_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(sim_dyn_func_params,t,x,u)
+      sim_dyn_func = lambda t,x,u: dyn.pend_dyn_nl(sim_dyn_func_params,x,u)
       sim_dyn_func_step = lambda x, u: gen_ctrl.simulate_forward_dynamics_step(sim_dyn_func, x, u,controller_output.time_step, sim_method='solve_ivp_zoh')
    x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(sim_dyn_func_step, controller_output, x_sim_init_vec)
 
