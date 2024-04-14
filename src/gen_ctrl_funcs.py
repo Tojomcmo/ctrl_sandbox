@@ -52,7 +52,7 @@ def simulate_forward_dynamics_seq(
     x_seq    = np.zeros([(len_seq+1),len(x_init), 1], dtype=float)
     x_seq[0] = x_init # type: ignore
     for idx in range(len_seq):
-        x_seq[idx+1] = x_seq[idx] + discrete_dyn_func(x_seq[idx], u_seq[idx]) # type: ignore    
+        x_seq[idx+1] = discrete_dyn_func(x_seq[idx], u_seq[idx]) # type: ignore    
     return x_seq
 
 def simulate_forward_dynamics_step(
@@ -144,11 +144,11 @@ def calculate_linearized_state_space_seq(
     if len(x_seq) != (len(u_seq)+1):
         raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
     else:
-        len_seq = len(u_seq)
+        len_seq = len(x_seq)
         x_len   = len(x_seq[0,:])
         u_len   = len(u_seq[0,:])
-        a_lin_array = np.zeros((len_seq, x_len, x_len))
-        b_lin_array = np.zeros((len_seq, x_len, u_len))
+        a_lin_array = np.zeros((len_seq-1, x_len, x_len))
+        b_lin_array = np.zeros((len_seq-1, x_len, u_len))
         for idx in range(len_seq-1):
             a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, x_seq[idx], u_seq[idx])
             a_lin_array[idx] = a_lin

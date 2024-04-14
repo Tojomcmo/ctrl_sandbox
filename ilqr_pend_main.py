@@ -27,12 +27,12 @@ if __name__ == "__main__":
 
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 30
+   len_seq    = 20
    num_states = 4
    num_controls = 2
    mj_ctrl = False
    Q_cost  = np.array([[10.,0],[0.,1.]]) * 1.0
-   R_cost  = np.array([[0.1]])
+   R_cost  = np.array([[0.5]])
    Qf_cost = np.array([[10.,0],[0.,1.]]) * 10.0
    dyn_func_params_ctrl = dyn.nlPendParams(g=9.81, b=1.0, l=1.0)
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
    #---------- create desired trajectory ----------#
    traj_gen_dyn_func_params = dyn.nlPendParams(g=9.81,b=5.0,l=1.0)
    x_tg_init_vec = np.array([[0.0],[0.0]])
-   u_tg_seq      = np.ones([len_seq-1,1,1])*(2) 
+   u_tg_seq      = np.ones([len_seq-1,1,1]) 
    traj_gen_cont_dyn_func = lambda x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,x,u)
    traj_gen_disc_dyn_func = lambda x,u: gen_ctrl.step_rk4(traj_gen_cont_dyn_func, ilqr_config.time_step, x, u)
    x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
