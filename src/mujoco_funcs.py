@@ -17,51 +17,39 @@ def update_plt_frame(renderer:mujoco.Renderer, data:mujoco._structs.MjData, fram
     frames.append(pixels)
     img_set.append([plt.imshow(pixels)])
 
+def fwd_sim_mj_w_ctrl_step(model, data, x, u):
+    set_mj_state_vec(data, x) 
+    data.ctrl  = (u[0]).reshape(-1)      
+    mujoco.mj_resetData(model, data)  
+    mujoco.mj_forward(model,data)
+    mujoco.mj_step(model, data)   
+    return get_state_vec(data)
 
-def fwd_sim_mj_w_ctrl(model, data, x_init, u_seq, ts_sim, ts_ctrl):
+def fwd_sim_mj_w_ctrl(model, data, x_init, u_seq):
     '''
         function simulates provided model and data forward in time using u sequence
         and returns state trajectory x_seq and linearized state and control matricies A
         and B at each pair x_seq, u_seq
     '''
-    if int(ts_ctrl % ts_sim) != 0:
-        raise ValueError('the control timestep must be an integer multiple of the simulation timestep')
-    elif ts_ctrl < ts_sim:
-        raise ValueError('the control timestep must be larger than or equal to the simulation timestep')
     nx            = model.nv
-    t_final       = len(u_seq) * ts_ctrl
-    sim_steps     = int(t_final / ts_sim)
-    steps_zoh     = int(ts_ctrl / ts_sim)
     x_seq         = np.zeros((len(u_seq)+1, nx*2, 1   ))
-    time_seq      = np.zeros(len(u_seq)+1)
-
     mujoco.mj_resetData(model, data)
-    prev_timestep = model.opt.timestep
-    model.opt.timestep = ts_sim
     set_mj_state_vec(data, x_init)    
     mujoco.mj_forward(model,data)
     x_seq[0]   = get_state_vec(data)
     assert (x_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"
     data.ctrl  = (u_seq[0]).reshape(-1)
-    ctrl_idx   = 0
-    ctrl_count = 0  
-    
-    for sim_idx in range(sim_steps+1):
-        if ctrl_count == steps_zoh:
-            ctrl_count = 0  
-            ctrl_idx  += 1               
-            x_seq[ctrl_idx]    = get_state_vec(data)
-            time_seq[ctrl_idx] = data.time    
-            if sim_idx < sim_steps:             
-                data.ctrl = (u_seq[ctrl_idx]).reshape(-1)
-            else:
-                break    
-        mujoco.mj_step(model, data)   
-        ctrl_count += 1         
-    model.opt.timestep = prev_timestep       
+    for idx in range(len(u_seq)):
+        mujoco.mj_step(model, data)  
+        x_seq[idx] = get_state_vec(data)  
+        if idx == len(u_seq):
+            break
+        idx += 1     
+        data.ctrl = (u_seq[idx]).reshape(-1)
+        idx += 1      
     return x_seq
 
-def linearize_mj_seq(model, data,x_seq, u_seq, ts_ctrl):
+def linearize_mj_seq(model, data,x_seq, u_seq):
     '''
         function simulates provided model and data forward in time using u sequence
         and returns state trajectory x_seq and linearized state and control matricies A
@@ -71,7 +59,7 @@ def linearize_mj_seq(model, data,x_seq, u_seq, ts_ctrl):
     nx      = model.nv
     prev_timestep = model.opt.timestep
     mujoco.mj_resetData(model, data)
-    model.opt.timestep = ts_ctrl
+#    model.opt.timestep = ts_ctrl
     mujoco.mj_forward(model, data)
     x_len   = len(x_seq[0])
     x_vec_split = int((x_len/2))
@@ -106,8 +94,6 @@ def set_mj_state_vec(data, x_vec):
     x_vec_split = int(len(x_vec)/2)
     data.qpos = (x_vec[:x_vec_split])[:,0]
     data.qvel = (x_vec[x_vec_split:])[:,0]
-
-
 
 def create_mj_sim_video(model, data, framerate, sim_dyn_step):
     renderer = mujoco.Renderer(model, 480, 480)
@@ -167,3 +153,50 @@ def create_mj_video_w_ctrl(model, data, renderer, scene_option, framerate, x_ini
         ctrl_count += 1         
     model.opt.timestep = prev_timestep       
     return img_set, frames
+
+
+
+
+
+def fwd_sim_mj_w_ctrl_different_time_steps(model, data, x_init, u_seq, ts_sim, ts_ctrl):
+    '''
+        function simulates provided model and data forward in time using u sequence
+        and returns state trajectory x_seq and linearized state and control matricies A
+        and B at each pair x_seq, u_seq
+    '''
+    if int(ts_ctrl % ts_sim) != 0:
+        raise ValueError('the control timestep must be an integer multiple of the simulation timestep')
+    elif ts_ctrl < ts_sim:
+        raise ValueError('the control timestep must be larger than or equal to the simulation timestep')
+    nx            = model.nv
+    t_final       = len(u_seq) * ts_ctrl
+    sim_steps     = int(t_final / ts_sim)
+    steps_zoh     = int(ts_ctrl / ts_sim)
+    x_seq         = np.zeros((len(u_seq)+1, nx*2, 1   ))
+    time_seq      = np.zeros(len(u_seq)+1)
+
+    mujoco.mj_resetData(model, data)
+    prev_timestep = model.opt.timestep
+    model.opt.timestep = ts_sim
+    set_mj_state_vec(data, x_init)    
+    mujoco.mj_forward(model,data)
+    x_seq[0]   = get_state_vec(data)
+    assert (x_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"
+    data.ctrl  = (u_seq[0]).reshape(-1)
+    ctrl_idx   = 0
+    ctrl_count = 0  
+    
+    for sim_idx in range(sim_steps+1):
+        if ctrl_count == steps_zoh:
+            ctrl_count = 0  
+            ctrl_idx  += 1               
+            x_seq[ctrl_idx]    = get_state_vec(data)
+            time_seq[ctrl_idx] = data.time    
+            if sim_idx < sim_steps:             
+                data.ctrl = (u_seq[ctrl_idx]).reshape(-1)
+            else:
+                break    
+        mujoco.mj_step(model, data)   
+        ctrl_count += 1         
+    model.opt.timestep = prev_timestep       
+    return x_seq

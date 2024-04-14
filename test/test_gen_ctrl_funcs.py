@@ -9,234 +9,6 @@ import src.gen_ctrl_funcs as gen_ctrl
 import src.ilqr_utils as util
  
 
-class shared_unit_test_data_and_funcs:
-    def __init__(self) -> None:
-        self.pend_unit_cost_func_params = {
-                        'Q'  : np.array([[1.,0],[0,1.]]), # type: ignore
-                        'R'  : np.array([[1.]]),
-                        'Qf' : np.array([[1.,0],[0,1.]]) # type: ignore
-                      } 
-        self.pend_cost_func_params = {
-                        'Q'  : np.array([[1.,0],[0,1.]]), # type: ignore
-                        'R'  : np.array([[0.001]]),
-                        'Qf' : np.array([[100.,0],[0,100.]]) # type: ignore
-                      } 
-        self.pend_unit_state_trans_params = {
-                        'b'  : 1.0,
-                        'l'  : 1.0,
-                        'g'  : 1.0
-                      } 
-        self.gen_cost_func_params = {
-                        'Q'  : np.array([[1.,0,0],[0,10.,0],[0,0,1.]]), # type: ignore
-                        'R'  : np.array([[1.,0],[0,10.]]), # type: ignore
-                        'Qf' : np.array([[1.,0,0],[0,10.,0],[0,0,10.]]) # type: ignore
-                      } 
-        self.gen_state_trans_params = {
-                        'b'  : 1.0,
-                        'l'  : 2.0,
-                        'g'  : 3.0
-                      } 
-        self.ilqr_config_lin_pend_unit_cost = {
-            'state_trans_func'          : self.pend_lin_dyn_func_full,
-            'state_trans_func_params'   : self.pend_unit_state_trans_params,
-            'cost_func'                 : self.cost_func_quad_state_and_control_full,
-            'cost_func_params'          : self.pend_unit_cost_func_params,
-            'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
-            'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
-            'max_iter'                  : 20,
-            'time_step'                 : 0.1,
-            'converge_crit'             : 1e-5,
-            'cost_ratio_bounds'         : [1e-6, 20],
-            'ro_reg_start'              : 0.25,
-            'ro_reg_change'             : 0.25,
-            'fp_max_iter'               : 5,
-            'log_ctrl_history'          : True
-            }
-        self.ilqr_config_nl_pend = {
-            'state_trans_func'          : self.pend_dyn_func_full,
-            'state_trans_func_params'   : self.pend_unit_state_trans_params,
-            'cost_func'                 : self.cost_func_quad_state_and_control_full,
-            'cost_func_params'          : self.pend_cost_func_params,
-            'sim_method'                : 'solve_ivp_zoh',      # 'euler', "solve_ivp_zoh"
-            'c2d_method'                : 'zoh',      # 'euler', "zoh", 'zohCombined'
-            'max_iter'                  : 20,
-            'time_step'                 : 0.1,
-            'converge_crit'             : 1e-5,
-            'cost_ratio_bounds'         : [1e-6, 20],
-            'ro_reg_start'              : 0.25,
-            'ro_reg_change'             : 0.25,
-            'fp_max_iter'               : 5,
-            'log_ctrl_history'          : True
-            }
-        
-        self.len_seq          = 10
-        self.seed_x_vec       = np.ones([2,1]) 
-        self.seed_u_seq       = np.ones([self.len_seq-1,1,1])
-
-        self.x_len            = len(self.seed_x_vec)
-        self.u_len            = len(self.seed_u_seq[0])
-
-        self.x_seq            = np.ones([self.len_seq,2,1])
-        self.x_seq[:,1]      *= 2.0
-        self.u_seq            = np.ones([self.len_seq-1,1,1])
-
-        self.x_des_seq        = np.zeros([self.len_seq, 2,1])
-        self.u_des_seq        = np.zeros([self.len_seq-1, 1,1])
-
-        self.K_seq            = np.ones([self.len_seq, self.u_len, self.x_len])
-        self.d_seq            = np.ones([self.len_seq, self.u_len, 1         ])
-        self.Del_V_vec_seq    = np.ones([self.len_seq, 1,          2         ])
-
-        self.time_step        = self.ilqr_config_lin_pend_unit_cost['time_step']
-        self.time_seq         = np.arange(self.len_seq) * self.time_step
-
-    def gen_dyn_func_full(self, x, u, t=None):
-        y = jnp.array([
-                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
-                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
-                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
-                    ])
-        return y
-    
-    def gen_dyn_func_curried(self, x, u, t=None):
-        y = jnp.array([
-                    x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
-                    x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
-                    x[0]**2 + x[1]**4 + 3*jnp.sin(x[2]) + u[0]**4 + u[1]**2,
-                    ])
-        return y
-    
-
-    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
-        x_k_jax = jnp.array(state)
-        u_k_jax = jnp.array(control)
-        g = 1.0
-        l = 1.0
-        b = 1.0
-        state_dot = jnp.array([
-                    x_k_jax[1],
-                    -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]
-                    ])
-        return state_dot 
-     
-    def step_rk4(self,
-            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
-            h:float, 
-            x_k:npt.NDArray[np.float64], 
-            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
-        #rk4 integration with zero-order hold on u
-        f1 = dyn_func_ad(x_k            , u_k)
-        f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
-        f3 = dyn_func_ad(x_k + 0.5*h*f2 , u_k)
-        f4 = dyn_func_ad(x_k + h*f3     , u_k)
-        return x_k + (h/6.0) * (f1 + 2*f2 + 2*f3 + f4)    
-    
-    def pend_dyn_func_full(self, params, time, state, control):
-    # continuous time dynamic equation for simple pendulum 
-    # time[in]       - time component, necessary prarmeter for ode integration
-    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
-        state.reshape(-1)
-        g = params['g']
-        l = params['l']
-        b = params['b']
-        state_dot = jnp.array([
-                    state[1],
-                    -(b/l) * state[1] - (jnp.sin(state[0]) * g/l) + control[0]
-                    ])
-        return state_dot
-    
-    def pend_unit_dyn_func_curried(self, state, control):
-    # continuous time dynamic equation for simple pendulum 
-    # time[in]       - time component, necessary prarmeter for ode integration
-    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
-        params = self.pend_unit_state_trans_params
-        # TODO assert dimensions of incoming vectors
-        state.reshape(-1)
-        g = params['g']
-        l = params['l']
-        b = params['b']
-        pos = state[0]
-        vel = state[1]
-        tq  = control[0]
-        state_dot = jnp.array([
-                    vel,
-                    -(b/l) * vel - (jnp.sin(pos) * g/l) + tq
-                    ])
-        return state_dot  
-
-    def pend_lin_dyn_func_full(self, params, time, state, control):
-    # continuous time dynamic equation for simple pendulum 
-    # time[in]       - time component, necessary prarmeter for ode integration
-    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
-        g = params['g']
-        l = params['l']
-        b = params['b']
-        state_dot = jnp.array([
-                    state[1],
-                    -((b/l) * state[1]) - ((state[0]) * (g/l)) + control[0]
-                    ])
-        return state_dot
-    
-    def pend_unit_lin_dyn_func_curried(self, time, state, control):
-    # continuous time dynamic equation for simple pendulum 
-    # time[in]       - time component, necessary prarmeter for ode integration
-    # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-    # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-    # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-    # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
-        g = 1.0
-        l = 1.0
-        b = 1.0
-        state_dot = jnp.array([
-                    state[1],
-                    -((b/l) * state[1]) - ((state[0]) * (g/l)) + control[0]
-                    ])
-        return state_dot
-    
-    def cost_func_quad_state_and_control_full(self,cost_func_params:dict, state_vec, control_vec, k_step, state_des_seq, control_des_seq, is_final_bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q  = jnp.array(cost_func_params['Q'])
-        R  = jnp.array(cost_func_params['R'])
-        Qf = jnp.array(cost_func_params['Qf'])
-        # check that dimensions match [TODO]
-        x_k_corr     = util.calc_and_shape_array_diff(state_vec, state_des_seq[k_step])
-        x_k_corr_col = util.array_to_col(x_k_corr)
-        if is_final_bool:
-            cost_float = ((0.5) * (jnp.transpose(x_k_corr_col)  @ Qf @ x_k_corr_col)).item()
-        else:
-            u_k_corr     = util.calc_and_shape_array_diff(control_vec, control_des_seq[k_step])
-            u_k_corr_col = util.array_to_col(u_k_corr)
-            cost_float = ((0.5) * ( (jnp.transpose(x_k_corr_col) @ Q @ x_k_corr_col)
-                                  +(jnp.transpose(u_k_corr_col) @ R @ u_k_corr_col))).item()
-        return cost_float      
-
-    def unit_cost_func_quad_state_and_control_pend_curried(self, x_k, u_k, k_step, is_final_bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        cost_func         = self.cost_func_quad_state_and_control_full
-        cost_func_params  = self.ilqr_config_lin_pend_unit_cost['cost_func_params']
-        state_des_seq     = self.x_des_seq
-        control_des_seq   = self.u_des_seq
-        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, state_des_seq, control_des_seq, is_final_bool)
-        cost_float = cost_func_curried(x_k, u_k, k_step, is_final_bool)
-        return cost_float   
-    
 class stateSpace_tests(unittest.TestCase):
     def test_state_space_class_accepts_valid_continuous_system(self):
         A = jnp.array([[1,1,1],[0,1,1],[0,0,1]])
@@ -522,153 +294,114 @@ class discretize_state_space_tests(unittest.TestCase):
 class calculate_total_cost_tests(unittest.TestCase):
 
     def cost_func_quad_state_and_control(self, 
-                                         cost_func_params:dict, 
                                          x_k:npt.NDArray[np.float64], 
                                          u_k:npt.NDArray[np.float64], 
                                          k_step:int, 
-                                         x_des_seq:npt.NDArray[np.float64], 
-                                         u_des_seq:npt.NDArray[np.float64], 
-                                         is_final_bool:bool):
+                                         is_final_bool:bool) -> Tuple[float,float,float]:
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
     # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
     # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q  = jnp.array(cost_func_params['Q'])
-        R  = jnp.array(cost_func_params['R'])
-        Qf = jnp.array(cost_func_params['Qf'])
-        x_des_seq_jax = jnp.array(x_des_seq)
-        u_des_seq_jax = jnp.array(u_des_seq)
+        Q  = jnp.array([[1.,0],[0,1.]])
+        R  = jnp.array([[1.]])
+        Qf = jnp.array([[1.,0],[0,1.]])
+        x_des_seq   = np.ones([3,2,1]) * 0.1
+        u_des_seq   = np.ones([2,1,1]) * 0.1
         # check that dimensions match [TODO]
         if is_final_bool:
-            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq_jax[k_step], shape='col')
+            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq[k_step], shape='col')
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
         elif k_step == 0:
-            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
             x_cost     = jnp.array([0.0])    
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
             total_cost = u_cost
         else:
-            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq_jax[k_step], shape='col')   
-            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq[k_step], shape='col')   
+            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
             total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
-        return total_cost, x_cost, u_cost                    
-
-    def unit_cost_func_quad_state_and_control_pend_curried(self, x_k, u_k, k_step, is_final_bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        cost_func         = self.cost_func_quad_state_and_control
-        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
-                             'R'  : np.array([[1.]]),
-                             'Qf' : np.array([[1.,0],[0,1.]])} 
-        x_des_seq     = np.zeros([3,2,1])
-        u_des_seq   = np.zeros([2,1,1])
-        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, x_des_seq, u_des_seq, is_final_bool)
-        cost_float = cost_func_curried(x_k, u_k, k_step, is_final_bool)
-        return cost_float   
+        return total_cost.item(), x_cost.item(), u_cost.item()                      
 
     def test_accepts_valid_inputs(self):
-        cost_func = self.unit_cost_func_quad_state_and_control_pend_curried
+        cost_func_for_calc = self.cost_func_quad_state_and_control
         x_seq = np.ones([3,2,1])
         u_seq = np.ones([2,1,1])
-        cost_func_calc = gen_ctrl.prep_cost_func_for_calc(cost_func)
-        total_cost, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(cost_func_calc, x_seq, u_seq)
-        total_cost_expect = (0.5*(0+1)) + (0.5*(2+1)) + (0.5*(2+0))
-        cost_seq_expect   = np.array([0.5, 1.5, 1.0]) 
-        x_cost_seq_expect = np.array([0.0, 1.0, 1.0])
-        u_cost_seq_expect = np.array([0.5, 0.5, 0.0])
-        self.assertEqual(total_cost, total_cost_expect) 
-        self.assertEqual(cost_seq.tolist(), cost_seq_expect.tolist())
-        self.assertEqual(x_cost_seq.tolist(), x_cost_seq_expect.tolist())
-        self.assertEqual(u_cost_seq.tolist(), u_cost_seq_expect.tolist())                       
+        total_cost, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(cost_func_for_calc, x_seq, u_seq)
+        total_cost_expect = (0.5*(0.9*0.9)) + (0.5*(2*(0.9*0.9)+(0.9*0.9))) + (0.5*(2*(0.9*0.9)))
+        cost_seq_expect   = np.array([0.5*(0.9*0.9), (0.5*(2*(0.9*0.9)+(0.9*0.9))), (0.5*(2*(0.9*0.9)))]) 
+        x_cost_seq_expect = np.array([0.0, (0.9*0.9), 0.9*0.9])
+        u_cost_seq_expect = np.array([0.5*(0.9*0.9), 0.5*(0.9*0.9), 0.0])
+        self.assertAlmostEqual(total_cost, total_cost_expect,places=6) 
+        numpy.testing.assert_allclose(cost_seq, cost_seq_expect,rtol=1e-6, atol=1e-6)        
+        numpy.testing.assert_allclose(x_cost_seq, x_cost_seq_expect,rtol=1e-6, atol=1e-6) 
+        numpy.testing.assert_allclose(u_cost_seq, u_cost_seq_expect,rtol=1e-6, atol=1e-6) 
+                 
      
 
 class taylor_expand_cost_tests(unittest.TestCase):  
     
     def cost_func_quad_state_and_control(self, 
-                                         cost_func_params:dict, 
                                          x_k:npt.NDArray[np.float64], 
                                          u_k:npt.NDArray[np.float64], 
                                          k_step:int, 
-                                         x_des_seq:npt.NDArray[np.float64], 
-                                         u_des_seq:npt.NDArray[np.float64], 
-                                         is_final_bool:bool):
+                                         is_final_bool:bool) -> npt.NDArray:
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
     # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
     # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q  = jnp.array(cost_func_params['Q'])
-        R  = jnp.array(cost_func_params['R'])
-        Qf = jnp.array(cost_func_params['Qf'])
-        x_des_seq_jax = jnp.array(x_des_seq)
-        u_des_seq_jax = jnp.array(u_des_seq)
+        Q  = jnp.array([[1.,0],[0,1.]])
+        R  = jnp.array([[1.]])
+        Qf = jnp.array([[1.,0],[0,1.]])
+        x_des_seq   = np.ones([3,2,1]) * 0.1
+        u_des_seq   = np.ones([2,1,1]) * 0.1
         # check that dimensions match [TODO]
         if is_final_bool:
-            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq_jax[k_step], shape='col')
+            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq[k_step], shape='col') # type: ignore (NDArray and Jax NDArray)
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
         elif k_step == 0:
-            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
             x_cost     = jnp.array([0.0])    
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
             total_cost = u_cost
         else:
-            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq_jax[k_step], shape='col')   
-            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq_jax[k_step], shape='col')
+            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq[k_step], shape='col')   
+            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
             total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
-        return total_cost, x_cost, u_cost                  
-
-    def unit_cost_func_quad_state_and_control_pend_curried(self, 
-                                                           x_k:npt.NDArray[np.float64], 
-                                                           u_k:npt.NDArray[np.float64], 
-                                                           k_step:int, 
-                                                           is_final_bool:bool=False):
-    # This function calculates a quadratic cost wrt state and control
-    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    # S[in]     - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        cost_func         = self.cost_func_quad_state_and_control
-        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
-                             'R'  : np.array([[1.]]),
-                             'Qf' : np.array([[1.,0],[0,1.]])} 
-        x_des_seq   = np.zeros([3,2,1])
-        u_des_seq   = np.zeros([2,1,1])
-        cost_func_curried = lambda x, u, k, is_final_bool=False: cost_func(cost_func_params, x, u, k, x_des_seq, u_des_seq, is_final_bool)
-        cost_tuple = cost_func_curried(x_k, u_k, k_step, is_final_bool)
-        return cost_tuple   
-    
+        return total_cost     # type:ignore (Jax NDArray)            
+ 
     def test_taylor_expand_cost_accepts_list_of_arrays(self):
-        cost_func = self.unit_cost_func_quad_state_and_control_pend_curried
+        cost_func_for_diff = self.cost_func_quad_state_and_control
         x_seq      = np.ones([3,2,1])
         u_seq      = np.ones([2,1,1])
         k_step     = 1
-        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func,x_seq[k_step],u_seq[k_step],k_step)
+
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func_for_diff,x_seq[k_step],u_seq[k_step],k_step) #type:ignore (Jax NDArray)
         cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
                              'R'  : np.array([[1.]]),
                              'Qf' : np.array([[1.,0],[0,1.]])} 
-        x_des_seq  = np.zeros([3,2,1])
-        u_des_seq  = np.zeros([2,1,1])
+        x_des_seq  = np.ones([3,2,1]) * 0.1
+        u_des_seq  = np.ones([2,1,1]) * 0.1
         l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-x_des_seq[k_step])
         l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-u_des_seq[k_step])
         l_xx_expected = cost_func_params['Q']
         l_uu_expected = cost_func_params['R']  
-        self.assertEqual(l_x.tolist(),  l_x_expected.tolist())
-        self.assertEqual(l_u.tolist(),  l_u_expected.tolist())
-        self.assertEqual(l_xx.tolist(), l_xx_expected.tolist())
-        self.assertEqual(l_uu.tolist(), l_uu_expected.tolist())
-        self.assertEqual(l_ux.tolist(), np.zeros([len(u_seq[0]),len(x_seq[0])]).tolist())            
+        l_ux_expected = np.zeros([len(u_seq[0]),len(x_seq[0])])
+
+        numpy.testing.assert_allclose(l_x, l_x_expected,rtol=1e-6, atol=1e-6)
+        numpy.testing.assert_allclose(l_u, l_u_expected,rtol=1e-6, atol=1e-6)
+        numpy.testing.assert_allclose(l_xx, l_xx_expected,rtol=1e-6, atol=1e-6)
+        numpy.testing.assert_allclose(l_uu, l_uu_expected,rtol=1e-6, atol=1e-6)
+        numpy.testing.assert_allclose(l_ux, l_ux_expected,rtol=1e-6, atol=1e-6)            
 
 
 class prep_xu_vecs_for_diff_tests(unittest.TestCase):
@@ -706,9 +439,9 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
 
 
 class prep_cost_func_for_diff_tests(unittest.TestCase):
-    def cost_func(self, vec_1_and_2): 
-        cost_val_1 = np.sum(vec_1_and_2)
-        cost_val_2 = np.sum(vec_1_and_2) + 2
+    def cost_func(self, vec_1:npt.NDArray[np.float64], vec_2:npt.NDArray[np.float64], input_int:int, input_bool:bool): 
+        cost_val_1 = jnp.sum(vec_1)
+        cost_val_2 = jnp.sum(vec_2)
         combined_cost = cost_val_1 + cost_val_2
         return combined_cost, cost_val_1, cost_val_2        
     
@@ -716,19 +449,15 @@ class prep_cost_func_for_diff_tests(unittest.TestCase):
         #create test conditions
         x_k = np.array([[1],[2]])
         u_k = np.array([[3],[4]])
-        xu_k = np.stack([x_k, u_k], axis=0)
+        input_int = 1
+        input_bool = False
         #test function
-        cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.cost_func)
-        combined_cost = cost_func_for_diff(xu_k)
-        _, cost_val_1, cost_val_2 = self.cost_func(xu_k)
+        cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.cost_func) # type: ignore (NDArray to Jax NDArray)
+        combined_cost = cost_func_for_diff(x_k, u_k, input_int,input_bool)
         # create expected output
-        combined_cost_expected = 22
-        cost_val_1_expected = 10
-        cost_val_2_expected  = 12
+        combined_cost_expected = jnp.array([10])
         #compare outputs
         self.assertEqual(combined_cost, combined_cost_expected)
-        self.assertEqual(cost_val_1, cost_val_1_expected)
-        self.assertEqual(cost_val_2, cost_val_2_expected)
 
 if __name__ == '__main__':
     unittest.main()

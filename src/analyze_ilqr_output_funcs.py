@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
+import src.ilqr_funcs as ilqr
+
 def plot_2d_state_scatter_sequences(x_seq, xlabel="state 1", ylabel="state 2", title="state plot"):
     """
     Plot XY data using Matplotlib from JAX arrays.
@@ -107,11 +109,11 @@ def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="sta
     axes.grid(True)
 
 
-def plot_ilqr_iter_sim_ctrl_cost(controller_output, x_sim_seq, u_sim_seq):
+def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_output:ilqr.ilqrControllerState, x_sim_seq, u_sim_seq):
     x_plot_seqs = controller_output.x_seq_history
     x_plot_seqs.insert(0,controller_output.seed_x_seq)
     x_plot_seqs.append(x_sim_seq)
-    x_plot_seqs.append(controller_output.x_des_seq)
+    x_plot_seqs.append(ilqr_config.cost_func_params.x_des_seq)
     x_plot_seq_names = []
     x_plot_seq_styles_dot = []
     x_plot_seq_styles_quiver = []

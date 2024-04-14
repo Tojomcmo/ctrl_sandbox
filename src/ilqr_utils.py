@@ -13,7 +13,6 @@ def reqularize_mat(mat:npt.NDArray, ro:float):
 
 def calc_and_shape_array_diff(current_array:npt.NDArray[np.float64],desired_array:npt.NDArray[np.float64],shape=None) -> npt.NDArray[np.float64]:  
     if shape == 'row':
-        
         current_minus_des_array = array_to_row(current_array) - array_to_row(desired_array)
     elif shape == 'col':
         current_minus_des_array = array_to_col(current_array) - array_to_col(desired_array)

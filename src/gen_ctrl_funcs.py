@@ -237,7 +237,7 @@ def calculate_total_cost(
     return total_cost, cost_seq, x_cost_seq, u_cost_seq
 
 def taylor_expand_cost(
-        cost_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],Tuple[float,float,float]], 
+        cost_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],npt.NDArray], 
         x_k:npt.NDArray[np.float64], 
         u_k:npt.NDArray[np.float64], 
         k_step:int, 
@@ -250,16 +250,15 @@ def taylor_expand_cost(
     # create concatenated state and control vector of primal points
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu:Callable[[npt.NDArray[np.float64]],Tuple[float,float,float]] = lambda xu_k: cost_func(
-                                                                                                    xu_k[:x_k_len], 
-                                                                                                    xu_k[x_k_len:], 
-                                                                                                    k_step, 
-                                                                                                    is_final_bool)
-    cost_func_for_diff = prep_cost_func_for_diff(cost_func_xu)
+    cost_func_xu:Callable[[npt.NDArray[np.float64]],npt.NDArray] = lambda xu_k: cost_func(
+                                                                                        xu_k[:x_k_len], 
+                                                                                        xu_k[x_k_len:], 
+                                                                                        k_step, 
+                                                                                        is_final_bool)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = (jax.jacfwd(cost_func_for_diff)(xu_k_jax[:,0])).reshape(xu_k_len,1)
+    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax[:,0])).reshape(xu_k_len,1)
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_for_diff))(xu_k_jax[:,0])).reshape(xu_k_len,xu_k_len)
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax[:,0])).reshape(xu_k_len,xu_k_len)
     l_x  = np.array((jac_cat[:x_k_len]),               dtype=float)
     l_u  = np.array((jac_cat[x_k_len:]),               dtype=float)
     l_xx = np.array((hessian_cat[:x_k_len,:x_k_len]) , dtype=float)
@@ -286,12 +285,17 @@ def calculate_s_xx_dot(Q_t:npt.NDArray[np.float64],
     s_xx_dt = -(Q_t - (s_xx_t @ BRinvBT_t @ s_xx_t) + (s_xx_t @ A_t) + (A_t.T @ s_xx_t))
     return s_xx_dt
 
-def prep_cost_func_for_diff(cost_func:Callable[[npt.NDArray[np.float64]],
-    Tuple[npt.NDArray,npt.NDArray,npt.NDArray]]) -> Callable[[npt.NDArray],npt.NDArray]:
-    # Function for reducing generic cost function output to single queried value
-    # useful for preparing functions for jax differentiation
-    def cost_func_for_diff(vec:npt.NDArray[np.float64]) -> npt.NDArray:
-        cost_out = cost_func(vec)
+def prep_cost_func_for_diff(cost_func:Callable[
+    [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
+    Tuple[npt.NDArray,npt.NDArray,npt.NDArray]]) -> Callable[
+    [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
+    npt.NDArray]:
+    '''
+    Function for reducing generic cost function output to single queried value.\n
+    useful for preparing functions for jax differentiation
+    '''
+    def cost_func_for_diff(x_k:npt.NDArray[np.float64], u_k:npt.NDArray[np.float64], k_step:int, is_final_bool:bool) -> npt.NDArray:
+        cost_out = cost_func(x_k, u_k, k_step, is_final_bool)
         return cost_out[0]
     return cost_func_for_diff
 
