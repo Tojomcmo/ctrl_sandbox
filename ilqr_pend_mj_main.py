@@ -28,13 +28,13 @@ if __name__ == "__main__":
 
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 20
-   num_states = 4
-   num_controls = 2
+   len_seq    = 40
+   num_states = 2
+   num_controls = 1
    mj_ctrl = True
    Q_cost  = np.array([[10.,0],[0.,1.]]) * 1.0
-   R_cost  = np.array([[0.5]])
-   Qf_cost = np.array([[10.,0],[0.,1.]]) * 100.0
+   R_cost  = np.array([[1.0]])
+   Qf_cost = np.array([[10.,0],[0.,1.]]) * 10.0
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
@@ -49,7 +49,7 @@ if __name__ == "__main__":
    x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
    #---------- create simulation system ----------#
-   x_sim_init_vec = np.array([[-1.0],[-2.0]])
+   x_sim_init_vec = np.array([[-1.0],[-1.0]])
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec
@@ -92,8 +92,8 @@ if __name__ == "__main__":
 
    #------- Simulate controller output --------#
    if ilqr_config.mj_ctrl is True:
-      mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config.mjcf_model)
-      sim_dyn_disc_func = lambda x, u: (mj_funcs.fwd_sim_mj_w_ctrl(mjsim_model, mjsim_data, x, u))[-1]
+      mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config.mjcf_model, ilqr_config.time_step)
+      sim_dyn_disc_func = lambda x, u: (mj_funcs.fwd_sim_mj_w_ctrl_step(mjsim_model, mjsim_data, x, u))
    else:
       sim_dyn_cont_func = lambda x,u: dyn.pend_dyn_nl(sim_dyn_func_params,x,u)
       sim_dyn_disc_func = lambda x,u: gen_ctrl.step_rk4(sim_dyn_cont_func, ilqr_config.time_step, x, u)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
    if ilqr_config.mj_ctrl is True:
       framerate = 30
       fig1, ax1 = plt.subplots()
-      mjvid_model, mjvid_renderer , mjvid_data = mj_funcs.create_mujoco_model(ilqr_config.mjcf_model)
+      mjvid_model, mjvid_renderer , mjvid_data = mj_funcs.create_mujoco_model(ilqr_config.mjcf_model, ilqr_config.time_step)
       mjvid_renderer.update_scene(mjvid_data, "fixed")
       scene_option = mujoco.MjvOption()
       scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = False

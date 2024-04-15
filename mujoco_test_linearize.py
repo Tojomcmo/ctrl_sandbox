@@ -5,6 +5,7 @@ import matplotlib.animation as animate
 
 import src.mujoco_funcs as mj_funcs
 import src.mjcf_models as mj_models
+import src.visualize_mj_funcs as mj_vis
 
 if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
@@ -36,7 +37,8 @@ if __name__ == "__main__":
     #initial linearization and predictiuon
     state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1) 
     control_vec = np.array(data.ctrl).reshape(-1,1)
-    mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+    A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)    
+    # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
     state_next_pred = state_next_pred = (A @ state_vec) + (B @ control_vec)
 
 
@@ -52,12 +54,13 @@ if __name__ == "__main__":
     for idx in range(steps):      
         mujoco.mj_step(model, data)
         state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1)      
-        mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+        # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+        A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)
         control_vec = np.array(data.ctrl).reshape(-1,1)
         state_next_pred = (A @ state_vec) + (B @ control_vec)
         # update frame
         if show_plot is True:  
-            mj_funcs.update_plt_frame(renderer, data, frames, img_set)
+            mj_vis.update_plt_frame(renderer, data, frames, img_set)
         idx += 1    
 
 
@@ -71,27 +74,13 @@ if __name__ == "__main__":
         print('state_predict: ', state_next_pred)         
         mujoco.mj_step(model, data)
         state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)      
-        print('state_actual: ', state_vec)  
-        mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+        print('state_actual: ', state_vec)
+        A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)  
+        # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
         print('A: ', A)
         print('B: ', B)    
         state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
         control_vec = np.array(data.ctrl).reshape(-1,1)
         state_next_pred = A @ state_vec + B @   control_vec
 
-
-###################################
-
-
-    # ts_sim = 0.01
-    # ts_ctrl = 0.1
-    # u_seq     = np.arange(1,10)*1
-    # x_init = np.array([[0.0],[0.0],[0.0],[0.0]])
-
-    # x_seq        = mj_funcs.fwd_sim_mj_w_ctrl(model, data,x_init, u_seq, ts_sim, ts_ctrl)
-    # A_seq, B_seq = mj_funcs.linearize_mj_seq(model, data, x_seq, u_seq, ts_ctrl)
-
-    # print(x_seq)
-    # print(A_seq)
-    # print(B_seq)
 

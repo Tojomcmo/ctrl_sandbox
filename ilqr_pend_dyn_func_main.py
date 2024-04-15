@@ -27,12 +27,12 @@ if __name__ == "__main__":
 
    #----- define timestep and sequence length -----#
    time_step  = 0.1
-   len_seq    = 20
-   num_states = 4
-   num_controls = 2
+   len_seq    = 40
+   num_states = 2
+   num_controls = 1
    mj_ctrl = False
    Q_cost  = np.array([[10.,0],[0.,1.]]) * 1.0
-   R_cost  = np.array([[0.5]])
+   R_cost  = np.array([[1.0]])
    Qf_cost = np.array([[10.,0],[0.,1.]]) * 100.0
    dyn_func_params_ctrl = dyn.nlPendParams(g=9.81, b=1.0, l=1.0)
 

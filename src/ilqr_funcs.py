@@ -83,8 +83,7 @@ class ilqrConfigStruct:
         # check whether struct already configured for dynamics
         if self.is_dyn_configured is True:
             ValueError("struct already configured for dynamics")
-        self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(mjcf_model)
-        self.mj_model.opt.timestep     = self.time_step
+        self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(mjcf_model, self.time_step)
         self.mjcf_model                = mjcf_model
 
         mujoco.mj_forward(self.mj_model,self.mj_data)        

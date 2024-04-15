@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def create_mujoco_model(mjcf_model:str):
+def create_mujoco_model(mjcf_model:str,time_step):
     model = mujoco.MjModel.from_xml_string(mjcf_model)
+    model.opt.timestep = time_step
     renderer = mujoco.Renderer(model, 480, 480)
     data = mujoco.MjData(model)
     return model,renderer,data
@@ -12,7 +13,6 @@ def create_mujoco_model(mjcf_model:str):
 def fwd_sim_mj_w_ctrl_step(model, data, x, u):
     set_mj_state_vec(data, x) 
     data.ctrl  = (u[0]).reshape(-1)      
-    mujoco.mj_resetData(model, data)  
     mujoco.mj_forward(model,data)
     mujoco.mj_step(model, data)   
     return get_state_vec(data)
@@ -30,14 +30,11 @@ def fwd_sim_mj_w_ctrl(model, data, x_init, u_seq):
     mujoco.mj_forward(model,data)
     x_seq[0]   = get_state_vec(data)
     assert (x_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"
-    data.ctrl  = (u_seq[0]).reshape(-1)
     for idx in range(len(u_seq)):
+        data.ctrl = (u_seq[idx]).reshape(-1)
         mujoco.mj_forward(model,data)        
         mujoco.mj_step(model, data)  
-        x_seq[idx+1] = get_state_vec(data)  
-        if idx == len(u_seq):
-            break    
-        data.ctrl = (u_seq[idx]).reshape(-1)
+        x_seq[idx+1] = get_state_vec(data)    
         idx += 1      
     return x_seq
 
@@ -49,7 +46,6 @@ def linearize_mj_seq(model, data,x_seq, u_seq):
     '''
     nu      = model.nu
     nx      = model.nv
-    prev_timestep = model.opt.timestep
     mujoco.mj_resetData(model, data)
 #    model.opt.timestep = ts_ctrl
     mujoco.mj_forward(model, data)
@@ -63,10 +59,10 @@ def linearize_mj_seq(model, data,x_seq, u_seq):
         mujoco.mj_resetData(model, data)  
         data.ctrl = (u_seq[idx]).reshape(-1)
         set_mj_state_vec(data, x_seq[idx])
+        mujoco.mj_forward(model, data)
         A_idx, B_idx = linearize_mujoco_state_and_control(model, data)
         A_seq[idx] = A_idx
         B_seq[idx] = B_idx
-    model.opt.timestep = prev_timestep    
     return A_seq, B_seq
 
 
