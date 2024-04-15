@@ -137,7 +137,7 @@ if __name__ == "__main__":
    mjvid_renderer.update_scene(mjvid_data, "fixed")
    scene_option = mujoco.MjvOption()
    scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = False
-   img_set, frames = mj_funcs.create_mj_video_w_ctrl(mjvid_model, mjvid_data, mjvid_renderer, scene_option, framerate, x_sim_init_vec, controller_output, ilqr_config)
+   img_set, frames = mj_funcs.create_mj_video_ilqr_w_ctrl(mjvid_model, mjvid_data, mjvid_renderer, scene_option, framerate, x_sim_init_vec, controller_output, ilqr_config)
 
    #------- plot simulation and controller outputs ------#
    ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/framerate * 1000))

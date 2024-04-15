@@ -109,7 +109,7 @@ def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="sta
     axes.grid(True)
 
 
-def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_output:ilqr.ilqrControllerState, x_sim_seq, u_sim_seq):
+def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_output:ilqr.ilqrControllerState, x_sim_seq, u_sim_seq, figsize=(18,10)):
     x_plot_seqs = controller_output.x_seq_history
     x_plot_seqs.insert(0,controller_output.seed_x_seq)
     x_plot_seqs.append(x_sim_seq)
@@ -150,7 +150,7 @@ def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_o
        c = next(color)           
        x_plot_seq_styles_dot.append(c) 
     gs = gridspec.GridSpec(2, 2)
-    fig = plt.figure(figsize=(14,6))
+    fig = plt.figure(figsize=figsize)
     ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
     ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
     ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns

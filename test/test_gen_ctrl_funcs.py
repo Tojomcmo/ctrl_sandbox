@@ -122,7 +122,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
         x_seq_expected[0] = x_init
         for idx in range(len_seq):
             x_delta    = self.pend_unit_dyn_func(x_seq[idx], u_seq[idx])
-            x_next       = x_seq[idx] + x_delta
+            x_next       = x_delta
             x_seq_expected[idx+1] = x_next
         self.assertEqual(len(x_seq), len_seq +1)
         self.assertEqual(x_seq[-1].tolist(), x_seq_expected[-1].tolist())

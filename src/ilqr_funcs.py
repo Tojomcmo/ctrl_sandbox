@@ -25,9 +25,9 @@ class ilqrConfigStruct:
         self.len_seq:int                = len_seq
         self.time_step:float            = time_step
         self.max_iter:int               = 20
-        self.converge_crit:float        = 1e-6
-        self.ff_gain_tol:float          = 1e-5
-        self.cost_ratio_bounds:Tuple[float,float] = (1e-6, 10)
+        self.converge_crit:float        = 1e-5
+        self.ff_gain_tol:float          = 1e-4
+        self.cost_ratio_bounds:Tuple[float,float] = (1e-8, 10)
         self.ro_reg_start:float         = 0.0
         self.ro_reg_change:float        = 0.5
         self.fp_max_iter:int            = 5
@@ -85,6 +85,7 @@ class ilqrConfigStruct:
             ValueError("struct already configured for dynamics")
         self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(mjcf_model)
         self.mj_model.opt.timestep     = self.time_step
+        self.mjcf_model                = mjcf_model
 
         mujoco.mj_forward(self.mj_model,self.mj_data)        
         self.mj_ctrl:bool              = True   
