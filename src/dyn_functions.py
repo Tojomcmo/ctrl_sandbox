@@ -90,10 +90,10 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     b1 = params.b1
     b2 = params.b2
     g  = params.g
-    th1 = state[0]
-    th2 = state[1]
-    thdot1 = state[2]
-    thdot2 = state[3]
+    th1 = (state[0]).item()
+    th2 = (state[1]).item()
+    thdot1 = (state[2]).item()
+    thdot2 = (state[3]).item()
     c1m2 = jnp.cos(th1-th2)
     s1m2 = jnp.sin(th1-th2)
     m1pm2 = m1 + m2
@@ -109,5 +109,6 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     B_mat = jnp.array([[1, -1],
                        [0,  1]])
 
-    state_dot = det_denom * M_inv_mat @ (gen_dyn_mat + B_mat @ control)
+    theta_ddots = det_denom * M_inv_mat @ (gen_dyn_mat + B_mat @ control)
+    state_dot = jnp.array([[thdot1],[thdot2],[(theta_ddots[0]).item()],[(theta_ddots[1]).item()]])
     return state_dot
