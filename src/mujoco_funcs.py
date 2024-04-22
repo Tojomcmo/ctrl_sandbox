@@ -13,7 +13,7 @@ def create_mujoco_model(mjcf_model:str,time_step):
 def fwd_sim_mj_w_ctrl_step(model, data, x, u):
     set_mj_state_vec(data, x) 
     data.ctrl  = (u[0]).reshape(-1)      
-    mujoco.mj_forward(model,data)
+    # mujoco.mj_forward(model,data)
     mujoco.mj_step(model, data)   
     return get_state_vec(data)
 
@@ -31,8 +31,7 @@ def fwd_sim_mj_w_ctrl(model, data, x_init, u_seq):
     x_seq[0]   = get_state_vec(data)
     assert (x_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"
     for idx in range(len(u_seq)):
-        data.ctrl = (u_seq[idx]).reshape(-1)
-        mujoco.mj_forward(model,data)        
+        data.ctrl = (u_seq[idx]).reshape(-1)       
         mujoco.mj_step(model, data)  
         x_seq[idx+1] = get_state_vec(data)    
         idx += 1      
@@ -47,7 +46,6 @@ def linearize_mj_seq(model, data,x_seq, u_seq):
     nu      = model.nu
     nx      = model.nv
     mujoco.mj_resetData(model, data)
-#    model.opt.timestep = ts_ctrl
     mujoco.mj_forward(model, data)
     x_len   = len(x_seq[0])
     x_vec_split = int((x_len/2))
@@ -76,12 +74,15 @@ def linearize_mujoco_state_and_control(model, data, eps=1e-6, flg_centered=True)
     return A, B
 
 def get_state_vec(data):
-    return np.hstack((data.qpos, data.qvel)).reshape(-1,1)  
+    return np.hstack((data.qpos, data.qvel)).reshape(-1,1) 
 
 def set_mj_state_vec(data, x_vec):
     x_vec_split = int(len(x_vec)/2)
     data.qpos = (x_vec[:x_vec_split])[:,0]
     data.qvel = (x_vec[x_vec_split:])[:,0]
+
+def set_mj_ctrl_vec(data, u_vec) -> None:
+    data.ctrl = (u_vec).reshape(-1)
 
 
 def fwd_sim_mj_w_ctrl_different_time_steps(model, data, x_init, u_seq, ts_sim, ts_ctrl):

@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
    #---------- create simulation system ----------#
    sim_dyn_func_params = dyn.nlPendParams(g=9.81,b=1.0,l=1.0)
-   x_sim_init_vec = np.array([[-1.0],[-2.0]])
+   x_sim_init_vec = np.array([[-1.0],[-1.0]])
 
    #---------- set system init ----------#
    x_init_vec = x_tg_init_vec

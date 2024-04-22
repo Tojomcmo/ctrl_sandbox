@@ -30,7 +30,7 @@ class ilqrConfigStruct:
         self.cost_ratio_bounds:Tuple[float,float] = (1e-8, 10)
         self.ro_reg_start:float         = 0.0
         self.ro_reg_change:float        = 0.5
-        self.fp_max_iter:int            = 5
+        self.fp_max_iter:int            = 10
         self.ls_scale_alpha_param:float = 0.5
         self.log_ctrl_history:bool      = True
         self.is_dyn_configured:bool     = False
@@ -331,9 +331,8 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
     line_search_factor = 1.0
     line_search_scale_param = ilqr_config.ls_scale_alpha_param
     iter_count = 0
-    max_iter   = ilqr_config.fp_max_iter
     ro_reg_change_bool = False
-    while not in_bounds_bool and (iter_count < max_iter):
+    while not in_bounds_bool and (iter_count < ilqr_config.fp_max_iter):
         for k in range(ctrl_state.len_seq-1):
             # calculate updated control value
             u_seq_new[k] = calculate_u_k_new(ctrl_state.u_seq[k], 
@@ -349,9 +348,6 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
         # calculate new trajectory cost    
         cost_float_new, cost_seq_new, x_cost_seq_new, u_cost_seq_new = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, x_seq_new, u_seq_new)
         # calculate the ratio between the expected cost decrease and actual cost decrease
-        actual_cost_decrease = cost_float_new - ctrl_state.cost_float
-        norm_cost_decrease = jnp.abs(actual_cost_decrease)/ctrl_state.cost_float
-        expected_cost_decrease = calculate_expected_cost_decrease(ctrl_state.Del_V_vec_seq, line_search_factor)
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_new, ctrl_state.Del_V_vec_seq, line_search_factor) 
         in_bounds_bool = ilqr_config.analyze_cost_dec(cost_decrease_ratio)
 
@@ -360,7 +356,7 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
         #     break
         if in_bounds_bool:
             break    
-        elif (iter_count == max_iter-1):
+        elif (iter_count == ilqr_config.fp_max_iter-1):
             iter_count     += 1  
             x_seq_new   = ctrl_state.x_seq
             u_seq_new = ctrl_state.u_seq
@@ -486,9 +482,7 @@ def calculate_u_k_new(u_nom_k:npt.NDArray[np.float64],
     assert (x_new_k.shape) == (len(x_new_k), 1), 'x_new_k must be column vector (n,1)'    
     assert (u_nom_k.shape) == (len(u_nom_k), 1), 'u_nom_k must be column vector (m,1)'    
     # form column vectors
-    u_k_updated = np.zeros(u_nom_k.shape)
-    u_k_updated = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
-    return u_k_updated
+    return u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
 
 def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, Del_V_vec_seq:npt.NDArray[np.float64], line_search_factor:float) -> float:
     """

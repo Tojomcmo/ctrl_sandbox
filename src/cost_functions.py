@@ -40,8 +40,8 @@ def cost_func_quad_state_and_control(cost_func_params:costFuncQuadStateAndContro
     Q  = jnp.array(cost_func_params.Q)
     R  = jnp.array(cost_func_params.R)
     Qf = jnp.array(cost_func_params.Qf)
-    x_des_seq_jax = np.array(cost_func_params.x_des_seq)
-    u_des_seq_jax = np.array(cost_func_params.u_des_seq)
+    # x_des_seq_jax = np.array(cost_func_params.x_des_seq)
+    # u_des_seq_jax = np.array(cost_func_params.u_des_seq)
     # check that dimensions match [TODO]
     if is_final_bool:
         x_k_corr = util.calc_and_shape_array_diff(x_k  , cost_func_params.x_des_seq[k_step], shape='col')
