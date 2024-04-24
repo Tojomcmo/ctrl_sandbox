@@ -138,7 +138,7 @@ class linearize_dynamics_tests(unittest.TestCase):
         state_dot = jnp.array([x_k_jax[1],
                              -(b/l) * x_k_jax[1] - (jnp.sin(x_k_jax[0]) * g/l) + u_k_jax[0]], dtype=float)
         return state_dot  
-    
+       
     def step_rk4(self,
             dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
             h:float, 

@@ -10,17 +10,23 @@ from src import gen_ctrl_funcs as gen_ctrl
 
 if __name__== "__main__":
     save_ani_bool = True
-
+    lock_arm_num = 0
     dt = 0.01
-    len_seq = 500
-    pend_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.5, b2=0.2)
+    len_seq = 1500
+    pend_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0, b2=0)
     dyn_func = lambda x, u: dyn.double_pend_no_damp_full_act_dyn(pend_params, x, u)
-    x_init = np.array([[1.0],[1.0],[5.0],[-15.0]])
+    x_init = np.array([[3.14],[3.14],[0.0],[0.0]])
     u_vec = np.array([[0.0],[0.0]]) 
 
     x_seq = np.zeros((len_seq, 4, 1))
     x_seq[0]= x_init
     for k in range(len_seq-1):
+        if lock_arm_num == 1:
+            x_seq[k,0] = 0.0
+            x_seq[k,2] = 0.0
+        elif lock_arm_num == 2:    
+            x_seq[k,1] = x_seq[k,0]
+            x_seq[k,3] = x_seq[k,2]
         x_seq[k+1] = gen_ctrl.step_rk4(dyn_func, dt, x_seq[k], u_vec)
 
     fig = plt.figure(figsize=[10,8])

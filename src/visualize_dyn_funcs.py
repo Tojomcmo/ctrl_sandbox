@@ -23,7 +23,7 @@ class double_pend_animation():
 
     def configure_figure(self):
         L = self.params.l1 + self.params.l2
-        ax = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, 1.))
+        ax = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))
         ax.set_aspect('equal')
         ax.grid()
         self.line, = ax.plot([], [], 'o-', lw=2)
@@ -47,7 +47,7 @@ class double_pend_animation():
         history_y = self.cartesian_vecs[3][:i]
         line.set_data(thisx, thisy)
         trace.set_data(history_x, history_y)
-        time_text.set_text(self.time_template % (i*self.dt))
+        time_text.set_text(self.time_template % (i / self.fps))
         return line, trace, time_text
     
     def set_fps_for_animation(self):

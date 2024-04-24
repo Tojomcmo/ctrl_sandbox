@@ -83,6 +83,9 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     
     Thetas are both reference to intertial frame down position
     '''
+    state_jax = jnp.array(state).squeeze()
+    control_jax = jnp.array(control).squeeze()
+    u_vec = control_jax.reshape(-1,1)
     m1 = params.m1
     m2 = params.m2
     l1 = params.l1
@@ -90,18 +93,17 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     b1 = params.b1
     b2 = params.b2
     g  = params.g
-    th1 = (state[0]).item()
-    th2 = (state[1]).item()
-    thdot1 = (state[2]).item()
-    thdot2 = (state[3]).item()
+    th1 = state_jax[0]
+    th2 = state_jax[1]
+    thdot1 = state_jax[2]
+    thdot2 = state_jax[3]  
     c1m2 = jnp.cos(th1-th2)
     s1m2 = jnp.sin(th1-th2)
     m1pm2 = m1 + m2
+    det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (m1 * m2 * l1**2 * l2**2 * c1m2))
 
-    det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (m1 * m2 * l1**2 * l2**2 * c1m2**2))
-
-    M_inv_mat = jnp.array([[ m2 * l2**2         , -m2 * l1 * l2 * c1m2],
-                           [-m1 * l1 * l2 * c1m2,  m1pm2 * l1**2      ]])
+    M_inv_mat = jnp.array([[ m2 * l2**2                     , -m2 * l1 * l2 * c1m2],
+                           [-m1 * l1 * l2 * c1m2,  m1pm2 * l1**2                  ]])
 
     gen_dyn_mat = jnp.array([[-m2*l1*l2*thdot2**2*s1m2 - m1pm2*l1*g*jnp.sin(th1) - (b1+b2)*thdot1 + b2*thdot2],
                              [ m2*l1*l2*thdot2**2*s1m2 - m2*l2*g*jnp.sin(th2)    +      b2*thdot1 - b2*thdot2]])
@@ -109,6 +111,6 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     B_mat = jnp.array([[1, -1],
                        [0,  1]])
 
-    theta_ddots = det_denom * M_inv_mat @ (gen_dyn_mat + B_mat @ control)
-    state_dot = jnp.array([[thdot1],[thdot2],[(theta_ddots[0]).item()],[(theta_ddots[1]).item()]])
+    theta_ddots = (det_denom * M_inv_mat @ (gen_dyn_mat + B_mat @ u_vec)).squeeze()
+    state_dot = jnp.array([thdot1,thdot2,theta_ddots[0],theta_ddots[1]])
     return state_dot
