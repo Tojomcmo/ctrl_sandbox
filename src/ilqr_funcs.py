@@ -85,7 +85,6 @@ class ilqrConfigStruct:
             ValueError("struct already configured for dynamics")
         self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(mjcf_model, self.time_step)
         self.mjcf_model                = mjcf_model
-
         mujoco.mj_forward(self.mj_model,self.mj_data)        
         self.mj_ctrl:bool              = True   
 
@@ -159,8 +158,8 @@ class ilqrControllerState:
         self.len_seq       = self.get_len_seq()
         self.x_len         = self.get_num_states()
         self.u_len         = self.get_num_controls()
-        self.seed_x_seq    = np.zeros([self.len_seq,self.x_len,1])      
-        self.x_seq         = np.zeros([self.len_seq,self.x_len,1])
+        self.seed_x_seq    = np.zeros([self.len_seq,self.x_len])      
+        self.x_seq         = np.zeros([self.len_seq,self.x_len])
         self.time_seq      = np.arange(self.len_seq) * ilqr_config.time_step
         self.K_seq         = np.zeros([self.len_seq-1, self.u_len, self.x_len])
         self.d_seq         = np.zeros([self.len_seq-1, self.u_len,          1])
@@ -378,13 +377,13 @@ def initialize_backwards_pass(P_N:npt.NDArray, p_N:npt.NDArray, x_len:int, u_len
     return P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq
 
 def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:npt.NDArray, len_seq:int):
-    control_seq_updated     = np.zeros([(len_seq-1),u_len, 1])
-    state_seq_updated       = np.zeros([(len_seq),  x_len, 1])
+    control_seq_updated     = np.zeros([(len_seq-1),u_len])
+    state_seq_updated       = np.zeros([(len_seq),  x_len])
     state_seq_updated[0][:] = seed_state_vec
     cost_float_updated      = 0.0
-    cost_seq_updated        = np.zeros([len_seq, 1])
-    x_cost_seq_updated      = np.zeros([len_seq, 1])   
-    u_cost_seq_updated      = np.zeros([len_seq, 1]) 
+    cost_seq_updated        = np.zeros([len_seq])
+    x_cost_seq_updated      = np.zeros([len_seq])   
+    u_cost_seq_updated      = np.zeros([len_seq]) 
     in_bounds_bool          = False
     return state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, x_cost_seq_updated,u_cost_seq_updated,in_bounds_bool
 
@@ -428,7 +427,7 @@ def calculate_final_ctg_approx(cost_func_for_diff:Callable[
                                 x_N:npt.NDArray[np.float64], u_len:int, len_seq:int) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
     # approximates the final step cost-to-go as only the state with no control input
     # create concatenated state and control vector of primal points
-    u_N = np.zeros([u_len,1], dtype=float)
+    u_N = np.zeros([u_len], dtype=float)
     k_step = len_seq - 1
     p_N, _, P_N, _, _ = gen_ctrl.taylor_expand_cost(cost_func_for_diff, x_N, u_N, k_step, is_final_bool=True)
     return P_N, p_N
@@ -450,8 +449,6 @@ def calculate_backstep_ctg_approx(q_x:npt.NDArray[np.float64],
     assert q_xx.shape == (len(q_x), len(q_x)), "q_xx incorrect shape, must be (len(q_x), len(q_x))" 
     assert q_uu.shape == (len(q_u), len(q_u)), "q_uu incorrect shape, must be (len(q_u), len(q_u))"    
     assert q_ux.shape == (len(q_u), len(q_x)), "q_ux incorrect shape, must be (len(q_u), len(q_x))" 
-    K_kt        = K_k.T 
-    d_kt        = d_k.T 
     q_xu        = q_ux.T 
     P_k         = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k) 
     p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k) 
@@ -478,11 +475,11 @@ def calculate_u_k_new(u_nom_k:npt.NDArray[np.float64],
     assert K_k.shape    == (len(u_nom_k), len(x_nom_k)), "K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))"
     assert d_k.shape    == (len(u_nom_k), 1)           , "d_k incorrect shape, must be (len(u_nom_k), 1)"
     assert len(x_new_k) ==  len(x_nom_k)               , "x_nom_k and x_new_k must be the same length"
-    assert (x_nom_k.shape) == (len(x_nom_k), 1), 'x_nom_k must be column vector (n,1)'
-    assert (x_new_k.shape) == (len(x_new_k), 1), 'x_new_k must be column vector (n,1)'    
-    assert (u_nom_k.shape) == (len(u_nom_k), 1), 'u_nom_k must be column vector (m,1)'    
+    assert (x_nom_k.shape) == (len(x_nom_k),), 'x_nom_k must be column vector (n,)'
+    assert (x_new_k.shape) == (len(x_new_k),), 'x_new_k must be column vector (n,)'    
+    assert (u_nom_k.shape) == (len(u_nom_k),), 'u_nom_k must be column vector (m,)'    
     # form column vectors
-    return u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
+    return (u_nom_k.reshape(-1,1) + K_k @ (x_new_k.reshape(-1,1) - x_nom_k.reshape(-1,1)) + line_search_factor * d_k).reshape(-1)
 
 def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, Del_V_vec_seq:npt.NDArray[np.float64], line_search_factor:float) -> float:
     """
@@ -525,16 +522,15 @@ def calculate_u_star(k_fb_k:npt.NDArray[np.float64],
                      u_des_k:npt.NDArray[np.float64], 
                      x_des_k:npt.NDArray[np.float64], 
                      x_k:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    u_star = u_des_k + k_fb_k @ (x_k - x_des_k)
-    return u_star
+    return (u_des_k.reshape(-1,1) + k_fb_k @ (x_k.reshape(-1,1) - x_des_k.reshape(-1,1))).reshape(-1)
 
 
 def simulate_ilqr_output(sim_dyn_func_step:Callable[
         [npt.NDArray[np.float64],npt.NDArray[np.float64]],  
         npt.NDArray[np.float64]], 
         ctrl_out:ilqrControllerState, x_sim_init:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
-    x_sim_seq  = np.zeros([ctrl_out.len_seq, ctrl_out.x_len, 1])
-    u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len, 1])
+    x_sim_seq  = np.zeros([ctrl_out.len_seq, ctrl_out.x_len])
+    u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len])
     x_sim_seq[0] = x_sim_init    
     for k in range(ctrl_out.len_seq-1):
         u_sim_seq[k]     = calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k])

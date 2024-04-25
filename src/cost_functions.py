@@ -8,8 +8,10 @@ from . import ilqr_utils as util
 #  - first value MUST be the float value of calculated query cost
 
 class costFuncParams:
-    def __init__(self) -> None:
-        pass
+    def __init__(self,x_des_seq:npt.NDArray[np.float64], 
+                 u_des_seq:npt.NDArray[np.float64]) -> None:
+        self.x_des_seq = x_des_seq
+        self.u_des_seq = u_des_seq
 
 class costFuncQuadStateAndControlParams(costFuncParams):
     def __init__(self, 
@@ -18,12 +20,10 @@ class costFuncQuadStateAndControlParams(costFuncParams):
                  Qf:npt.NDArray[np.float64], 
                  x_des_seq:npt.NDArray[np.float64], 
                  u_des_seq:npt.NDArray[np.float64]) -> None:
-        super().__init__()
+        super().__init__(x_des_seq, u_des_seq)
         self.Q  = Q
         self.R  = R
         self.Qf = Qf
-        self.x_des_seq = x_des_seq
-        self.u_des_seq = u_des_seq
         # TODO create validate inputs function
 
 
@@ -45,19 +45,19 @@ def cost_func_quad_state_and_control(cost_func_params:costFuncQuadStateAndContro
     # check that dimensions match [TODO]
     if is_final_bool:
         x_k_corr = util.calc_and_shape_array_diff(x_k  , cost_func_params.x_des_seq[k_step], shape='col')
-        x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
+        x_cost     = jnp.array((0.5) * (x_k_corr.T @ Qf @ x_k_corr))
         u_cost     = jnp.array([0.0])
         total_cost = x_cost
     elif k_step == 0:
         u_k_corr   = util.calc_and_shape_array_diff(u_k, cost_func_params.u_des_seq[k_step], shape='col')
         x_cost     = jnp.array([0.0])    
-        u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
+        u_cost     = jnp.array((0.5) * (u_k_corr.T  @ R  @ u_k_corr))
         total_cost = u_cost
     else:
         x_k_corr = util.calc_and_shape_array_diff(x_k, cost_func_params.x_des_seq[k_step], shape='col')   
         u_k_corr = util.calc_and_shape_array_diff(u_k, cost_func_params.u_des_seq[k_step], shape='col')
-        x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
-        u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
-        total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
+        x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
+        u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
+        total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
     return total_cost, x_cost, u_cost     
 

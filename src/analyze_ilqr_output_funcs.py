@@ -155,8 +155,8 @@ def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_o
     ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
     ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
     plot_compare_state_sequences_quiver_dot(fig, ax1, x_plot_seqs,x_plot_seq_names,x_plot_seq_styles_quiver,x_plot_seq_styles_dot, x_plot_seq_quiverwidth, xlabel = 'angPos', ylabel = 'angVel')
-    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control nominal', title = "control plot", color= 'r.') # type: ignore 
-    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], u_sim_seq[:,0,0], xlabel='Time', ylabel='control', datalabel='control simulated', title = "control plot", color= 'b.') # type: ignore 
+    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:,0], xlabel='Time', ylabel='control', datalabel='control nominal', title = "control plot", color= 'r.') # type: ignore 
+    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], u_sim_seq[:,0], xlabel='Time', ylabel='control', datalabel='control simulated', title = "control plot", color= 'b.') # type: ignore 
     plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.cost_seq, xlabel='Time', ylabel='cost',datalabel='cost pred', title = "cost plot", color= 'r.')
     plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.x_cost_seq, xlabel='Time', ylabel='cost',datalabel='state cost pred', title = "cost plot", color= 'b.')
     plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.u_cost_seq, xlabel='Time', ylabel='cost',datalabel='control cost pred', title = "cost plot", color= 'g.')

@@ -17,16 +17,32 @@ class nlPendParams(dynFuncParams):
         self.l = l
 
 class nlDoublePendParams(dynFuncParams):
-    def __init__(self, g:float, m1:float, l1:float, m2:float, l2:float, b1:float=0.0, b2:float=0.0):
+    def __init__(self, g:float, m1:float,          l1:float, 
+                                m2:float,          l2:float,
+                                b1:float,          b2:float,                                 
+                                shoulder_act:bool, elbow_act:bool):
         super().__init__()
-        self.g = g
+        self.g  = g
         self.m1 = m1
         self.l1 = l1
         self.m2 = m2
         self.l2 = l2
         self.b1 = b1
         self.b2 = b2
-
+        self.shoulder_act = shoulder_act
+        self.elbow_act    = elbow_act
+        if self.shoulder_act is True and self.elbow_act is True:
+            self.B_mat = jnp.array([[1, -1],
+                                    [0,  1]],dtype=float)
+        elif self.shoulder_act is True and self.elbow_act is False:
+            self.B_mat = jnp.array([[1],
+                                    [0]],dtype=float) 
+        elif self.shoulder_act is False and self.elbow_act is True:
+            self.B_mat = jnp.array([[-1],
+                                    [1]],dtype=float)
+        else:
+            print('double pendulum dynamics function is fully passive. Control array must be len(1,)')
+            self.B_mat = jnp.zeros([2,1])       
 
 def pend_dyn_nl(params:nlPendParams, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])->npt.NDArray:
 # continuous time dynamic equation for simple pendulum 
@@ -35,9 +51,11 @@ def pend_dyn_nl(params:nlPendParams, state:npt.NDArray[np.float64], control:npt.
 # control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
 # params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
 # state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+    x_jax = jnp.array(state)
+    u_jax = jnp.array(control)
     state_dot = jnp.array([
                 state[1],
-                -(params.b/params.l) * state[1] - (jnp.sin(state[0]) * params.g/params.l) + control[0]
+                -(params.b/params.l) * x_jax[1] - (jnp.sin(x_jax[0]) * params.g/params.l) + u_jax[0]
                 ])
     return state_dot
 
@@ -81,11 +99,12 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
     helpful resource https://dassencio.org/33
     
+    Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
+    
     Thetas are both reference to intertial frame down position
     '''
-    state_jax = jnp.array(state).squeeze()
-    control_jax = jnp.array(control).squeeze()
-    u_vec = control_jax.reshape(-1,1)
+    x_jax = jnp.array(state)
+    u_jax = jnp.array(control)
     m1 = params.m1
     m2 = params.m2
     l1 = params.l1
@@ -93,10 +112,10 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     b1 = params.b1
     b2 = params.b2
     g  = params.g
-    th1 = state_jax[0]
-    th2 = state_jax[1]
-    thdot1 = state_jax[2]
-    thdot2 = state_jax[3]  
+    th1 = x_jax[0]
+    th2 = x_jax[1]
+    thdot1 = x_jax[2]
+    thdot2 = x_jax[3]  
     c1m2 = jnp.cos(th1-th2)
     s1m2 = jnp.sin(th1-th2)
     m1pm2 = m1 + m2
@@ -107,10 +126,7 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
 
     gen_dyn_mat = jnp.array([[-m2*l1*l2*thdot2**2*s1m2 - m1pm2*l1*g*jnp.sin(th1) - (b1+b2)*thdot1 + b2*thdot2],
                              [ m2*l1*l2*thdot2**2*s1m2 - m2*l2*g*jnp.sin(th2)    +      b2*thdot1 - b2*thdot2]])
-    
-    B_mat = jnp.array([[1, -1],
-                       [0,  1]])
-
-    theta_ddots = (det_denom * M_inv_mat @ (gen_dyn_mat + B_mat @ u_vec)).squeeze()
+                   
+    theta_ddots = (det_denom * M_inv_mat @ (gen_dyn_mat + params.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
     state_dot = jnp.array([thdot1,thdot2,theta_ddots[0],theta_ddots[1]])
     return state_dot

@@ -22,12 +22,12 @@ class plot_2d_state_batch_sequences_tests(unittest.TestCase):
 
 class plot_compare_two_state_sequences_tests(unittest.TestCase):
     def test_compare_two_state_sequences(self):
-        x_seq_1 = [jnp.array([[1.],[2.]]),
-                   jnp.array([[4.],[3.]]),
-                   jnp.array([[5.],[6.]])]  
-        x_seq_2 = [jnp.array([[4.],[6.]]),
-                   jnp.array([[2.],[5.]]),
-                   jnp.array([[1.],[1.]])] 
+        x_seq_1 = [jnp.array([1.,2.]),
+                   jnp.array([4.,3.]),
+                   jnp.array([5.,6.])]  
+        x_seq_2 = [jnp.array([4.,6.]),
+                   jnp.array([2.,5.]),
+                   jnp.array([1.,1.])] 
         x_seqs   = [x_seq_1,x_seq_2]
         x_names  = ['sequence1', 'sequence2']   
         x_styles = ['b.', 'r.']     

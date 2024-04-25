@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import os
 
 from src import dyn_functions as dyn
@@ -9,7 +8,7 @@ from src import gen_ctrl_funcs as gen_ctrl
 
 
 if __name__== "__main__":
-    save_ani_bool = True
+    save_ani_bool = False
     lock_arm_num = 0
     dt = 0.01
     len_seq = 1500

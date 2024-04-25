@@ -49,7 +49,7 @@ def simulate_forward_dynamics_seq(
     # sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'    
     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
     len_seq  = len(u_seq)  
-    x_seq    = np.zeros([(len_seq+1),len(x_init), 1], dtype=float)
+    x_seq    = np.zeros([(len_seq+1),len(x_init)], dtype=float)
     x_seq[0] = x_init # type: ignore
     for idx in range(len_seq):
         x_seq[idx+1] = discrete_dyn_func(x_seq[idx], u_seq[idx]) # type: ignore    
@@ -70,7 +70,7 @@ def simulate_forward_dynamics_step(
     x_kp1[out]     - array shape[1,state_dim] of state vector at next time step
     '''   
     x_len      = len(x_k)  
-    x_kp1      = np.zeros([x_len, 1], dtype=float)
+    x_kp1      = np.zeros([x_len], dtype=float)
     if   sim_method == 'rk4':
         x_kp1        = step_rk4(dyn_func, time_step, x_k, u_k)
     elif sim_method == 'euler':
@@ -97,7 +97,7 @@ def linearize_dynamics(
 # B_lin     - [out] continuous or discrete time linearization of dyn_func wrt control eval at x,u
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     dyn_func_xu = lambda xu_k: dyn_func(xu_k[:x_k_len], xu_k[x_k_len:])
-    ab_lin_cat  = jax.jacfwd(dyn_func_xu)(xu_k_jax[:,0])
+    ab_lin_cat  = jax.jacfwd(dyn_func_xu)(xu_k_jax)
     a_lin       = np.array(ab_lin_cat[:x_k_len,:x_k_len], dtype=np.float64)
     b_lin       = np.array(ab_lin_cat[:x_k_len,x_k_len:], dtype=np.float64)
     return a_lin, b_lin
@@ -144,12 +144,12 @@ def calculate_linearized_state_space_seq(
     if len(x_seq) != (len(u_seq)+1):
         raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
     else:
-        len_seq = len(x_seq)
+        len_seq = len(u_seq)
         x_len   = len(x_seq[0,:])
         u_len   = len(u_seq[0,:])
-        a_lin_array = np.zeros((len_seq-1, x_len, x_len))
-        b_lin_array = np.zeros((len_seq-1, x_len, u_len))
-        for idx in range(len_seq-1):
+        a_lin_array = np.zeros((len_seq, x_len, x_len))
+        b_lin_array = np.zeros((len_seq, x_len, u_len))
+        for idx in range(len_seq):
             a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, x_seq[idx], u_seq[idx])
             a_lin_array[idx] = a_lin
             b_lin_array[idx] = b_lin
@@ -218,7 +218,7 @@ def calculate_total_cost(
     # check state_seq and control_seq are valid lengths
     # Calculate total cost
     len_seq    = len(x_seq)
-    u_len      = len(u_seq[0])
+    u_len      = len(u_seq[1])
     cost_seq   = np.zeros([len_seq], dtype=float)
     x_cost_seq = np.zeros([len_seq], dtype=float)    
     u_cost_seq = np.zeros([len_seq], dtype=float)
@@ -227,7 +227,7 @@ def calculate_total_cost(
     for idx in range(len_seq):
         if (idx == len_seq-1):
             is_final_bool=True
-            inc_cost, inc_x_cost, inc_u_cost = cost_func(x_seq[idx], np.zeros([u_len,1], dtype=float), idx, is_final_bool)
+            inc_cost, inc_x_cost, inc_u_cost = cost_func(x_seq[idx], np.zeros([u_len], dtype=float), idx, is_final_bool)
         else:
             inc_cost, inc_x_cost, inc_u_cost = cost_func(x_seq[idx], u_seq[idx], idx, is_final_bool)
         total_cost += inc_cost 
@@ -256,9 +256,9 @@ def taylor_expand_cost(
                                                                                         k_step, 
                                                                                         is_final_bool)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax[:,0])).reshape(xu_k_len,1)
+    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax)).reshape(xu_k_len,1)
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax[:,0])).reshape(xu_k_len,xu_k_len)
+    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax)).reshape(xu_k_len,xu_k_len)
     l_x  = np.array((jac_cat[:x_k_len]),               dtype=float)
     l_u  = np.array((jac_cat[x_k_len:]),               dtype=float)
     l_xx = np.array((hessian_cat[:x_k_len,:x_k_len]) , dtype=float)
@@ -266,17 +266,16 @@ def taylor_expand_cost(
     l_ux = np.array((hessian_cat[x_k_len:,:x_k_len]) , dtype=float)
     return l_x, l_u, l_xx, l_uu, l_ux
     
-def prep_xu_vec_for_diff(x_k:npt.NDArray,u_k:npt.NDArray):
-    assert (x_k.shape)[1] == 1, 'x_vector must be column vector (n,1)'
-    assert (u_k.shape)[1] == 1, 'u_vector must be column vector (m,1)'
+def prep_xu_vec_for_diff(x_k:npt.NDArray,u_k:npt.NDArray)->Tuple[npt.NDArray, int, int]:
+    '''x_k and u_k must each be shape (n,) and (m,) respectively'''
     xu_k       = np.concatenate([x_k, u_k])
-    x_k_len    = np.shape(x_k)[0]
-    xu_k_len   = np.shape(xu_k)[0]
+    x_k_len    = len(x_k)
+    xu_k_len   = len(xu_k)
     xu_k_jax   = jnp.array(xu_k)
     return xu_k_jax, xu_k_len, x_k_len
 
 def ss_2_dyn_func(ss_cont:stateSpace):
-    return lambda t, x, u: ss_cont.a @ x + ss_cont.b @ u
+    return lambda t, x, u: ss_cont.a @ x.reshape(-1,1) + ss_cont.b @ u.reshape(-1,1)
 
 def calculate_s_xx_dot(Q_t:npt.NDArray[np.float64], 
                        A_t:npt.NDArray[np.float64], 
@@ -314,7 +313,7 @@ def prep_cost_func_for_calc(cost_func:Callable[
     return cost_func_for_calc
 
 
-def c2d_AB_zoh_compbined(
+def c2d_AB_zoh_combined(
         A:npt.NDArray[np.float64], 
         B:npt.NDArray[np.float64], 
         time_step:float) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
