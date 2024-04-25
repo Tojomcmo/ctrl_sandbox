@@ -114,11 +114,11 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
 
     def test_accepts_valid_input(self):
         len_seq         = 4
-        u_seq     = np.ones([4,1,1])
-        x_init      = np.array([[1.],[1.]])
+        u_seq     = np.ones((4,1))
+        x_init      = np.array([1.,1.])
         x_seq       = gen_ctrl.simulate_forward_dynamics_seq(self.pend_unit_dyn_func, x_init, u_seq)
         # calculate expected output
-        x_seq_expected    = np.zeros([5,2,1])
+        x_seq_expected    = np.zeros([5,2])
         x_seq_expected[0] = x_init
         for idx in range(len_seq):
             x_delta    = self.pend_unit_dyn_func(x_seq[idx], u_seq[idx])
@@ -153,14 +153,14 @@ class linearize_dynamics_tests(unittest.TestCase):
     
     def test_linearize_dynamics_accepts_valid_case(self):
         h = 0.1
-        x = np.array([[1.],[1.]])
-        u = np.array([[1.]])
+        x = np.array([1., 1.])
+        u = np.array([1.])
         discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
         a_lin, b_lin    = gen_ctrl.linearize_dynamics(discrete_dyn_func,x,u)
         g = 1.0
         l = 1.0
         b = 1.0
-        state_pos = x[0][0]
+        state_pos = x[0]
         A_lin_expected = np.array([[0, 1],[-(g/l)*jnp.cos(state_pos), -(b/l)]])
         B_lin_expected = np.array([[0],[1]])
         A_lin_d_expected = np.eye(2) + (A_lin_expected * h)
@@ -197,14 +197,14 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     def test_calculate_linearized_state_space_seq_accepts_valid_system(self):
         len_seq     = 4
         h           = 0.1
-        u_seq = np.ones((3,1,1), dtype=np.float64)
-        x_seq   = np.ones((4,2,1), dtype=np.float64)
+        u_seq = np.ones((3,1), dtype=np.float64)
+        x_seq   = np.ones((4,2), dtype=np.float64)
         discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
         A_lin_d_seq, B_lin_d_seq = gen_ctrl.calculate_linearized_state_space_seq(discrete_dyn_func,
                                                                                 x_seq, 
                                                                                 u_seq)
         # calculate expected output
-        x_init_pos = x_seq[0][0]
+        x_init_pos = x_seq[0]
         A_lin_expected = np.array([[0, 1],[-(1./1.) * np.cos(x_init_pos[0]), -(1./1.)]])
         B_lin_expected = np.array([[0],[1]])
         A_lin_d_expected = np.eye(2) + (A_lin_expected * h)
@@ -340,8 +340,7 @@ class calculate_total_cost_tests(unittest.TestCase):
         numpy.testing.assert_allclose(cost_seq, cost_seq_expect,rtol=1e-6, atol=1e-6)        
         numpy.testing.assert_allclose(x_cost_seq, x_cost_seq_expect,rtol=1e-6, atol=1e-6) 
         numpy.testing.assert_allclose(u_cost_seq, u_cost_seq_expect,rtol=1e-6, atol=1e-6) 
-                 
-     
+                    
 
 class taylor_expand_cost_tests(unittest.TestCase):  
     
@@ -407,35 +406,19 @@ class taylor_expand_cost_tests(unittest.TestCase):
 class prep_xu_vecs_for_diff_tests(unittest.TestCase):
     def test_accepts_valid_np_col_inputs(self):
         #create test conditions
-        x_k = np.array([[1],[2],[3]])
-        u_k = np.array([[4],[5]])
+        x_k = np.array([1,2,3])
+        u_k = np.array([4,5])
         #test function
         xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
         # create expected output
-        xu_k_jax_expected = jnp.array([[1],[2],[3],[4],[5]])
+        xu_k_jax_expected = jnp.array([1,2,3,4,5])
         xu_k_len_expected = 5
         x_k_len_expected  = 3
         #compare outputs
-        self.assertEqual(jnp.shape(xu_k_jax), (5,1))
+        self.assertEqual(jnp.shape(xu_k_jax), (5,))
         self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
         self.assertEqual(xu_k_len, xu_k_len_expected)
         self.assertEqual(x_k_len, x_k_len_expected)
-
-    def test_rejects_np_row_x_inputs(self):
-        #create test conditions
-        x_k = np.array([[1,2,3]])
-        u_k = np.array([[4,5]])
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
-        self.assertEqual(str(assert_seq_len_error.exception), 'x_vector must be column vector (n,1)')
-
-    def test_rejects_np_row_u_inputs(self):
-        #create test conditions
-        x_k = np.array([[1],[2],[3]])
-        u_k = np.array([[4,5]])
-        with self.assertRaises(AssertionError) as assert_seq_len_error:
-            xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
-        self.assertEqual(str(assert_seq_len_error.exception), 'u_vector must be column vector (m,1)')
 
 
 class prep_cost_func_for_diff_tests(unittest.TestCase):
@@ -447,8 +430,8 @@ class prep_cost_func_for_diff_tests(unittest.TestCase):
     
     def test_accepts_valid_cost_func_inputs(self):
         #create test conditions
-        x_k = np.array([[1],[2]])
-        u_k = np.array([[3],[4]])
+        x_k = np.array([1,2])
+        u_k = np.array([3,4])
         input_int = 1
         input_bool = False
         #test function

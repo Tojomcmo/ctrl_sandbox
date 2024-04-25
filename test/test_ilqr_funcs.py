@@ -21,8 +21,8 @@ class shared_unit_test_data_and_funcs:
                                                                 Q  = np.array([[1.,0],[0,1.]]),
                                                                 R  = np.array([[1.]]),
                                                                 Qf = np.array([[1.,0],[0,1.]]),
-                                                                x_des_seq=np.zeros((5,2,1)),
-                                                                u_des_seq=np.zeros((4,1,1)))
+                                                                x_des_seq=np.zeros((5,2)),
+                                                                u_des_seq=np.zeros((4,1)))
 
         self.pend_unit_state_trans_params = dyn.nlPendParams(g=1.0, b=1.0, l=1.0)
 
@@ -31,12 +31,12 @@ class shared_unit_test_data_and_funcs:
         self.ilqr_config.config_for_dyn_func(self.pend_dyn_nl, self.pend_unit_state_trans_params, gen_ctrl.step_rk4)
         self.ilqr_config.create_curried_funcs()
 
-        self.seed_x_vec       = np.ones([self.ilqr_config.num_states,1]) 
-        self.seed_u_seq       = np.ones([self.ilqr_config.len_seq-1,self.ilqr_config.num_controls,1])
+        self.seed_x_vec       = np.ones([self.ilqr_config.num_states]) 
+        self.seed_u_seq       = np.ones([self.ilqr_config.len_seq-1,self.ilqr_config.num_controls])
 
-        self.x_seq_example            = np.ones([self.ilqr_config.len_seq,2,1])
+        self.x_seq_example            = np.ones([self.ilqr_config.len_seq,2])
         self.x_seq_example[:,1]      *= 2.0
-        self.u_seq_example            = np.ones([self.ilqr_config.len_seq-1,1,1])
+        self.u_seq_example            = np.ones([self.ilqr_config.len_seq-1,1])
 
         self.K_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.num_controls, self.ilqr_config.num_states])
         self.d_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.num_controls, 1         ])
@@ -305,7 +305,7 @@ class calculate_final_ctg_approx_tests(unittest.TestCase):
         x_N = shared_data_funcs.x_seq_example[-1]
         u_N = shared_data_funcs.u_seq_example[-1]
         P_N, p_N = ilqr.calculate_final_ctg_approx(shared_data_funcs.ilqr_config.cost_func_for_diff,x_N,len(u_N),len_seq = 1)
-        p_N_expected = shared_data_funcs.cost_func_quad_unit_params.Qf @ x_N
+        p_N_expected = shared_data_funcs.cost_func_quad_unit_params.Qf @ x_N.reshape(-1,1)
         P_N_expected = shared_data_funcs.cost_func_quad_unit_params.Qf
         self.assertEqual(p_N.tolist(), p_N_expected.tolist())
         self.assertEqual(P_N.tolist(), P_N_expected.tolist())
@@ -360,8 +360,8 @@ class calculate_optimal_gains_tests(unittest.TestCase):
 
 class calculate_u_k_new_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        u_nom_k = np.array([[1.0], [2.0]])
-        x_nom_k = np.array([[1.0], [1.0]])
+        u_nom_k = np.array([1.0, 2.0])
+        x_nom_k = np.array([1.0, 1.0])
         x_new_k = x_nom_k + 1.0
         K_k     = np.ones([2, 2])
         d_k     = np.ones([2, 1]) * 2.0
@@ -369,8 +369,8 @@ class calculate_u_k_new_tests(unittest.TestCase):
         u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
                                                  K_k, d_k, line_search_factor)
         # u_k_expected = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
-        u_k_expected = np.array([[1. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.],
-                                 [2. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.]])
+        u_k_expected = np.array([1. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.,
+                                 2. + (1.* (2.-1.) + 1. * (2.-1.)) + 1.*2.])
         self.assertEqual(u_k_updated_new.tolist(), u_k_expected.tolist())
 
     def test_reject_invalid_K_k_dimension(self):
@@ -411,15 +411,15 @@ class calculate_u_k_new_tests(unittest.TestCase):
 
     def test_reject_invalid_x_dimension(self):
         u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
-        x_new_k = np.array([1.0, 2.0])
+        x_nom_k = np.array([[1.0], [1.0]])
+        x_new_k = np.array([[1.0], [2.0]])
         K_k     = np.ones([2, 2])
         d_k     = np.ones([2, 1]) * 2.0
         line_search_factor = 1
         with self.assertRaises(AssertionError) as assert_seq_len_error:
            u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
                                                  K_k, d_k, line_search_factor)
-        self.assertEqual(str(assert_seq_len_error.exception), 'x_nom_k must be column vector (n,1)')
+        self.assertEqual(str(assert_seq_len_error.exception), 'x_nom_k must be column vector (n,)')
 
 
     def test_accepts_valid_inputs_with_shared_data(self):
@@ -433,7 +433,7 @@ class calculate_u_k_new_tests(unittest.TestCase):
         line_search_factor = 0.5
         u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
                                                  K_k, d_k, line_search_factor)
-        u_k_expected = u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k
+        u_k_expected = (u_nom_k + K_k @ (x_new_k - x_nom_k) + line_search_factor * d_k).reshape(-1)
         self.assertEqual(u_k_updated_new, u_k_expected)    
 
 class calculate_cost_decrease_ratio_tests(unittest.TestCase):
