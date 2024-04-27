@@ -2,8 +2,9 @@
 import mujoco as mujoco
 import numpy as np
 import matplotlib.pyplot as plt
-from . import mujoco_funcs as mj_funcs
-from . import ilqr_funcs as ilqr
+
+import mujoco_funcs as mj_funcs
+import ilqr_funcs as ilqr
 
 
 def update_plt_frame(renderer:mujoco.Renderer, data:mujoco._structs.MjData, frames:list, img_set:list):

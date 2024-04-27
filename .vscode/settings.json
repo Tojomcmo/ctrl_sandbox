@@ -12,9 +12,9 @@
         "-p",
         "test_*.py"
     ],
-
+    "python.analysis.extraPaths": ["${workspaceFolder}/src;${workspaceFolder}/scripts"],
     "terminal.integrated.env.windows": {
-        "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests"
+        "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests;${workspaceFolder}/scripts"
     },
     // "python.envFile": "${workspaceFolder}/.env",
 }

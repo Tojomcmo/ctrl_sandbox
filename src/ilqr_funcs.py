@@ -11,11 +11,11 @@ from numpy import typing as npt
 from typing import Sequence, Callable, Tuple
 import mujoco as mujoco
 
-from . import ilqr_utils as util
-from . import gen_ctrl_funcs as gen_ctrl
-from . import mujoco_funcs as mj_funcs
-from . import cost_functions as cost
-from . import dyn_functions as dyn
+import ilqr_utils as util
+import gen_ctrl_funcs as gen_ctrl
+import mujoco_funcs as mj_funcs
+import cost_functions as cost
+import dyn_functions as dyn
 
 
 class ilqrConfigStruct:

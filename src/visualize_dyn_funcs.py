@@ -4,45 +4,69 @@ from functools import partial
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import matplotlib.gridspec as gridspec
 import numpy.typing as npt
 import os
+from typing import Optional
 
-from . import dyn_functions as dyn
-from typing import Tuple
-
+import dyn_functions as dyn
+import analyze_ilqr_output_funcs as analyze
 
 class double_pend_animation():
-    def __init__(self,double_pend_params:dyn.nlDoublePendParams,x_seq:npt.NDArray[np.float64],dt:float, fig:Figure) -> None:
+    def __init__(self,double_pend_params:dyn.nlDoublePendParams,
+                 x_seq:npt.NDArray[np.float64],
+                 dt:float, fig:Figure,
+                 u_seq:Optional[npt.NDArray[np.float64]] = None,
+                 cost_seqs:Optional[npt.NDArray[np.float64]] = None) -> None:
         self.params  = double_pend_params
         self.dt      = dt
         self.x_seq   = x_seq        
         self.fig     = fig
         self.min_fps:int = 30
         self.set_fps_for_animation()
-        self.configure_figure()
+        self.create_cartesian_sequence()    
+        if u_seq is None or cost_seqs is None:
+            self.config_for_ani()
+            self.plt_w_ctrl_cost = False 
+        else:
+            self.config_for_ani_ctrl_cost()
+            self.plt_w_ctrl_cost = True    
 
-    def configure_figure(self):
+    def config_for_ani(self):
         L = self.params.l1 + self.params.l2
-        ax = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))
-        ax.set_aspect('equal')
-        ax.grid()
-        self.line, = ax.plot([], [], 'o-', lw=2)
-        self.trace, = ax.plot([], [], '.-', lw=1, ms=2)
+        self.ax1 = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))
+        self.ax1.set_aspect('equal')
+        self.ax1.grid()
+        self.line, = self.ax1.plot([], [], 'o-', lw=2)
+        self.trace, = self.ax1.plot([], [], '.-', lw=1, ms=2)
         self.time_template = 'time = %.2fs'
-        self.time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+        self.time_text = self.ax1.text(0.05, 0.9, '', transform=self.ax1.transAxes)
 
-    def create_cartesian_sequence(self)->Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+    def config_for_ani_ctrl_cost(self):
+        L = self.params.l1 + self.params.l2
+        gs = gridspec.GridSpec(2, 2)
+        self.ax1 = self.fig.add_subplot(gs[:, 0],autoscale_on=False, xlim=(-L, L), ylim=(-L, L)) # row 0, col 0
+        self.ax2 = self.fig.add_subplot(gs[0, 1]) # row 0, col 1
+        self.ax3 = self.fig.add_subplot(gs[1, 1]) # row 1, span all columns
+        # ax = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))
+        self.ax1.set_aspect('equal')
+        self.ax1.grid()
+        self.line = self.ax1.plot([], [], 'o-', lw=2)
+        self.trace = self.ax1.plot([], [], '.-', lw=1, ms=2)
+        self.time_template = 'time = %.2fs'
+        self.time_text = self.ax1.text(0.05, 0.9, '', transform=self.ax1.transAxes)
+
+    def create_cartesian_sequence(self)->None:
         x1 =  self.params.l1*np.sin(self.x_seq_ani[:, 0])
         y1 = -self.params.l1*np.cos(self.x_seq_ani[:, 0])
         x2 =  self.params.l2*np.sin(self.x_seq_ani[:, 1]) + x1
         y2 = -self.params.l2*np.cos(self.x_seq_ani[:, 1]) + y1
-        return (x1, y1, x2, y2)
+        self.cartesian_vecs = (x1, y1, x2, y2)
+
 
     def animate_double_pend(self, i, line, trace, time_text):
-        self.cartesian_vecs = self.create_cartesian_sequence()
         thisx = [0, (self.cartesian_vecs[0][i]).item(), (self.cartesian_vecs[2][i]).item()]
         thisy = [0, (self.cartesian_vecs[1][i]).item(), (self.cartesian_vecs[3][i]).item()]
-
         history_x = self.cartesian_vecs[2][:i]
         history_y = self.cartesian_vecs[3][:i]
         line.set_data(thisx, thisy)
@@ -62,6 +86,7 @@ class double_pend_animation():
     def update_fps_for_animation(self, new_min_fps):
         self.min_fps = new_min_fps
         self.set_fps_for_animation()
+        self.create_cartesian_sequence()  
 
     def create_double_pend_animation(self):
         self.ani = animation.FuncAnimation(self.fig, partial(self.animate_double_pend, 
@@ -70,7 +95,7 @@ class double_pend_animation():
                                                 time_text = self.time_text), 
                                                 len(self.x_seq_ani), interval=self.fps, blit=True)
 
-    def show_animation(self):
+    def show_plot(self):
         # self.fig.show()
         plt.show()
 

@@ -31,7 +31,7 @@ if __name__== "__main__":
     fig = plt.figure(figsize=[10,8])
     pend_animation = vis_dyn.double_pend_animation(pend_params, x_seq, dt,fig)
     pend_animation.create_double_pend_animation()
-    pend_animation.show_animation()
+    pend_animation.show_plot()
 
     if save_ani_bool == True: 
         print('saving animation...')

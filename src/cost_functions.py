@@ -1,7 +1,7 @@
 from jax import numpy as jnp
 import numpy as np
 import numpy.typing as npt
-from . import ilqr_utils as util
+import ilqr_utils as util
 
 # library of cost functions and associated functions for manipulating cost functions
 # Cost functions may return multiple values:

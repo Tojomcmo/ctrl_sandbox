@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
-import src.ilqr_funcs as ilqr
+import ilqr_funcs as ilqr
 
 def plot_2d_state_scatter_sequences(x_seq, xlabel="state 1", ylabel="state 2", title="state plot"):
     """
@@ -98,7 +98,7 @@ def plot_x_y_sequences(figure, axes, x_seq, y_seq, xlabel="state 1", ylabel="sta
     # y_np = np.array(y) if isinstance(y, jnp.ndarray) else y
     """
     # Create the plot
-    plt.figure(figure) 
+    # plt.figure(figure) 
     x_seq.reshape(-1)
     y_seq.reshape(-1)
     axes.plot(x_seq, y_seq, color,linestyle='-',label=datalabel)

@@ -1,8 +1,9 @@
 from jax import numpy as jnp
 import numpy as np
 import numpy.typing as npt
-from . import ilqr_utils as util
-from . import gen_ctrl_funcs as gen_ctrl
+
+import ilqr_utils as util
+import gen_ctrl_funcs as gen_ctrl
 
 
 class dynFuncParams:

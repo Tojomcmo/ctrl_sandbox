@@ -78,8 +78,8 @@ def get_state_vec(data):
 
 def set_mj_state_vec(data, x_vec):
     x_vec_split = int(len(x_vec)/2)
-    data.qpos = (x_vec[:x_vec_split])[:,0]
-    data.qvel = (x_vec[x_vec_split:])[:,0]
+    data.qpos = x_vec[:x_vec_split]
+    data.qvel = x_vec[x_vec_split:]
 
 def set_mj_ctrl_vec(data, u_vec) -> None:
     data.ctrl = (u_vec).reshape(-1)

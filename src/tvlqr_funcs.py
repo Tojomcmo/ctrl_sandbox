@@ -1,6 +1,6 @@
 
 import numpy as np
-from . import gen_ctrl_funcs as gen_ctrl
+import gen_ctrl_funcs as gen_ctrl
 
 """
 Time-varying LQR functions

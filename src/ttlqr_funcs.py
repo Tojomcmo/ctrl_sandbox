@@ -1,8 +1,8 @@
 import numpy as np
 from numpy import typing as npt
 
-from . import gen_ctrl_funcs as gen_ctrl
-from . import ilqr_utils as util
+import gen_ctrl_funcs as gen_ctrl
+import ilqr_utils as util
 
 class ttlqrControllerConfig():
     def __init__(self, config_dict, x_des_seq, u_des_seq):

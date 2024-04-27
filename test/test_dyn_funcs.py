@@ -18,18 +18,31 @@ class nl_pend_dyn_tests(unittest.TestCase):
 
 class double_pend_dyn_tests(unittest.TestCase):
     def test_double_pend_accepts_valid_inputs(self):    
-        params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.1, b2=0.1)
+        params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.1, b2=0.1, 
+                                        shoulder_act=True, elbow_act=True)
         x_vec = np.array([0.1,0.1,0.1,0.1])
         u_vec = np.array([5.0,1.0]) 
         x_dot = dyn.double_pend_no_damp_full_act_dyn(params,x_vec,u_vec)
         self.assertEqual(True, True)
 
     def test_double_pend_is_jax_compatible(self):
-        params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.1, b2=0.1)
+        params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
+                                        shoulder_act=True, elbow_act=True)
         x_vec = np.array([0.1,0.1,0.1,0.1])
-        u_vec = np.array([5.0,1.0]) 
+        u_vec = np.array([1.0,1.0]) 
         dyn_func = lambda x, u : dyn.double_pend_no_damp_full_act_dyn(params,x, u)           
         A, B = gen_ctrl.linearize_dynamics(dyn_func, x_vec, u_vec)
+        self.assertEqual(True, True)
+
+    def test_double_pend_is_jax_compatible_thru_rk(self):
+        params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
+                                        shoulder_act=True, elbow_act=True)
+        x_vec = np.array([0.1,0.1,0.1,0.1])
+        u_vec = np.array([1.0,1.0]) 
+        time_step = 0.01
+        dyn_func = lambda x, u : dyn.double_pend_no_damp_full_act_dyn(params,x, u)   
+        dyn_func_discrete = lambda x, u: gen_ctrl.step_rk4(dyn_func, time_step, x, u)        
+        A, B = gen_ctrl.linearize_dynamics(dyn_func_discrete, x_vec, u_vec)
         self.assertEqual(True, True)
 
 if __name__ == '__main__':
