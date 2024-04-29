@@ -21,7 +21,7 @@ if __name__ == "__main__":
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.03
+   time_step  = 0.05
    len_seq    = 60
    num_states = 4
    num_controls = 1
@@ -29,28 +29,28 @@ if __name__ == "__main__":
    elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
-                       [0   ,0   ,1   ,0  ],
-                       [0   ,0   ,0   ,1  ]],
-                       dtype=float) * 100.0
-   R_cost  = np.array([[1.0]],dtype=float)*1.0
-   # R_cost  = np.array([[125.0, 0],[0, 1.0]],dtype=float)*0.1
-   Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
-                       [0   ,10. ,0   ,0  ],
                        [0   ,0   ,0.1   ,0  ],
                        [0   ,0   ,0   ,0.1  ]],
+                       dtype=float) * 100.0
+   R_cost  = np.array([[1.0]],dtype=float)*10.0
+   # R_cost  = np.array([[10.0, 0],[0, 1.0]],dtype=float)*0.1
+   Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
+                       [0   ,10. ,0   ,0  ],
+                       [0   ,0   ,1.0   ,0  ],
+                       [0   ,0   ,0   ,1.0  ]],
                        dtype=float) * 1000.0
-   dyn_func_params_ctrl = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.05, b2=0.05,
+   dyn_func_params_ctrl = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
-   ilqr_config.max_iter = 20
+   ilqr_config.max_iter = 40
 
 
    #---------- create simulation system for post algorithm test ----------#
-   sim_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.1, b2=0.1,
+   sim_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                 shoulder_act=shoulder_act, elbow_act=elbow_act)
-   x_sim_init_vec = np.array([0.2,0.4,0.0,0.0])
+   x_sim_init_vec = np.array([0.0,0.0,0.0,0.0])
 
    #---------- set system state init and desired trajectories ----------#
    x_tg_init_vec = np.array([0.0,0.0,0.0,0.0])
@@ -59,7 +59,7 @@ if __name__ == "__main__":
    ctrl_target_condition = 2
 
    if ctrl_target_condition == 1:
-      traj_gen_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.1, b2=0.1,
+      traj_gen_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                       shoulder_act=shoulder_act, elbow_act=elbow_act)
       u_tg_seq      = np.ones([len_seq-1,num_controls]) 
       traj_gen_cont_dyn_func = lambda x,u: dyn.double_pend_no_damp_full_act_dyn(traj_gen_dyn_func_params,x,u)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
    controller_state.seed_x_seq = controller_state.x_seq
    # run ilqr controller
    controller_output = ilqr.run_ilqr_controller(ilqr_config, controller_state)
-
+   print("max control nominal: ", max(controller_output.u_seq))
    #------- Simulate controller output --------#
 
    sim_dyn_cont_func = lambda x,u: dyn.double_pend_no_damp_full_act_dyn(sim_dyn_func_params,x,u)

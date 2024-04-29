@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
    #------- Simulate controller output --------#
    if ilqr_config.mj_ctrl is True:
-      mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config.mj_model)
+      mjsim_model, _ , mjsim_data = mj_funcs.create_mujoco_model(ilqr_config.mj_model, time_step)
       sim_dyn_func_step = lambda x, u: (mj_funcs.fwd_sim_mj_w_ctrl(mjsim_model, mjsim_data, x, u))[-1]
    else:
       sim_dyn_cont_func = lambda x,u: dyn.pend_dyn_nl(sim_dyn_func_params,x,u)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
    if ilqr_config.mj_ctrl is True:
       framerate = 30
       fig1, ax1 = plt.subplots()
-      mjvid_model, mjvid_renderer , mjvid_data = mj_funcs.create_mujoco_model(ilqr_config.mj_model)
+      mjvid_model, mjvid_renderer , mjvid_data = mj_funcs.create_mujoco_model(ilqr_config.mj_model, time_step)
       mjvid_renderer.update_scene(mjvid_data, "fixed")
       scene_option = mujoco.MjvOption()
       scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = False

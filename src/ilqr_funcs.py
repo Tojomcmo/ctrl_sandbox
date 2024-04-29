@@ -25,12 +25,12 @@ class ilqrConfigStruct:
         self.len_seq:int                = len_seq
         self.time_step:float            = time_step
         self.max_iter:int               = 20
-        self.converge_crit:float        = 1e-5
+        self.converge_crit:float        = 1e-4
         self.ff_gain_tol:float          = 1e-4
-        self.cost_ratio_bounds:Tuple[float,float] = (1e-8, 10)
+        self.cost_ratio_bounds:Tuple[float,float] = (1e-7, 10)
         self.ro_reg_start:float         = 0.0
         self.ro_reg_change:float        = 0.5
-        self.fp_max_iter:int            = 10
+        self.fp_max_iter:int            = 5
         self.ls_scale_alpha_param:float = 0.5
         self.log_ctrl_history:bool      = True
         self.is_dyn_configured:bool     = False

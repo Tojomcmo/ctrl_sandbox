@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from src import dyn_functions as dyn
-from src import visualize_dyn_funcs as vis_dyn
-from src import gen_ctrl_funcs as gen_ctrl
+import dyn_functions as dyn
+import visualize_dyn_funcs as vis_dyn
+import gen_ctrl_funcs as gen_ctrl
 
 
 if __name__== "__main__":
@@ -12,12 +12,12 @@ if __name__== "__main__":
     lock_arm_num = 0
     dt = 0.01
     len_seq = 1500
-    pend_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0, b2=0)
+    pend_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0, b2=0, shoulder_act=True, elbow_act=True)
     dyn_func = lambda x, u: dyn.double_pend_no_damp_full_act_dyn(pend_params, x, u)
-    x_init = np.array([[3.14],[3.14],[0.0],[0.0]])
-    u_vec = np.array([[0.0],[0.0]]) 
+    x_init = np.array([3.14,3.14,0, 0.5])
+    u_vec = np.array([0.0,0.0]) 
 
-    x_seq = np.zeros((len_seq, 4, 1))
+    x_seq = np.zeros((len_seq, 4))
     x_seq[0]= x_init
     for k in range(len_seq-1):
         if lock_arm_num == 1:

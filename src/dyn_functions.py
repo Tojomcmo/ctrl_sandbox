@@ -120,10 +120,10 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     c1m2 = jnp.cos(th1-th2)
     s1m2 = jnp.sin(th1-th2)
     m1pm2 = m1 + m2
-    det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (m1 * m2 * l1**2 * l2**2 * c1m2))
+    det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (- m2 * l1 * l2 * c1m2)**2)
 
     M_inv_mat = jnp.array([[ m2 * l2**2                     , -m2 * l1 * l2 * c1m2],
-                           [-m1 * l1 * l2 * c1m2,  m1pm2 * l1**2                  ]])
+                           [-m2 * l1 * l2 * c1m2,  m1pm2 * l1**2                  ]])
 
     gen_dyn_mat = jnp.array([[-m2*l1*l2*thdot2**2*s1m2 - m1pm2*l1*g*jnp.sin(th1) - (b1+b2)*thdot1 + b2*thdot2],
                              [ m2*l1*l2*thdot2**2*s1m2 - m2*l2*g*jnp.sin(th2)    +      b2*thdot1 - b2*thdot2]])
