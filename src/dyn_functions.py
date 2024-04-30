@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 import numpy as np
 import numpy.typing as npt
+from numpy.linalg import inv
 
 import ilqr_utils as util
 import gen_ctrl_funcs as gen_ctrl
@@ -43,7 +44,41 @@ class nlDoublePendParams(dynFuncParams):
                                     [1]],dtype=float)
         else:
             print('double pendulum dynamics function is fully passive. Control array must be len(1,)')
-            self.B_mat = jnp.zeros([2,1])       
+            self.B_mat = jnp.zeros([2,1])     
+
+class nlDoublePend2Params(dynFuncParams):
+    def __init__(self, g:float, m1:float,        moi1:float,         
+                                d1:float,          l1:float, 
+                                m2:float,        moi2:float,   
+                                d2:float,          l2:float,
+                                b1:float,          b2:float,                                 
+                                shoulder_act:bool, elbow_act:bool):
+        super().__init__()
+        self.g  = g
+        self.m1 = m1
+        self.moi1 = moi1                
+        self.d1 = d1
+        self.l1 = l1
+        self.m2 = m2
+        self.moi2 = moi2
+        self.d2 = d2
+        self.l2 = l2
+        self.b1 = b1
+        self.b2 = b2
+        self.shoulder_act = shoulder_act
+        self.elbow_act    = elbow_act
+        if self.shoulder_act is True and self.elbow_act is True:
+            self.B_mat = jnp.array([[1, -1],
+                                    [0,  1]],dtype=float)
+        elif self.shoulder_act is True and self.elbow_act is False:
+            self.B_mat = jnp.array([[1],
+                                    [0]],dtype=float) 
+        elif self.shoulder_act is False and self.elbow_act is True:
+            self.B_mat = jnp.array([[-1],
+                                    [1]],dtype=float)
+        else:
+            print('double pendulum dynamics function is fully passive. Control array must be len(1,)')
+            self.B_mat = jnp.zeros([2,1])  
 
 def pend_dyn_nl(params:nlPendParams, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])->npt.NDArray:
 # continuous time dynamic equation for simple pendulum 
@@ -99,9 +134,7 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     The control vector has form u = [tq1, tq2]'
     The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
     helpful resource https://dassencio.org/33
-    
     Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
-    
     Thetas are both reference to intertial frame down position
     '''
     x_jax = jnp.array(state)
@@ -120,14 +153,20 @@ def double_pend_no_damp_full_act_dyn(params:nlDoublePendParams, state:npt.NDArra
     c1m2 = jnp.cos(th1-th2)
     s1m2 = jnp.sin(th1-th2)
     m1pm2 = m1 + m2
-    det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (- m2 * l1 * l2 * c1m2)**2)
 
-    M_inv_mat = jnp.array([[ m2 * l2**2                     , -m2 * l1 * l2 * c1m2],
-                           [-m2 * l1 * l2 * c1m2,  m1pm2 * l1**2                  ]])
+    mass_matrix = jnp.array([[(m1 + m2) * l1**2            , m2 * l1 * l2 * c1m2 ],
+                             [m2 * l1 * l2 * c1m2,    m2 * l2**2                 ]])
+    # det_denom = 1/((m1pm2 * m2 * l1**2 * l2**2) - (m2 * l1 * l2 * c1m2)**2)
+    # M_inv_mat = det_denom * jnp.array([[ m2 * l2**2                     , -m2 * l1 * l2 * c1m2],
+    #                                    [-m2 * l1 * l2 * c1m2,  m1pm2 * l1**2                  ]])
 
-    gen_dyn_mat = jnp.array([[-m2*l1*l2*thdot2**2*s1m2 - m1pm2*l1*g*jnp.sin(th1) - (b1+b2)*thdot1 + b2*thdot2],
-                             [ m2*l1*l2*thdot2**2*s1m2 - m2*l2*g*jnp.sin(th2)    +      b2*thdot1 - b2*thdot2]])
-                   
-    theta_ddots = (det_denom * M_inv_mat @ (gen_dyn_mat + params.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
+    M_inv_mat = jnp.linalg.inv(mass_matrix)
+    gen_dyn_mat = jnp.array([[-m2*l1*l2*thdot2**2*s1m2  - (b1+b2)*thdot1 + (b2)*thdot2],
+                             [ m2*l1*l2*thdot1**2*s1m2  +    (b2)*thdot1 - (b2)*thdot2]])
+
+    grav_mat   = jnp.array([[ - m1pm2*l1*g*jnp.sin(th1)],
+                            [ -  m2  *l2*g*jnp.sin(th2)]])               
+
+    theta_ddots = (M_inv_mat @ (gen_dyn_mat + grav_mat + params.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
     state_dot = jnp.array([thdot1,thdot2,theta_ddots[0],theta_ddots[1]])
     return state_dot

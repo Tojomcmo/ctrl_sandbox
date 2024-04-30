@@ -22,34 +22,36 @@ if __name__ == "__main__":
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
    time_step  = 0.05
-   len_seq    = 60
+   len_seq    = 100
    num_states = 4
    num_controls = 1
    shoulder_act = False
    elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
-                       [0   ,0   ,0.1   ,0  ],
-                       [0   ,0   ,0   ,0.1  ]],
-                       dtype=float) * 100.0
-   R_cost  = np.array([[1.0]],dtype=float)*10.0
+                       [0   ,0   ,0.05   ,0  ],
+                       [0   ,0   ,0   ,0.05  ]],
+                       dtype=float) * 200.0
+   R_cost  = np.array([[1.0]],dtype=float)*1.0
    # R_cost  = np.array([[10.0, 0],[0, 1.0]],dtype=float)*0.1
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 1000.0
-   dyn_func_params_ctrl = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
+                       dtype=float) * 4000.0
+   dyn_func_params_ctrl = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=2.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
+   ilqr_config.converge_crit = 1e-5
    ilqr_config.max_iter = 40
 
 
    #---------- create simulation system for post algorithm test ----------#
-   sim_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
-                                                shoulder_act=shoulder_act, elbow_act=elbow_act)
+   # sim_dyn_func_params = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=2.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
+   #                                              shoulder_act=shoulder_act, elbow_act=elbow_act)
+   sim_dyn_func_params = dyn_func_params_ctrl
    x_sim_init_vec = np.array([0.0,0.0,0.0,0.0])
 
    #---------- set system state init and desired trajectories ----------#

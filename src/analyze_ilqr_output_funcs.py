@@ -1,11 +1,14 @@
 import jax.numpy as jnp
 import numpy as np
+import numpy.typing as npt
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
 import ilqr_funcs as ilqr
+import dyn_functions as dyn
 
 def plot_2d_state_scatter_sequences(x_seq, xlabel="state 1", ylabel="state 2", title="state plot"):
     """
@@ -161,3 +164,20 @@ def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_o
     plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.x_cost_seq, xlabel='Time', ylabel='cost',datalabel='state cost pred', title = "cost plot", color= 'b.')
     plot_x_y_sequences(fig, ax3, controller_output.time_seq, controller_output.u_cost_seq, xlabel='Time', ylabel='cost',datalabel='control cost pred', title = "cost plot", color= 'g.')
     plt.tight_layout()
+
+
+
+
+
+def calculate_dpend_potential_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+    pot_energy_m1 = - pm.g * (pm.m1 + pm.m2) * pm.l1 * np.cos(x_vec[0])
+    pot_energy_m2 = - pm.g *  pm.m2          * pm.l2 * np.cos(x_vec[1])
+    return pot_energy_m1 + pot_energy_m2
+
+def calculate_dpend_kinetic_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+    return ( 0.5*(pm.m1 + pm.m2) * pm.l1**2 * (x_vec[2])**2 ) + \
+           ( 0.5*(pm.m2)         * pm.l2**2 * (x_vec[3])**2 ) + \
+        (pm.m2 * pm.l1 * pm.l2 * x_vec[2] * x_vec[3] * np.cos(x_vec[0] - x_vec[1]))
+
+def calculate_dpend_total_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+    return calculate_dpend_kinetic_energy(pm,x_vec) + calculate_dpend_potential_energy(pm, x_vec)
