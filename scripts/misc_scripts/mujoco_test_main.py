@@ -4,9 +4,9 @@ import mujoco as mujoco
 import matplotlib.pyplot as plt
 import matplotlib.animation as animate
 
-import src.mjcf_models as mjcf
-import src.mujoco_funcs as mj_funcs
-import src.gen_ctrl_funcs as gen_ctrl
+import mjcf_models as mjcf
+import mujoco_funcs as mj_funcs
+import gen_ctrl_funcs as gen_ctrl
 # More legible printing from numpy.
 
 if __name__ == "__main__":

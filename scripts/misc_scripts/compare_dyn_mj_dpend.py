@@ -31,7 +31,7 @@ if __name__ == "__main__":
     time_step = 0.05
     model.opt.timestep = time_step
     steps     = 200
-    data.ctrl = np.array([50.0,0.0])
+    data.ctrl = np.array([10.0,0.0])
     mujoco.mj_forward(model,data)
 
     #initial linearization and predictiuon

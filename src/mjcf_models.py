@@ -144,23 +144,23 @@ def create_MJCF_single_pend_m_d_mod(mass, damping, length):
                                     """
     return mjcf_pend_model
 
-
+                                      # <inertial pos="0 0 -1.5" mass="1.0" diaginertia="0.5 1.0 0.5"/>
 def create_MJCF_double_pend_m_d_mod(mass, damping, length):
     mjcf_pend_model = """<mujoco>
                           <option gravity="0 0 -9.81">
-                              <flag sensornoise="enable"/>
+                              <flag sensornoise="disable"/>
                           </option>
 
                           <worldbody>
                               <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
                               <camera name="fixed" pos="0 -4 2" xyaxes="1 0 0 0 0 1"/>
                               <geom type="plane" size="1 1 0.1" rgba=".9 0 0 1"/>
-                              <body name="pend1" pos="0 0 2" euler="0 0 0">
+                              <body name="pend1" pos="0 0 3" euler="0 0 0">
                                   <joint name="swing1" type="hinge" axis="0 -1 0" pos="0 0 0"/>
-                                  <geom type="capsule" fromto="0 0 0 0 0 -0.75" size=".05" rgba="0 1 0 1"/>
-                                  <body name="pend2" pos="0 0.0 -0.75"  euler="0 0 0">
-                                      <joint name="swing2" type="hinge" damping="0.1" axis="0 -1 0" pos="0 0 0"/>
-                                      <geom type="capsule" fromto="0 0 0 0 0 -0.75" size=".05" rgba="0 1 0 1"/> 
+                                  <geom type="capsule" mass="1"fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/>
+                                  <body name="pend2" pos="0 0.0 -1.0"  euler="0 0 0">
+                                      <joint name="swing2" type="hinge" damping="0.0" axis="0 -1 0" pos="0 0 0"/>
+                                      <geom type="capsule" mass="1" fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/> 
                                   </body>                              
                               </body>
                           </worldbody>

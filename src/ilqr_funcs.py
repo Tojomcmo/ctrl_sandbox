@@ -78,7 +78,7 @@ class ilqrConfigStruct:
             ValueError("struct already configured for dynamics")
         self.mj_model, _, self.mj_data = mj_funcs.create_mujoco_model(mjcf_model, self.time_step)
         self.mjcf_model                = mjcf_model
-        mujoco.mj_forward(self.mj_model,self.mj_data)        
+        mujoco.mj_forward(self.mj_model,self.mj_data)         # type: ignore
         self.mj_ctrl:bool              = True   
 
     def curry_funcs_for_mujoco(self)->None:
