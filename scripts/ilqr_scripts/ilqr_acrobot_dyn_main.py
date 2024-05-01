@@ -38,7 +38,7 @@ if __name__ == "__main__":
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 4000.0
+                       dtype=float) * 5000.0
    dyn_func_params_ctrl = dyn.nlDoublePendParams(g=9.81, m1=1.0, l1=2.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
