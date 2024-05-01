@@ -15,12 +15,11 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         control        = np.array([1, 0.1], dtype=float)
         state_des      = np.ones((3,3), dtype=float) * 2.0
         control_des    = np.ones((3,2), dtype=float) *2.0       
+        k_step         = 1
 
-        cost_func_params = cost.costFuncQuadStateAndControlParams(Q,R,Qf,state_des,control_des)        
-        k_step = 1
-        j,j_state,j_control = cost.cost_func_quad_state_and_control(cost_func_params,
-                                                                 state, control,
-                                                                 k_step, is_final_bool=False)
+        cost_func_obj = cost.cost_quad_x_and_u(Q,R,Qf,state_des,control_des)
+        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control(state,control,k_step, is_final_bool=False)
+
         state_corr   = (state - state_des[k_step]).reshape(-1,1)
         control_corr = (control - control_des[k_step]).reshape(-1,1)
         j_expect       = jnp.array((0.5) * ((state_corr.T @ Q @ state_corr)+(control_corr.T @ R @ control_corr)))                                    
@@ -35,12 +34,11 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         control        = np.array([1, 0.1], dtype=float)
         state_des      = np.ones((3,3), dtype=float) * 2.0
         control_des    = np.ones((3,2), dtype=float) *2.0       
+        k_step         = 1
 
-        cost_func_params = cost.costFuncQuadStateAndControlParams(Q,R,Qf,state_des,control_des)        
-        k_step = 1
-        j,j_state,j_control = cost.cost_func_quad_state_and_control(cost_func_params,
-                                                                 state, control,
-                                                                 k_step, is_final_bool=True)
+        cost_func_obj = cost.cost_quad_x_and_u(Q,R,Qf,state_des,control_des)
+        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control(state,control,k_step, is_final_bool=True)
+
         state_corr   = (state - state_des[k_step]).reshape(-1,1)
         control_corr = (control - control_des[k_step]).reshape(-1,1)
         j_expect       = jnp.array((0.5) * (state_corr.T @ Qf @ state_corr))

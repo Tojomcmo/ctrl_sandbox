@@ -169,15 +169,15 @@ def plot_ilqr_iter_sim_ctrl_cost(ilqr_config:ilqr.ilqrConfigStruct, controller_o
 
 
 
-def calculate_dpend_potential_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-    pot_energy_m1 = - pm.g * (pm.m1 + pm.m2) * pm.l1 * np.cos(x_vec[0])
-    pot_energy_m2 = - pm.g *  pm.m2          * pm.l2 * np.cos(x_vec[1])
-    return pot_energy_m1 + pot_energy_m2
+# def calculate_dpend_potential_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+#     pot_energy_m1 = - pm.g * (pm.m1 + pm.m2) * pm.l1 * np.cos(x_vec[0])
+#     pot_energy_m2 = - pm.g *  pm.m2          * pm.l2 * np.cos(x_vec[1])
+#     return pot_energy_m1 + pot_energy_m2
 
-def calculate_dpend_kinetic_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-    return ( 0.5*(pm.m1 + pm.m2) * pm.l1**2 * (x_vec[2])**2 ) + \
-           ( 0.5*(pm.m2)         * pm.l2**2 * (x_vec[3])**2 ) + \
-        (pm.m2 * pm.l1 * pm.l2 * x_vec[2] * x_vec[3] * np.cos(x_vec[0] - x_vec[1]))
+# def calculate_dpend_kinetic_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+#     return ( 0.5*(pm.m1 + pm.m2) * pm.l1**2 * (x_vec[2])**2 ) + \
+#            ( 0.5*(pm.m2)         * pm.l2**2 * (x_vec[3])**2 ) + \
+#         (pm.m2 * pm.l1 * pm.l2 * x_vec[2] * x_vec[3] * np.cos(x_vec[0] - x_vec[1]))
 
-def calculate_dpend_total_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-    return calculate_dpend_kinetic_energy(pm,x_vec) + calculate_dpend_potential_energy(pm, x_vec)
+# def calculate_dpend_total_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
+#     return calculate_dpend_kinetic_energy(pm,x_vec) + calculate_dpend_potential_energy(pm, x_vec)

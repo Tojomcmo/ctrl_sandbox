@@ -39,25 +39,19 @@ class ilqrConfigStruct:
 
     def config_cost_func(self,
             cost_func:Callable[
-                [cost.costFuncParams, npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-                Tuple[npt.NDArray,npt.NDArray,npt.NDArray]], 
-            cost_func_params:cost.costFuncParams)-> None:
+                [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
+                Tuple[npt.NDArray,npt.NDArray,npt.NDArray]])-> None:
         '''
         This function receives the proposed cost function and parameters for the cost function, and generates
         The specific cost function for the controller to use with curried inputs
         ''' 
-        self.cost_func_curried:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-            Tuple[npt.NDArray,npt.NDArray,npt.NDArray]] = lambda x, u, k, is_final_bool: cost_func(cost_func_params, x, u, k, is_final_bool)
-        
-        self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(self.cost_func_curried)
-        self.cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.cost_func_curried)
+        self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(cost_func)
+        self.cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func)
         self.is_cost_configured = True
-        self.cost_func_params   = cost_func_params
+
 
     def config_for_dyn_func(self,
-                            cont_dyn_func:Callable[[dyn.dynFuncParams, npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
-                            dyn_func_params:dyn.dynFuncParams,
+                            cont_dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
                             integrate_func:Callable[[Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
                                                     float, npt.NDArray[np.float64], npt.NDArray[np.float64]], 
                                                     npt.NDArray[np.float64]]) -> None:
@@ -73,7 +67,6 @@ class ilqrConfigStruct:
             ValueError("struct already configured for dynamics")
         # Populate discrete dynamics function
         self.cont_dyn_func   = cont_dyn_func
-        self.dyn_func_params = dyn_func_params
         self.integrate_func  = integrate_func
         self.is_cost_configured = True
         self.mj_ctrl:bool       = False
@@ -103,14 +96,9 @@ class ilqrConfigStruct:
                                                                                                                       x_seq, u_seq)
         
     def curry_funcs_for_dyn_funcs(self)->None:
-
-        self.cont_dyn_func_curried:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]],
-            npt.NDArray] = lambda x, u: self.cont_dyn_func(self.dyn_func_params, x, u)
-        
         self.discrete_dyn_func:Callable[
             [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            npt.NDArray[np.float64]] = lambda x, u: self.integrate_func(self.cont_dyn_func_curried, self.time_step, x, u)
+            npt.NDArray[np.float64]] = lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
 
         self.simulate_fwd_dyn_seq:Callable[
             [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
@@ -124,8 +112,7 @@ class ilqrConfigStruct:
 
     def create_curried_analyze_cost_dec_func(self)-> None:
         self.analyze_cost_dec = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, self.cost_ratio_bounds)
-
-    
+  
     def create_curried_funcs(self):
         if self.is_cost_configured is False or self.is_dyn_configured is False:
             ValueError("Controller is not configured yet")
