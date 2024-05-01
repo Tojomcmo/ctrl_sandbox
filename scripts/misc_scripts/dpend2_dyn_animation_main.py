@@ -14,19 +14,19 @@ if __name__== "__main__":
     dt = 0.02
     len_seq = 1500
     time_vec = np.arange(0,len_seq*dt, dt)
-    d_pend_sys = dyn.double_pend_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=0.0, shoulder_act=True, elbow_act=True)
-    dyn_func = d_pend_sys.cont_dyn_func
-    x_init = np.array([3.14,3.14,0.0, 0.0])
-    u_vec = np.array([0.0,0.0]) 
+    dpend_sys = dyn.double_pend_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=5.0, b2=5.0, shoulder_act=True, elbow_act=True)
+    dyn_func = dpend_sys.cont_dyn_func
+    x_init = np.array([0.0,0.0,0.0, 0.0])
+    u_vec = np.array([0.0,5.0]) 
 
     x_seq = np.zeros((len_seq, 4))
     pot_energy_seq = np.zeros((len_seq,1))
     kin_energy_seq = np.zeros((len_seq,1))
     tot_energy_seq = np.zeros((len_seq,1))
     x_seq[0]= x_init
-    pot_energy_seq[0] = d_pend_sys.calculate_potential_energy(x_init)
-    kin_energy_seq[0] = d_pend_sys.calculate_kinetic_energy(x_init)
-    tot_energy_seq[0] = d_pend_sys.calculate_total_energy(x_init)
+    pot_energy_seq[0] = dpend_sys.calculate_potential_energy(x_init)
+    kin_energy_seq[0] = dpend_sys.calculate_kinetic_energy(x_init)
+    tot_energy_seq[0] = dpend_sys.calculate_total_energy(x_init)
     for k in range(len_seq-1):
         if lock_arm_num == 1:
             x_seq[k,0] = 0.0
@@ -35,9 +35,9 @@ if __name__== "__main__":
             x_seq[k,1] = x_seq[k,0]
             x_seq[k,3] = x_seq[k,2]
         x_seq[k+1] = gen_ctrl.step_rk4(dyn_func, dt, x_seq[k], u_vec)
-        pot_energy_seq[k+1] = d_pend_sys.calculate_potential_energy(x_seq[k+1])
-        kin_energy_seq[k+1] = d_pend_sys.calculate_kinetic_energy(x_seq[k+1])  
-        tot_energy_seq[k+1] = d_pend_sys.calculate_total_energy(x_seq[k+1])
+        pot_energy_seq[k+1] = dpend_sys.calculate_potential_energy(x_seq[k+1])
+        kin_energy_seq[k+1] = dpend_sys.calculate_kinetic_energy(x_seq[k+1])  
+        tot_energy_seq[k+1] = dpend_sys.calculate_total_energy(x_seq[k+1])
         
     fig1 = plt.figure(figsize=[6,4])
     plt.plot(np.arange(0,len_seq*dt, dt), pot_energy_seq, label='potential')
@@ -46,7 +46,7 @@ if __name__== "__main__":
     plt.legend()
 
     fig = plt.figure(figsize=[10,8])
-    pend_animation = vis_dyn.double_pend_animation(d_pend_sys, x_seq, dt,fig)
+    pend_animation = vis_dyn.double_pend_animation(dpend_sys.l1, dpend_sys.l2, x_seq, dt,fig)
     pend_animation.create_double_pend_animation()
     pend_animation.show_plot()
 

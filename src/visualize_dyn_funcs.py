@@ -13,12 +13,13 @@ import dyn_functions as dyn
 import analyze_ilqr_output_funcs as analyze
 
 class double_pend_animation():
-    def __init__(self,double_pend_params:dyn.nlDoublePendParams,
+    def __init__(self,l1,l2,
                  x_seq:npt.NDArray[np.float64],
                  dt:float, fig:Figure,
                  u_seq:Optional[npt.NDArray[np.float64]] = None,
                  cost_seqs:Optional[npt.NDArray[np.float64]] = None) -> None:
-        self.params  = double_pend_params
+        self.l1      = l1
+        self.l2      = l2
         self.dt      = dt
         self.x_seq   = x_seq        
         self.fig     = fig
@@ -33,7 +34,7 @@ class double_pend_animation():
             self.plt_w_ctrl_cost = True    
 
     def config_for_ani(self):
-        L = self.params.l1 + self.params.l2
+        L = self.l1 + self.l2
         self.ax1 = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))
         self.ax1.set_aspect('equal')
         self.ax1.grid()
@@ -43,7 +44,7 @@ class double_pend_animation():
         self.time_text = self.ax1.text(0.05, 0.9, '', transform=self.ax1.transAxes)
 
     def config_for_ani_ctrl_cost(self):
-        L = self.params.l1 + self.params.l2
+        L = self.l1 + self.l2
         gs = gridspec.GridSpec(2, 2)
         self.ax1 = self.fig.add_subplot(gs[:, 0],autoscale_on=False, xlim=(-L, L), ylim=(-L, L)) # row 0, col 0
         self.ax2 = self.fig.add_subplot(gs[0, 1]) # row 0, col 1
@@ -57,10 +58,10 @@ class double_pend_animation():
         self.time_text = self.ax1.text(0.05, 0.9, '', transform=self.ax1.transAxes)
 
     def create_cartesian_sequence(self)->None:
-        x1 =  self.params.l1*np.sin(self.x_seq_ani[:, 0])
-        y1 = -self.params.l1*np.cos(self.x_seq_ani[:, 0])
-        x2 =  self.params.l2*np.sin(self.x_seq_ani[:, 1]) + x1
-        y2 = -self.params.l2*np.cos(self.x_seq_ani[:, 1]) + y1
+        x1 =  self.l1*np.sin(self.x_seq_ani[:, 0])
+        y1 = -self.l1*np.cos(self.x_seq_ani[:, 0])
+        x2 =  self.l2*np.sin(self.x_seq_ani[:, 1]) + x1
+        y2 = -self.l2*np.cos(self.x_seq_ani[:, 1]) + y1
         self.cartesian_vecs = (x1, y1, x2, y2)
 
 

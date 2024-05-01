@@ -18,7 +18,7 @@ if __name__ == "__main__":
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
    time_step  = 0.05
-   len_seq    = 50
+   len_seq    = 80
    num_states = 4
    num_controls = 1
    shoulder_act = True
@@ -35,7 +35,7 @@ if __name__ == "__main__":
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
                        dtype=float) * 5000.0
-   dyn_func_sys_ctrl = dyn.double_pm_pend_dyn(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
+   dyn_func_sys_ctrl = dyn.double_pend_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=3.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
    #---------- initialize ilqr configuration object --------------#
@@ -70,7 +70,7 @@ if __name__ == "__main__":
    elif ctrl_target_condition == 2:  
       x_des_seq  = np.zeros([len_seq, num_states], dtype=float)
       x_des_seq[:,0] = np.pi
-      x_des_seq[:,1] = np.pi      
+      x_des_seq[:,1] = np.pi * 0      
       u_init_seq = np.ones([len_seq-1, num_controls], dtype=float)*0.1
       u_des_seq  = np.zeros([len_seq-1, num_controls], dtype=float)
 
