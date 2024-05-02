@@ -158,6 +158,10 @@ class double_pm_pend_dyn():
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(x_vec)
 
 class double_pend_dyn():
+    '''
+    https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    https://github.com/Tojomcmo/ctrl_sandbox/wiki/2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    '''
     def __init__(self, g:float, m1:float,        moi1:float,         
                                 d1:float,          l1:float, 
                                 m2:float,        moi2:float,   

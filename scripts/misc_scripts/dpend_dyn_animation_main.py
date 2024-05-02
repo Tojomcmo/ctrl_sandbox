@@ -11,8 +11,8 @@ import analyze_ilqr_output_funcs as analyze
 if __name__== "__main__":
     save_ani_bool = False
     lock_arm_num = 0
-    dt = 0.02
-    len_seq = 1500
+    dt = 0.03
+    len_seq = 600
     time_vec = np.arange(0,len_seq*dt, dt)
     dpend_sys = dyn.double_pm_pend_dyn(g=9.81, m1=1.0, l1=2.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0, shoulder_act=True, elbow_act=True)
     x_init = np.array([3.14,3.14,0.0, 0.0])
@@ -41,7 +41,10 @@ if __name__== "__main__":
     fig1 = plt.figure(figsize=[6,4])
     plt.plot(np.arange(0,len_seq*dt, dt), pot_energy_seq, label='potential')
     plt.plot(np.arange(0,len_seq*dt, dt), kin_energy_seq,label='kinetic')
-    plt.plot(np.arange(0,len_seq*dt, dt), tot_energy_seq,label='total')        
+    plt.plot(np.arange(0,len_seq*dt, dt), tot_energy_seq,label='total')
+    plt.title('Passive undamped pendulum energy conservation')
+    plt.xlabel('time [s]')
+    plt.ylabel('energy [J]')        
     plt.legend()
 
     fig = plt.figure(figsize=[10,8])

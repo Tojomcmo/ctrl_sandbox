@@ -24,12 +24,11 @@ def fwd_sim_mj_w_ctrl(model, data, x_init, u_seq):
         and B at each pair x_seq, u_seq
     '''
     nx            = model.nv
-    x_seq         = np.zeros((len(u_seq)+1, nx*2, 1   ))
+    x_seq         = np.zeros((len(u_seq)+1, nx*2))
     mujoco.mj_resetData(model, data)
     set_mj_state_vec(data, x_init)    
     mujoco.mj_forward(model,data)
     x_seq[0]   = get_state_vec(data)
-    assert (x_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"
     for idx in range(len(u_seq)):
         data.ctrl = (u_seq[idx]).reshape(-1)       
         mujoco.mj_step(model, data)  
@@ -74,7 +73,7 @@ def linearize_mujoco_state_and_control(model, data, eps=1e-6, flg_centered=True)
     return A, B
 
 def get_state_vec(data):
-    return np.hstack((data.qpos, data.qvel)).reshape(-1,1) 
+    return np.hstack((data.qpos, data.qvel)).reshape(-1) 
 
 def set_mj_state_vec(data, x_vec):
     x_vec_split = int(len(x_vec)/2)

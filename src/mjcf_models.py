@@ -157,10 +157,10 @@ def create_MJCF_double_pend_m_d_mod(mass, damping, length):
                               <geom type="plane" size="1 1 0.1" rgba=".9 0 0 1"/>
                               <body name="pend1" pos="0 0 3" euler="0 0 0">
                                   <joint name="swing1" type="hinge" axis="0 -1 0" pos="0 0 0"/>
-                                  <geom type="capsule" mass="1"fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/>
+                                  <geom type="cylinder" mass="1.0"fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/>
                                   <body name="pend2" pos="0 0.0 -1.0"  euler="0 0 0">
                                       <joint name="swing2" type="hinge" damping="0.0" axis="0 -1 0" pos="0 0 0"/>
-                                      <geom type="capsule" mass="1" fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/> 
+                                      <geom type="cylinder" mass="1.0" fromto="0 0 0 0 0 -1.0" size=".05" rgba="0 1 0 1"/> 
                                   </body>                              
                               </body>
                           </worldbody>

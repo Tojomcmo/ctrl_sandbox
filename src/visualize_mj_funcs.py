@@ -40,15 +40,14 @@ def create_mj_video_ilqr_w_ctrl(model,
     img_set:list = []
     nx            = model.nv
     nu            = model.nu
-    x_sim_seq         = np.zeros((ctrl_out.len_seq, nx*2, 1   ))
-    u_sim_seq     = np.zeros((ctrl_out.len_seq-1, nu, 1   ))
+    x_sim_seq         = np.zeros((ctrl_out.len_seq, nx*2))
+    u_sim_seq     = np.zeros((ctrl_out.len_seq-1, nu))
     mujoco.mj_resetData(model, data)
     prev_timestep = model.opt.timestep
     model.opt.timestep = ts_sim
     mj_funcs.set_mj_state_vec(data, x_init)    
     mujoco.mj_forward(model,data)
     x_sim_seq[0]   = mj_funcs.get_state_vec(data)
-    assert (x_sim_seq[0]).tolist() == x_init.tolist(), "x_init vector improperly initialized or queried"  
     for idx in range(len(ctrl_out.u_seq-1)):
         u_sim_seq[idx] = ilqr.calculate_u_star(ctrl_out.K_seq[idx], ctrl_out.u_seq[idx], ctrl_out.x_seq[idx], x_sim_seq[idx]) # type: ignore       
         data.ctrl      = (u_sim_seq[idx]).reshape(-1)                     

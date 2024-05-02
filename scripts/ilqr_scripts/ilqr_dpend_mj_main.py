@@ -6,21 +6,21 @@ import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
 import numpy.typing as npt
 
-import src.ilqr_funcs as ilqr
-import src.dyn_functions as dyn
-import src.cost_functions as cost
-import src.analyze_ilqr_output_funcs as analyze
-import src.gen_ctrl_funcs as gen_ctrl
+import ilqr_funcs as ilqr
+import dyn_functions as dyn
+import cost_functions as cost
+import analyze_ilqr_output_funcs as analyze
+import gen_ctrl_funcs as gen_ctrl
 
 import mujoco as mujoco
-import src.mjcf_models as mj_models
-import src.mujoco_funcs as mj_funcs
-import src.visualize_mj_funcs as mj_vis
+import mjcf_models as mj_models
+import mujoco_funcs as mj_funcs
+import visualize_mj_funcs as mj_vis
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
    time_step  = 0.05 
-   len_seq    = 60
+   len_seq    = 10
    num_states = 4
    num_controls = 2
    mj_ctrl = True
@@ -29,11 +29,11 @@ if __name__ == "__main__":
                        [0 ,0 ,1 ,0 ],
                        [0 ,0 ,0 ,1 ]], dtype=float) * 10.0
    # R_cost  = np.array([[1]], dtype=float) * (0.01)
-   R_cost  = np.eye(2, dtype=float) * (10.0)   
+   R_cost  = np.eye(2, dtype=float) * (1.0)   
    Qf_cost = np.array([[10,0 ,0 ,0 ],
                        [0 ,10,0 ,0 ],
                        [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 10.0
+                       [0 ,0 ,0 ,1 ]], dtype=float) * 100.0
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
@@ -48,10 +48,10 @@ if __name__ == "__main__":
    # x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
    #---------- create simulation system ----------#
-   x_sim_init_vec = np.array([[1.0],[1.0],[1.0],[1.0]])
+   x_sim_init_vec = np.array([0.0,0.0,0.0,0.0])
 
    #---------- set system init ----------#
-   x_tg_init_vec = np.array([[0.0],[0.0],[0.0],[0.0]])
+   x_tg_init_vec = np.array([0.0,0.0,0.0,0.0])
    x_init_vec = x_tg_init_vec
 
    ctrl_target_condition = 2
@@ -62,23 +62,23 @@ if __name__ == "__main__":
       # x_des_seq  = x_des_seq_traj_gen  
       pass
    elif ctrl_target_condition == 2:  
-      x_des_seq  = np.zeros([len_seq, num_states, 1])
+      x_des_seq  = np.zeros([len_seq, num_states])
       x_des_seq[:,0] = np.pi
-      u_init_seq = np.ones([len_seq-1, num_controls,1]) * (0.01)
-      u_des_seq  = np.zeros([len_seq-1, num_controls, 1])
+      u_init_seq = np.ones([len_seq-1, num_controls]) * (0.01)
+      u_des_seq  = np.zeros([len_seq-1, num_controls])
 
    else:
       raise ValueError('invalid ctrl_target_condition')   
 
    #------- complete ilqr configuration --------#
-   cost_func_params = cost.costFuncQuadStateAndControlParams(Q_cost,R_cost,Qf_cost,
-                                                            x_des_seq=x_des_seq,
-                                                            u_des_seq=u_des_seq)
+   cost_func_obj = cost.cost_quad_x_and_u(Q_cost,R_cost,Qf_cost,
+                                          x_des_seq=x_des_seq,
+                                          u_des_seq=u_des_seq)
    if mj_ctrl is True:
-      ilqr_config.config_for_mujoco(mj_models.create_acrobot())
+      ilqr_config.config_for_mujoco(mj_models.create_MJCF_double_pend_m_d_mod(1,1,1))
    else:
       pass
-   ilqr_config.config_cost_func(cost.cost_func_quad_state_and_control, cost_func_params)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -110,5 +110,5 @@ if __name__ == "__main__":
       ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/framerate * 1000))
    #------- plot simulation and controller outputs ------#
 
-   analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, x_sim_seq, u_sim_seq)
+   analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, cost_func_obj.x_des_seq, x_sim_seq, u_sim_seq)
    plt.show()
