@@ -14,15 +14,12 @@ if __name__== "__main__":
     len_seq = 600
     time_vec = np.arange(0,len_seq*dt, dt)
     h_bar = 1.0
-    r_bar = 0.025
     m_bar = 1.0
-    d_bar = h_bar/2
-    moi = (1/12)*h_bar*(m_bar**2 + 3*r_bar**2) 
-    dpend_sys = dyn.double_pend_rel_dyn(g=9.81, m1=m_bar, moi1=moi, d1=d_bar, l1=h_bar, 
-                                            m2=m_bar, moi2=moi, d2=d_bar, l2=h_bar, 
-                                            b1=0.0, b2=0.0, shoulder_act=True, elbow_act=True)
+    dpend_sys = dyn.ua_double_pend_rel_dyn(g=9.81, m1=m_bar, l1=h_bar, 
+                                            m2=m_bar, l2=h_bar, 
+                                           shoulder_act=True, elbow_act=True)
     x_init = np.array([0.0,0.0,0.0,0.0])
-    u_vec = np.array([10.0,0.0]) 
+    u_vec = np.array([10.0, 0.0]) 
 
     x_seq = np.zeros((len_seq, 4))
     pot_energy_seq = np.zeros((len_seq,1))
