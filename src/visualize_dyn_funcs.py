@@ -13,9 +13,10 @@ import dyn_functions as dyn
 import analyze_ilqr_output_funcs as analyze
 
 class double_pend_animation():
-    def __init__(self,l1,l2,
+    def __init__(self,l1,l2, 
                  x_seq:npt.NDArray[np.float64],
                  dt:float, fig:Figure,
+                 th2='abs',
                  u_seq:Optional[npt.NDArray[np.float64]] = None,
                  cost_seqs:Optional[npt.NDArray[np.float64]] = None) -> None:
         self.l1      = l1
@@ -25,7 +26,10 @@ class double_pend_animation():
         self.fig     = fig
         self.min_fps:int = 30
         self.set_fps_for_animation()
-        self.create_cartesian_sequence()    
+        if th2=='abs':
+            self.create_abs_cartesian_sequence()  
+        elif th2=='rel': 
+            self.create_rel_cartesian_sequence()       
         if u_seq is None or cost_seqs is None:
             self.config_for_ani()
             self.plt_w_ctrl_cost = False 
@@ -57,13 +61,19 @@ class double_pend_animation():
         self.time_template = 'time = %.2fs'
         self.time_text = self.ax1.text(0.05, 0.9, '', transform=self.ax1.transAxes)
 
-    def create_cartesian_sequence(self)->None:
+    def create_abs_cartesian_sequence(self)->None:
         x1 =  self.l1*np.sin(self.x_seq_ani[:, 0])
         y1 = -self.l1*np.cos(self.x_seq_ani[:, 0])
         x2 =  self.l2*np.sin(self.x_seq_ani[:, 1]) + x1
         y2 = -self.l2*np.cos(self.x_seq_ani[:, 1]) + y1
         self.cartesian_vecs = (x1, y1, x2, y2)
 
+    def create_rel_cartesian_sequence(self)->None:
+        x1 =  self.l1*np.sin(self.x_seq_ani[:, 0])
+        y1 = -self.l1*np.cos(self.x_seq_ani[:, 0])
+        x2 =  self.l2*np.sin(self.x_seq_ani[:, 0] + self.x_seq_ani[:, 1]) + x1
+        y2 = -self.l2*np.cos(self.x_seq_ani[:, 0] + self.x_seq_ani[:, 1]) + y1
+        self.cartesian_vecs = (x1, y1, x2, y2)
 
     def animate_double_pend(self, i, line, trace, time_text):
         thisx = [0, (self.cartesian_vecs[0][i]).item(), (self.cartesian_vecs[2][i]).item()]
@@ -87,7 +97,7 @@ class double_pend_animation():
     def update_fps_for_animation(self, new_min_fps):
         self.min_fps = new_min_fps
         self.set_fps_for_animation()
-        self.create_cartesian_sequence()  
+        self.create_abs_cartesian_sequence()  
 
     def create_double_pend_animation(self):
         self.ani = animation.FuncAnimation(self.fig, partial(self.animate_double_pend, 

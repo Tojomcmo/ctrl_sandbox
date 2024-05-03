@@ -35,7 +35,7 @@ if __name__ == "__main__":
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
                        dtype=float) * 5000.0
-   dyn_func_sys_ctrl = dyn.double_pend_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=3.0,
+   dyn_func_sys_ctrl = dyn.double_pend_abs_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=3.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
    #---------- initialize ilqr configuration object --------------#

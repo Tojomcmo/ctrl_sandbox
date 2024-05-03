@@ -157,7 +157,7 @@ class double_pm_pend_dyn():
     def calculate_total_energy(self, x_vec:npt.NDArray[np.float64]) -> float:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(x_vec)
 
-class double_pend_dyn():
+class double_pend_abs_dyn():
     '''
     https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
     https://github.com/Tojomcmo/ctrl_sandbox/wiki/2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
@@ -267,6 +267,118 @@ class double_pend_dyn():
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(x_vec)
     
 
+class double_pend_rel_dyn():
+    '''
+    https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    https://github.com/Tojomcmo/ctrl_sandbox/wiki/2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    '''
+    def __init__(self, g:float, m1:float,        moi1:float,         
+                                d1:float,          l1:float, 
+                                m2:float,        moi2:float,   
+                                d2:float,          l2:float,
+                                b1:float,          b2:float,                                 
+                                shoulder_act:bool, elbow_act:bool):
+        # populate gravity parameter
+        self.g  = g
+        # populate inertial parameters
+        self.m1 = m1
+        self.moi1 = moi1   
+        self.m2 = m2
+        self.moi2 = moi2    
+        # populate length parameters
+        self.d1 = d1
+        self.l1 = l1
+        self.d2 = d2
+        self.l2 = l2
+        # populate damping parameters
+        self.b1 = b1
+        self.b2 = b2
+        # set actuation boolean states
+        self.shoulder_act = shoulder_act
+        self.elbow_act    = elbow_act
+        # configure system matrices and static lumped terms
+        self._configure_B_mat()
+        self._calculate_lumped_terms()
+
+    def validate_inputs(self):
+        #TODO fill in validation criteria
+        pass
+
+    def reconfigure_double_pend(self):
+        self._configure_B_mat()
+        self._calculate_lumped_terms()
+        
+    def _configure_B_mat(self):
+        if self.shoulder_act is True and self.elbow_act is True:
+            self.B_mat = jnp.array([[1, 0],
+                                    [0, 1]],dtype=float)
+        elif self.shoulder_act is True and self.elbow_act is False:
+            self.B_mat = jnp.array([[1],
+                                    [0]],dtype=float) 
+        elif self.shoulder_act is False and self.elbow_act is True:
+            self.B_mat = jnp.array([[0],
+                                    [1]],dtype=float)
+        else:
+            print('double pendulum dynamics function is fully passive. Control array must be len(1,)')
+            self.B_mat = jnp.zeros([2,1]) 
+
+    def _calculate_lumped_terms(self):
+        self.M_1 = (self.m1 * self.d1**2) + (self.m2 * self.l1**2) + (self.m2 * self.d2**2) + self.moi1
+        self.M_2 = (self.m2 * self.d2**2) + self.moi2
+        self.M_3 = (self.m2 * self.d2**2)
+        self.M_4 = (self.m2 * self.l1 * self.d2)
+        self.G_1 = (self.m1 * self.d1  +  self.m2 * self.l1) * self.g
+        self.G_2 = (self.m2 * self.d2 * self.g)
+
+    def _calc_state_dep_mass_term(self, x_vec:npt.NDArray[np.float64])->npt.NDArray:
+        return self.M_4 * jnp.cos(x_vec[1])
+    
+    def calculate_mass_matrix(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+        M4c2 = self._calc_state_dep_mass_term(x_vec)
+        return jnp.array([[self.M_1 + 2*M4c2, self.M_3 + M4c2 ],[self.M_3 + M4c2, self.M_2]])
+
+    def calculate_mass_matrix_inv(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+        M4c2 = self._calc_state_dep_mass_term(x_vec)
+        return (1/((self.M_1 + 2*M4c2)*self.M_2 - (self.M_3 + M4c2)**2)) * jnp.array([[self.M_2, -(self.M_3 + M4c2 )],
+                                                                                      [-(self.M_3 + M4c2 ), self.M_1 + 2*M4c2]])
+
+    def cont_dyn_func(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])-> npt.NDArray:
+        '''
+        The state vector has form x = [th1, th2, thdot1, thdot2]'
+        The control vector has form u = [tq1, tq2]'
+        The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
+        helpful resource https://dassencio.org/33
+        Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
+        Thetas are both reference to intertial frame down position
+        '''
+        x_jax = jnp.array(x_vec)
+        u_jax = jnp.array(u_vec) 
+        s2 = jnp.sin(x_jax[1])
+
+        # mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
+        mass_mat = self.calculate_mass_matrix(x_vec)
+        mass_mat_inv = inv(mass_mat)
+
+        C_mat = jnp.array([[ self.M_4*s2*x_jax[3]*(2*x_jax[2] + x_jax[3]) - (self.b1)*x_jax[2]],
+                           [-self.M_4*s2*x_jax[2]**2                      - (self.b2)*x_jax[3]]])
+        
+        grav_mat   = jnp.array([[ - self.G_1*jnp.sin(x_jax[0]) - self.G_2*jnp.sin(x_jax[0] + x_jax[1])],
+                                [ - self.G_2*jnp.sin(x_jax[0] + x_jax[1])]])   
+                    
+        theta_ddots = (mass_mat_inv @ (C_mat + grav_mat + self.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
+        state_dot = jnp.array([x_jax[2],x_jax[3],theta_ddots[0],theta_ddots[1]])
+        return state_dot
+        
+    def calculate_kinetic_energy(self, x_vec:npt.NDArray[np.float64])-> float:
+        mass_mat = self.calculate_mass_matrix(x_vec)
+        x_vec_col = x_vec[2:].reshape(-1,1)
+        return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item() 
+    
+    def calculate_potential_energy(self, x_vec:npt.NDArray[np.float64])-> float:
+        return (-self.G_1 * jnp.cos(x_vec[0])  - self.G_2 * jnp.cos(x_vec[0] + x_vec[1])).item()
+    
+    def calculate_total_energy(self, x_vec:npt.NDArray[np.float64])-> float:
+        return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(x_vec)
 '''
 
 ___________________________________OBSOLETE_______________________________________ 
