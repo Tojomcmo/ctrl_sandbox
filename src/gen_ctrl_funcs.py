@@ -37,7 +37,7 @@ class stateSpace:
                 raise ValueError(f'invalid time step definition {time_step}. time_step must be a positive float or None')
 
 def simulate_forward_dynamics_seq(
-        discrete_dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.float64]], 
+        discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
         x_init:npt.NDArray[np.float64], 
         u_seq:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
@@ -52,11 +52,11 @@ def simulate_forward_dynamics_seq(
     x_seq    = np.zeros([(len_seq+1),len(x_init)], dtype=float)
     x_seq[0] = x_init # type: ignore
     for idx in range(len_seq):
-        x_seq[idx+1] = discrete_dyn_func(x_seq[idx], u_seq[idx]) # type: ignore    
+        x_seq[idx+1] = np.array(discrete_dyn_func(jnp.array(x_seq[idx]), jnp.array(u_seq[idx]))) # type: ignore    
     return x_seq
 
 def simulate_forward_dynamics_step(
-        dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.float64]], 
+        dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
         x_k:npt.NDArray[np.float64], u_k:npt.NDArray[np.float64], 
         time_step:float, 
         sim_method:str = 'rk4') -> npt.NDArray[np.float64]:
@@ -71,22 +71,24 @@ def simulate_forward_dynamics_step(
     '''   
     x_len      = len(x_k)  
     x_kp1      = np.zeros([x_len], dtype=float)
+    x_jax = jnp.array(x_k)
+    u_jax = jnp.array(u_k)
     if   sim_method == 'rk4':
-        x_kp1        = step_rk4(dyn_func, time_step, x_k, u_k)
+        x_kp1        = step_rk4(dyn_func, time_step, x_jax, u_jax)
     elif sim_method == 'euler':
-        x_kp1      = x_k + dyn_func(x_k, u_k) * time_step
+        x_kp1        = x_jax + dyn_func(x_jax, u_jax) * time_step
     elif sim_method == 'solve_ivp_zoh':
         time_span    = (0,time_step)
-        dyn_func_zoh = (lambda time_dyn, state: dyn_func(state, u_k.reshape(-1)))
-        y_0          = (x_k).reshape(-1)
+        dyn_func_zoh = (lambda time_dyn, state: dyn_func(state, u_jax.reshape(-1)))
+        y_0          = (x_jax).reshape(-1)
         result_ivp   = solve_ivp(dyn_func_zoh, time_span, y_0)
-        x_kp1        = (np.array([result_ivp.y[:,-1]])).reshape(-1,1)
+        x_kp1        = [result_ivp.y[:,-1]]
     else:
         raise ValueError("invalid simulation method")
-    return x_kp1
+    return np.array(x_kp1).reshape(-1)
 
 def linearize_dynamics(
-        dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.float64]], 
+        dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
         x_k:npt.NDArray[np.float64], 
         u_k:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
 # Linearizes the dynamics function about the primals x and u
@@ -110,10 +112,10 @@ def step_euler_forward(
     return x_k + dyn_func(x_k, u_k) * h
 
 def step_rk4(
-        dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+        dyn_func_ad:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
         h:float, 
-        x_k:npt.NDArray[np.float64], 
-        u_k:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        x_k:jnp.ndarray, 
+        u_k:jnp.ndarray) -> jnp.ndarray:
     #rk4 integration with zero-order hold on u
     f1 = dyn_func_ad(x_k            , u_k)
     f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
@@ -134,7 +136,7 @@ def step_solve_ivp(
     return x_kp1
 
 def calculate_linearized_state_space_seq(
-        discrete_dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.float64]], 
+        discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
         x_seq:npt.NDArray[np.float64], 
         u_seq:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     # walk through state and control sequences
@@ -237,7 +239,7 @@ def calculate_total_cost(
     return total_cost, cost_seq, x_cost_seq, u_cost_seq
 
 def taylor_expand_cost(
-        cost_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],npt.NDArray], 
+        cost_func:Callable[[jnp.ndarray, jnp.ndarray, int, bool],jnp.ndarray], 
         x_k:npt.NDArray[np.float64], 
         u_k:npt.NDArray[np.float64], 
         k_step:int, 
@@ -250,11 +252,10 @@ def taylor_expand_cost(
     # create concatenated state and control vector of primal points
     xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
-    cost_func_xu:Callable[[npt.NDArray[np.float64]],npt.NDArray] = lambda xu_k: cost_func(
-                                                                                        xu_k[:x_k_len], 
-                                                                                        xu_k[x_k_len:], 
-                                                                                        k_step, 
-                                                                                        is_final_bool)
+    cost_func_xu:Callable[[jnp.ndarray],jnp.ndarray] = lambda xu_k: cost_func(xu_k[:x_k_len], 
+                                                                              xu_k[x_k_len:], 
+                                                                              k_step, 
+                                                                              is_final_bool)
     # calculate the concatenated jacobian vector for the cost function at the primal point
     jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax)).reshape(xu_k_len,1)
     # calculate the lumped hessian matrix for the cost function at the primal point
@@ -266,7 +267,7 @@ def taylor_expand_cost(
     l_ux = np.array((hessian_cat[x_k_len:,:x_k_len]) , dtype=float)
     return l_x, l_u, l_xx, l_uu, l_ux
     
-def prep_xu_vec_for_diff(x_k:npt.NDArray,u_k:npt.NDArray)->Tuple[npt.NDArray, int, int]:
+def prep_xu_vec_for_diff(x_k:npt.NDArray[np.float64],u_k:npt.NDArray[np.float64])->Tuple[jnp.ndarray, int, int]:
     '''x_k and u_k must each be shape (n,) and (m,) respectively'''
     xu_k       = np.concatenate([x_k, u_k])
     x_k_len    = len(x_k)
@@ -285,22 +286,22 @@ def calculate_s_xx_dot(Q_t:npt.NDArray[np.float64],
     return s_xx_dt
 
 def prep_cost_func_for_diff(cost_func:Callable[
-    [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-    Tuple[npt.NDArray,npt.NDArray,npt.NDArray]]) -> Callable[
-    [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-    npt.NDArray]:
+    [jnp.ndarray, jnp.ndarray, int, bool],
+    Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]) -> Callable[
+    [jnp.ndarray, jnp.ndarray, int, bool],
+    jnp.ndarray]:
     '''
     Function for reducing generic cost function output to single queried value.\n
     useful for preparing functions for jax differentiation
     '''
-    def cost_func_for_diff(x_k:npt.NDArray[np.float64], u_k:npt.NDArray[np.float64], k_step:int, is_final_bool:bool) -> npt.NDArray:
+    def cost_func_for_diff(x_k:jnp.ndarray, u_k:jnp.ndarray, k_step:int, is_final_bool:bool) -> jnp.ndarray:
         cost_out = cost_func(x_k, u_k, k_step, is_final_bool)
         return cost_out[0]
     return cost_func_for_diff
 
 def prep_cost_func_for_calc(cost_func:Callable[
-                            [npt.NDArray[np.float64],npt.NDArray[np.float64],int,bool],
-                            Tuple[npt.NDArray,npt.NDArray,npt.NDArray]]) -> Callable[
+                            [jnp.ndarray,jnp.ndarray,int,bool],
+                            Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]) -> Callable[
                             [npt.NDArray[np.float64],npt.NDArray[np.float64],int,bool],
                             Tuple[float,float,float]]:
     
@@ -308,7 +309,7 @@ def prep_cost_func_for_calc(cost_func:Callable[
                            u_k:npt.NDArray[np.float64], 
                            k:int,
                            is_final_bool:bool) -> Tuple[float,float,float]:
-        total_cost, x_cost, u_cost = cost_func(x_k, u_k, k, is_final_bool)
+        total_cost, x_cost, u_cost = cost_func(jnp.array(x_k), jnp.array(u_k), k, is_final_bool)
         return total_cost.item(), x_cost.item(), u_cost.item() 
     return cost_func_for_calc
 

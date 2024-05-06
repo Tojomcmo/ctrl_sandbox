@@ -73,18 +73,18 @@ class cost_quad_x_and_u():
         self.Q  = Q
         self.R  = R
         self.Qf = Qf
-        self.x_des_seq = x_des_seq
-        self.u_des_seq = u_des_seq
+        self.x_des_seq = jnp.array(x_des_seq)
+        self.u_des_seq = jnp.array(u_des_seq)
 
     def validate_inputs(self):    
         #TODO add validation criteria
         pass
 
     def cost_func_quad_state_and_control(self, 
-                                    x_k:npt.NDArray[np.float64], 
-                                    u_k:npt.NDArray[np.float64], 
+                                    x_k:jnp.ndarray, 
+                                    u_k:jnp.ndarray, 
                                     k_step:int, 
-                                    is_final_bool:bool)->Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+                                    is_final_bool:bool)->Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
@@ -97,18 +97,18 @@ class cost_quad_x_and_u():
         # u_des_seq_jax = np.array(cost_func_params.u_des_seq)
         # check that dimensions match [TODO]
         if is_final_bool:
-            x_k_corr = util.calc_and_shape_array_diff(x_k  , self.x_des_seq[k_step], shape='col')
+            x_k_corr:jnp.ndarray = x_k.reshape(-1,1) - (self.x_des_seq[k_step]).reshape(-1,1)
             x_cost     = jnp.array((0.5) * (x_k_corr.T @ Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
         elif k_step == 0:
-            u_k_corr   = util.calc_and_shape_array_diff(u_k, self.u_des_seq[k_step], shape='col')
+            u_k_corr:jnp.ndarray = u_k.reshape(-1,1) - (self.u_des_seq[k_step]).reshape(-1,1)
             x_cost     = jnp.array([0.0])    
             u_cost     = jnp.array((0.5) * (u_k_corr.T  @ R  @ u_k_corr))
             total_cost = u_cost
         else:
-            x_k_corr = util.calc_and_shape_array_diff(x_k, self.x_des_seq[k_step], shape='col')   
-            u_k_corr = util.calc_and_shape_array_diff(u_k, self.u_des_seq[k_step], shape='col')
+            x_k_corr:jnp.ndarray = x_k.reshape(-1,1) - (self.x_des_seq[k_step]).reshape(-1,1) 
+            u_k_corr:jnp.ndarray = u_k.reshape(-1,1) - (self.u_des_seq[k_step]).reshape(-1,1)
             x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
             u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
             total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))

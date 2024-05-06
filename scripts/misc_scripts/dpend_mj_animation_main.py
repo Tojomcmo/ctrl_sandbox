@@ -6,18 +6,19 @@ import matplotlib.animation as animate
 import mujoco_funcs as mj_funcs
 import mjcf_models as mj_models
 import visualize_mj_funcs as mj_vis
+import visualize_dyn_funcs as vis_dyn
 
 if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
 
-    mjcf_model  = mj_models.create_MJCF_double_pend_m_d_mod(1,1,1)
-    # mjcf_model  = mj_models.MJCF_single_pend_2  
-    # mjcf_model  = mj_models.MJCF_dpend_outer_motor
+    # mjcf_model  = mj_models.create_MJCF_double_pend_m_d_mod(1,1,1)
+    mjcf_model  = mj_models.create_MJCF_double_pend_dev(1,1,1)
     model = mujoco.MjModel.from_xml_string(mjcf_model)
     data = mujoco.MjData(model)
 
     # renderer and visualization
-    show_plot = True
+    show_plot = False
+    show_custom_ani = True
 
     # finite difference prep
     nu = model.nu
@@ -28,20 +29,22 @@ if __name__ == "__main__":
     flg_centered = True
 
     # update model and data parameters
-    time_step = 0.05
+    time_step = 0.005
     model.opt.timestep = time_step
-    steps     = 200
-    data.ctrl = np.array([10.0,0.0])
+    steps     = 600
+    data.ctrl = np.array([0.0,0.0])
+    x_init = np.array([3.14,0.0,0.0,0.0])
+    mj_funcs.set_mj_state_vec(data, x_init)
     mujoco.mj_forward(model,data)
 
     #initial linearization and predictiuon
     state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1) 
     control_vec = np.array(data.ctrl).reshape(-1,1)
     A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)    
-    # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
     state_next_pred = state_next_pred = (A @ state_vec) + (B @ control_vec)
-
-
+    
+    x_vec_seq = np.zeros((steps, 4))
+    x_vec_seq[0] = state_vec.reshape(-1)
     if show_plot is True:
         renderer = mujoco.Renderer(model, 480, 480)
         scene_option = mujoco.MjvOption()
@@ -53,7 +56,8 @@ if __name__ == "__main__":
 
     for idx in range(steps):      
         mujoco.mj_step(model, data)
-        state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1)      
+        state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1)   
+        x_vec_seq[idx] = state_vec.reshape(-1)  
         # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
         A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)
         control_vec = np.array(data.ctrl).reshape(-1,1)
@@ -67,6 +71,12 @@ if __name__ == "__main__":
     if show_plot is True:
         ani = animate.ArtistAnimation(fig1, img_set, interval = time_step*1000)
         plt.show()
+
+    if show_custom_ani is True:
+        fig = plt.figure(figsize=[10,8])
+        pend_animation = vis_dyn.double_pm_pend_animation(1.0, 1.0, x_vec_seq, time_step,fig, th2='rel')
+        pend_animation.create_double_pend_animation()
+        pend_animation.show_plot()    
 
 ###################################
 

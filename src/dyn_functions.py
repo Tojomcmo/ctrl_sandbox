@@ -13,7 +13,7 @@ class single_pm_pend_dyn():
         self.b = b
         self.l = l
 
-    def cont_dyn_func(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])->npt.NDArray:
+    def cont_dyn_func(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)->jnp.ndarray:
         '''
         continuous time dynamic equation for simple pendulum 
         time[in]       - time component, necessary prarmeter for ode integration
@@ -30,7 +30,7 @@ class single_pm_pend_dyn():
                     ])
         return state_dot    
     
-    def cont_pend_dyn_lin_down(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])->npt.NDArray:
+    def cont_pend_dyn_lin_down(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)->jnp.ndarray:
         '''
         continuous time dynamic equation for simple pendulum 
         time[in]       - time component, necessary prarmeter for ode integration
@@ -104,18 +104,18 @@ class double_pm_pend_dyn():
         self.G_1 = (self.m1 + self.m2) * self.l1 * self.g
         self.G_2 = (self.m2 * self.l2 * self.g)
 
-    def _calc_mass_matrix_cross_term(self, x_vec:npt.NDArray[np.float64])->npt.NDArray:
+    def _calc_mass_matrix_cross_term(self, x_vec:jnp.ndarray)->jnp.ndarray:
         return self.M_3 * jnp.cos(x_vec[0]-x_vec[1])
     
-    def calculate_mass_matrix(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         cross_term = self._calc_mass_matrix_cross_term(x_vec)
         return jnp.array([[self.M_1, cross_term ],[cross_term, self.M_2]])
 
-    def calculate_mass_matrix_inv(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix_inv(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         cross_term = self._calc_mass_matrix_cross_term(x_vec)
         return (1/(self.M_1 * self.M_2 - cross_term**2)) * jnp.array([[self.M_2, -cross_term],[-cross_term, self.M_1]])
         
-    def cont_dyn_func(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def cont_dyn_func(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)-> jnp.ndarray:
         '''
         The state vector has form x = [th1, th2, thdot1, thdot2]'
         The control vector has form u = [tq1, tq2]'
@@ -150,7 +150,7 @@ class double_pm_pend_dyn():
             (self.m2 * self.l1 * self.l2 * x_vec[2] * x_vec[3] * np.cos(x_vec[0] - x_vec[1]))
     
     def calculate_kinetic_energy(self, x_vec:npt.NDArray[np.float64])-> float:
-        mass_mat = self.calculate_mass_matrix(x_vec)
+        mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1,1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item() 
     
@@ -219,18 +219,18 @@ class double_pend_abs_dyn():
         self.G_1 = (self.m1 * self.d1  +  self.m2 * self.l1) * self.g
         self.G_2 = (self.m2 * self.d2 * self.g)
 
-    def _calc_mass_matrix_cross_term(self, x_vec:npt.NDArray[np.float64])->npt.NDArray:
+    def _calc_mass_matrix_cross_term(self, x_vec:jnp.ndarray)->jnp.ndarray:
         return self.M_3 * jnp.cos(x_vec[0]-x_vec[1])
     
-    def calculate_mass_matrix(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         cross_term = self._calc_mass_matrix_cross_term(x_vec)
         return jnp.array([[self.M_1, cross_term ],[cross_term, self.M_2]])
 
-    def calculate_mass_matrix_inv(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix_inv(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         cross_term = self._calc_mass_matrix_cross_term(x_vec)
         return (1/(self.M_1 * self.M_2 - cross_term**2)) * jnp.array([[self.M_2, -cross_term],[-cross_term, self.M_1]])
 
-    def cont_dyn_func(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def cont_dyn_func(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)-> jnp.ndarray:
         '''
         The state vector has form x = [th1, th2, thdot1, thdot2]'
         The control vector has form u = [tq1, tq2]'
@@ -239,24 +239,22 @@ class double_pend_abs_dyn():
         Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
         Thetas are both reference to intertial frame down position
         '''
-        x_jax = jnp.array(x_vec)
-        u_jax = jnp.array(u_vec) 
-        s1m2 = jnp.sin(x_jax[0]-x_jax[1])
+        s1m2 = jnp.sin(x_vec[0]-x_vec[1])
 
         mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
 
-        gen_dyn_mat = jnp.array([[-self.M_3*x_jax[3]**2*s1m2 - (self.b1+self.b2)*x_jax[2] + (self.b2)*x_jax[3]],
-                                 [ self.M_3*x_jax[2]**2*s1m2 +         (self.b2)*x_jax[2] - (self.b2)*x_jax[3]]])
+        gen_dyn_mat = jnp.array([[-self.M_3*x_vec[3]**2*s1m2 - (self.b1+self.b2)*x_vec[2] + (self.b2)*x_vec[3]],
+                                 [ self.M_3*x_vec[2]**2*s1m2 +         (self.b2)*x_vec[2] - (self.b2)*x_vec[3]]])
         
-        grav_mat   = jnp.array([[ - self.G_1 * jnp.sin(x_jax[0])],
-                                [ - self.G_2 * jnp.sin(x_jax[1])]])   
+        grav_mat   = jnp.array([[ - self.G_1 * jnp.sin(x_vec[0])],
+                                [ - self.G_2 * jnp.sin(x_vec[1])]])   
                     
-        theta_ddots = (mass_mat_inv @ (gen_dyn_mat + grav_mat + self.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
-        state_dot = jnp.array([x_jax[2],x_jax[3],theta_ddots[0],theta_ddots[1]])
+        theta_ddots = (mass_mat_inv @ (gen_dyn_mat + grav_mat + self.B_mat @ u_vec.reshape(-1,1))).reshape(-1)
+        state_dot = jnp.array([x_vec[2],x_vec[3],theta_ddots[0],theta_ddots[1]])
         return state_dot
         
     def calculate_kinetic_energy(self, x_vec:npt.NDArray[np.float64])-> float:
-        mass_mat = self.calculate_mass_matrix(x_vec)
+        mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1,1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item() 
     
@@ -322,25 +320,25 @@ class double_pend_rel_dyn():
             self.B_mat = jnp.zeros([2,1]) 
 
     def _calculate_lumped_terms(self):
-        self.M_1 = (self.m1 * self.d1**2) + (self.m2 * self.l1**2) + (self.m2 * self.d2**2) + self.moi1
+        self.M_1 = (self.m1 * self.d1**2) + (self.m2 * self.l1**2) + (self.m2 * self.d2**2) + self.moi1 + self.moi2
         self.M_2 = (self.m2 * self.d2**2) + self.moi2
         self.M_3 = (self.m2 * self.l1 * self.d2)
         self.G_1 = (self.m1 * self.d1  +  self.m2 * self.l1) * self.g
         self.G_2 = (self.m2 * self.d2 * self.g)
 
-    def _calc_state_dep_mass_term(self, x_vec:npt.NDArray[np.float64])->npt.NDArray:
+    def _calc_state_dep_mass_term(self, x_vec:jnp.ndarray)->jnp.ndarray:
         return self.M_3 * jnp.cos(x_vec[1])
     
-    def calculate_mass_matrix(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         M3c2 = self._calc_state_dep_mass_term(x_vec)
         return jnp.array([[self.M_1 + 2*M3c2, self.M_2 + M3c2 ],[self.M_2 + M3c2, self.M_2]])
 
-    def calculate_mass_matrix_inv(self, x_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def calculate_mass_matrix_inv(self, x_vec:jnp.ndarray)-> jnp.ndarray:
         M3c2 = self._calc_state_dep_mass_term(x_vec)
         return (1/((self.M_1 + 2*M3c2)*self.M_2 - (self.M_2 + M3c2)**2)) * jnp.array([[self.M_2, -(self.M_2 + M3c2 )],
                                                                                       [-(self.M_2 + M3c2 ), self.M_1 + 2*M3c2]])
 
-    def cont_dyn_func(self, x_vec:npt.NDArray[np.float64], u_vec:npt.NDArray[np.float64])-> npt.NDArray:
+    def cont_dyn_func(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)-> jnp.ndarray:
         '''
         The state vector has form x = [th1, th2, thdot1, thdot2]'
         The control vector has form u = [tq1, tq2]'
@@ -349,26 +347,26 @@ class double_pend_rel_dyn():
         Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
         Thetas are both reference to intertial frame down position
         '''
-        x_jax = jnp.array(x_vec)
-        u_jax = jnp.array(u_vec) 
-        s2 = jnp.sin(x_jax[1])
+
+        s2 = jnp.sin(x_vec[1])
+        G2s12 = self.G_2 * jnp.sin(x_vec[0]+x_vec[1])
 
         mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
         # mass_mat = self.calculate_mass_matrix(x_vec)
         # mass_mat_inv = inv(mass_mat)
 
-        C_mat = jnp.array([[ self.M_3*s2*x_jax[3]*(2*x_jax[2] + x_jax[3]) - (self.b1)*x_jax[2]],
-                           [-self.M_3*s2*x_jax[2]**2                      - (self.b2)*x_jax[3]]])
+        C_mat = jnp.array([[ self.M_3*s2*x_vec[3]*(2*x_vec[2] + x_vec[3]) - (self.b1)*x_vec[2]],
+                           [-self.M_3*s2*x_vec[2]**2                      - (self.b2)*x_vec[3]]])
         
-        grav_mat   = jnp.array([[ - self.G_1*jnp.sin(x_jax[0]) - self.G_2*jnp.sin(x_jax[0] + x_jax[1])],
-                                [ - self.G_2*jnp.sin(x_jax[0] + x_jax[1])]])   
+        grav_mat   = jnp.array([[ - self.G_1*jnp.sin(x_vec[0]) - G2s12],
+                                [ - G2s12]])   
                     
-        theta_ddots = (mass_mat_inv @ (C_mat + grav_mat + self.B_mat @ u_jax.reshape(-1,1))).reshape(-1)
-        state_dot = jnp.array([x_jax[2],x_jax[3],theta_ddots[0],theta_ddots[1]])
+        theta_ddots = (mass_mat_inv @ (C_mat + grav_mat + self.B_mat @ u_vec.reshape(-1,1))).reshape(-1)
+        state_dot = jnp.array([x_vec[2],x_vec[3],theta_ddots[0],theta_ddots[1]])
         return state_dot
         
     def calculate_kinetic_energy(self, x_vec:npt.NDArray[np.float64])-> float:
-        mass_mat = self.calculate_mass_matrix(x_vec)
+        mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1,1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item() 
     
@@ -378,6 +376,12 @@ class double_pend_rel_dyn():
     def calculate_total_energy(self, x_vec:npt.NDArray[np.float64])-> float:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(x_vec)
 
+    def get_animate_value_dict(self)-> dict:
+        animate_vals = {'l1' : self.l1,
+                        'l2' : self.l2,
+                        'd1' : self.d1,
+                        'd2' : self.d2}
+        return animate_vals
 class ua_double_pend_rel_dyn():
     '''
     https://underactuated.mit.edu/multibody.html#Jain11

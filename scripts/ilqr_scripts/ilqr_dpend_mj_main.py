@@ -19,7 +19,7 @@ import visualize_mj_funcs as mj_vis
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   time_step  = 0.05 
+   time_step  = 0.01 
    len_seq    = 10
    num_states = 4
    num_controls = 2
@@ -33,7 +33,7 @@ if __name__ == "__main__":
    Qf_cost = np.array([[10,0 ,0 ,0 ],
                        [0 ,10,0 ,0 ],
                        [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 100.0
+                       [0 ,0 ,0 ,1 ]], dtype=float) * 1000.0
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
    elif ctrl_target_condition == 2:  
       x_des_seq  = np.zeros([len_seq, num_states])
       x_des_seq[:,0] = np.pi
-      u_init_seq = np.ones([len_seq-1, num_controls]) * (0.01)
+      u_init_seq = np.ones([len_seq-1, num_controls]) * (2.0)
       u_des_seq  = np.zeros([len_seq-1, num_controls])
 
    else:

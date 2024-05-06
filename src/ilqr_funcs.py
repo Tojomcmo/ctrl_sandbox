@@ -39,8 +39,8 @@ class ilqrConfigStruct:
 
     def config_cost_func(self,
             cost_func:Callable[
-                [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-                Tuple[npt.NDArray,npt.NDArray,npt.NDArray]])-> None:
+                [jnp.ndarray, jnp.ndarray, int, bool],
+                Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
         '''
         This function receives the proposed cost function and parameters for the cost function, and generates
         The specific cost function for the controller to use with curried inputs
@@ -51,10 +51,10 @@ class ilqrConfigStruct:
 
 
     def config_for_dyn_func(self,
-                            cont_dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
-                            integrate_func:Callable[[Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
-                                                    float, npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-                                                    npt.NDArray[np.float64]]) -> None:
+                            cont_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
+                            integrate_func:Callable[[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
+                                                    float, jnp.ndarray, jnp.ndarray], 
+                                                    jnp.ndarray]) -> None:
         '''
         This function receives python functions for dynamics and prepares the curried functions for the controller to use.\n
         dyn_func[in] - callable that returns the continuous dynamics (state_dot) given current state, control, and a set of paramters\n
@@ -82,7 +82,7 @@ class ilqrConfigStruct:
         self.mj_ctrl:bool              = True   
 
     def curry_funcs_for_mujoco(self)->None:
-        self.discrete_dyn_func:Callable[
+        self.discrete_dyn_mj_func:Callable[
             [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
              npt.NDArray[np.float64]] = lambda x, u : mj_funcs.fwd_sim_mj_w_ctrl_step(self.mj_model, self.mj_data, x, u)
         
@@ -97,8 +97,8 @@ class ilqrConfigStruct:
         
     def curry_funcs_for_dyn_funcs(self)->None:
         self.discrete_dyn_func:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            npt.NDArray[np.float64]] = lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
+            [jnp.ndarray, jnp.ndarray], 
+            jnp.ndarray] = lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
 
         self.simulate_fwd_dyn_seq:Callable[
             [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
@@ -409,8 +409,8 @@ def taylor_expand_pseudo_hamiltonian(cost_func_for_diff:Callable[
     return q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg
 
 def calculate_final_ctg_approx(cost_func_for_diff:Callable[
-                                        [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-                                        npt.NDArray], 
+                                        [jnp.ndarray, jnp.ndarray, int, bool],
+                                        jnp.ndarray], 
                                 x_N:npt.NDArray[np.float64], u_len:int, len_seq:int) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
     # approximates the final step cost-to-go as only the state with no control input
     # create concatenated state and control vector of primal points
@@ -512,10 +512,8 @@ def calculate_u_star(k_fb_k:npt.NDArray[np.float64],
     return (u_des_k.reshape(-1,1) + k_fb_k @ (x_k.reshape(-1,1) - x_des_k.reshape(-1,1))).reshape(-1)
 
 
-def simulate_ilqr_output(sim_dyn_func_step:Callable[
-        [npt.NDArray[np.float64],npt.NDArray[np.float64]],  
-        npt.NDArray[np.float64]], 
-        ctrl_out:ilqrControllerState, x_sim_init:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+def simulate_ilqr_output(sim_dyn_func_step:Callable[[jnp.ndarray,jnp.ndarray], jnp.ndarray], 
+    ctrl_out:ilqrControllerState, x_sim_init:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
     x_sim_seq  = np.zeros([ctrl_out.len_seq, ctrl_out.x_len])
     u_sim_seq  = np.zeros([ctrl_out.len_seq-1, ctrl_out.u_len])
     x_sim_seq[0] = x_sim_init    
