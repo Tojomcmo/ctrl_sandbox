@@ -4,11 +4,11 @@ import numpy.typing as npt
 from typing import Callable, Tuple
 from jax import numpy as jnp
 
-import src.ilqr_funcs as ilqr
-import src.ilqr_utils as util
-import src.cost_functions as cost
-import src.dyn_functions as dyn
-import src.gen_ctrl_funcs as gen_ctrl
+import ilqr_funcs as ilqr
+import ilqr_utils as util
+import cost_functions as cost
+import dyn_functions as dyn
+import gen_ctrl_funcs as gen_ctrl
 
 # for each input
 #   test one known case

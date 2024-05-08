@@ -21,8 +21,8 @@ if __name__== "__main__":
     dpend_sys = dyn.double_pend_rel_dyn(g=9.81, m1=m_bar, moi1=moi, d1=d_bar, l1=h_bar, 
                                             m2=m_bar, moi2=moi, d2=d_bar, l2=h_bar, 
                                             b1=0.0, b2=0.0, shoulder_act=True, elbow_act=True)
-    x_init = np.array([3.14,0.0,0.0,0.0])
-    u_vec = np.array([0.0,0.0]) 
+    x_init = np.array([1.0,1.0,0.0,0.0])
+    u_vec = np.array([0.0,1.0]) 
 
     x_seq = np.zeros((len_seq, 4))
     pot_energy_seq = np.zeros((len_seq,1))

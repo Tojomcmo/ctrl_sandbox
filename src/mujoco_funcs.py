@@ -63,7 +63,7 @@ def linearize_mj_seq(model, data,x_seq, u_seq):
     return A_seq, B_seq
 
 
-def linearize_mujoco_state_and_control(model, data, eps=1e-6, flg_centered=True):
+def linearize_mujoco_state_and_control(model, data, eps=1e-5, flg_centered=True):
     nu = model.nu
     nx = model.nv
     A = np.zeros((2*nx, 2*nx))

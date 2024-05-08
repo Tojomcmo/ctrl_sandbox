@@ -19,18 +19,18 @@ if __name__ == "__main__":
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
    time_step  = 0.04
-   len_seq    = 65
+   len_seq    = 70
    num_states = 4
-   num_controls = 2
-   shoulder_act = True
+   num_controls = 1
+   shoulder_act = False
    elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
-                       [0   ,10. ,0   ,0  ],
+                       [0   ,1. ,0   ,0  ],
                        [0   ,0   ,0.1   ,0  ],
-                       [0   ,0   ,0   ,0.1  ]],
+                       [0   ,0   ,0   ,0.5  ]],
                        dtype=float) * 10.0
-   # R_cost  = np.array([[1.0]],dtype=float)*1.0
-   R_cost  = np.array([[5.0, 0],[0, 1.0]],dtype=float)*0.5
+   R_cost  = np.array([[1.0]],dtype=float)*1.0
+   # R_cost  = np.array([[5.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],

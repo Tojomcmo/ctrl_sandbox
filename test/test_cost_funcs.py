@@ -2,7 +2,7 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 import numpy.typing as npt
-import src.cost_functions as cost
+import cost_functions as cost
 
 
 class cost_func_quad_state_and_control_tests(unittest.TestCase):

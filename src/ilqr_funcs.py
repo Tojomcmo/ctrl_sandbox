@@ -511,6 +511,14 @@ def calculate_u_star(k_fb_k:npt.NDArray[np.float64],
                      x_k:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return (u_des_k.reshape(-1,1) + k_fb_k @ (x_k.reshape(-1,1) - x_des_k.reshape(-1,1))).reshape(-1)
 
+# def calculate_new_forward_pass_rollout(disc_dyn_func:Callable[[jnp.ndarray, jnp.ndarray],jnp.ndarray],
+#                                         u_nom_seq:npt.NDArray[np.float64],
+#                                         x_nom_seq:npt.NDArray[np.float64],
+#                                         x_new_seq:npt.NDArray[np.float64], 
+#                                         K_seq:npt.NDArray[np.float64], 
+#                                         d_seq:npt.NDArray[np.float64], line_search_factor:float):
+#     def step(x_k, t):
+#         x_vec_kp1 = 
 
 def simulate_ilqr_output(sim_dyn_func_step:Callable[[jnp.ndarray,jnp.ndarray], jnp.ndarray], 
     ctrl_out:ilqrControllerState, x_sim_init:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:

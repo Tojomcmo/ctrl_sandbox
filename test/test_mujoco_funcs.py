@@ -3,7 +3,7 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 
-import src.mujoco_funcs as mj_funcs
+import mujoco_funcs as mj_funcs
 
 class shared_mjcf_models:
     def __init__(self) -> None:

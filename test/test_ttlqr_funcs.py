@@ -1,9 +1,9 @@
 import unittest
 import numpy as np
 
-import src.ttlqr_funcs as ttlqr
-import src.gen_ctrl_funcs as gen_ctrl
-import src.ilqr_utils as util
+import ttlqr_funcs as ttlqr
+import gen_ctrl_funcs as gen_ctrl
+import ilqr_utils as util
 
 class calculate_backstep_params_seq_tests(unittest.TestCase):
     def lti_pend_ss_cont(self, params):

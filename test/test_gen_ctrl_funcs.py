@@ -5,8 +5,8 @@ import scipy
 import numpy.typing as npt
 import numpy.testing
 from typing import Callable, Tuple
-import src.gen_ctrl_funcs as gen_ctrl
-import src.ilqr_utils as util
+import gen_ctrl_funcs as gen_ctrl
+import ilqr_utils as util
  
 
 class stateSpace_tests(unittest.TestCase):
@@ -172,7 +172,7 @@ class linearize_dynamics_tests(unittest.TestCase):
 
 class calculate_linearized_state_space_seq_tests(unittest.TestCase):
 
-    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+    def pend_unit_dyn_func(self, state:jnp.ndarray, control:jnp.ndarray)-> jnp.ndarray:
         x_k_jax = jnp.array(state)
         u_k_jax = jnp.array(control)
         g = 1.0
@@ -183,10 +183,10 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         return state_dot  
     
     def step_rk4(self,
-            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+            dyn_func_ad:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
             h:float, 
-            x_k:npt.NDArray[np.float64], 
-            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
+            x_k:jnp.ndarray, 
+            u_k:jnp.ndarray) -> jnp.ndarray:
         #rk4 integration with zero-order hold on u
         f1 = dyn_func_ad(x_k            , u_k)
         f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
@@ -196,7 +196,7 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     
     def test_calculate_linearized_state_space_seq_accepts_valid_system(self):
         len_seq     = 4
-        h           = 0.1
+        h           = 0.005
         u_seq = np.ones((3,1), dtype=np.float64)
         x_seq   = np.ones((4,2), dtype=np.float64)
         discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
@@ -212,8 +212,8 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
         #assert validity
         self.assertEqual(len(A_lin_d_seq), len_seq-1)
         self.assertEqual(len(B_lin_d_seq), len_seq-1)
-        numpy.testing.assert_allclose(A_lin_d_seq[0], A_lin_d_expected,rtol=1e-1, atol=1e-1)
-        numpy.testing.assert_allclose(B_lin_d_seq[0], B_lin_d_expected,rtol=1e-1, atol=1e-1)
+        numpy.testing.assert_allclose(A_lin_d_seq[0], A_lin_d_expected,rtol=1e-4, atol=1e-4)
+        numpy.testing.assert_allclose(B_lin_d_seq[0], B_lin_d_expected,rtol=1e-4, atol=1e-4)
         
 class discretize_state_space_tests(unittest.TestCase):
 

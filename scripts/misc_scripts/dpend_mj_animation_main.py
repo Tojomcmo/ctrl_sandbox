@@ -32,8 +32,8 @@ if __name__ == "__main__":
     time_step = 0.005
     model.opt.timestep = time_step
     steps     = 600
-    data.ctrl = np.array([0.0,0.0])
-    x_init = np.array([3.14,0.0,0.0,0.0])
+    data.ctrl = np.array([0.0,1.0])
+    x_init = np.array([1.0,1.0,0.0,0.0])
     mj_funcs.set_mj_state_vec(data, x_init)
     mujoco.mj_forward(model,data)
 
@@ -56,10 +56,11 @@ if __name__ == "__main__":
 
     for idx in range(steps):      
         mujoco.mj_step(model, data)
+        print('ctrl_forces: ', data.actuator_force[0], ',  ', data.actuator_force[1])
         state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1)   
         x_vec_seq[idx] = state_vec.reshape(-1)  
         # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
-        A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)
+        A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered=False)
         control_vec = np.array(data.ctrl).reshape(-1,1)
         state_next_pred = (A @ state_vec) + (B @ control_vec)
         # update frame
