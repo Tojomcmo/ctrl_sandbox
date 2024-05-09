@@ -89,19 +89,17 @@ def simulate_forward_dynamics_step(
 
 def linearize_dynamics(
         dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
-        x_k:npt.NDArray[np.float64], 
-        u_k:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        xu_k:jnp.ndarray, x_k_len) -> Tuple[jnp.ndarray, jnp.ndarray]:
 # Linearizes the dynamics function about the primals x and u
 # dyn_func  - [in] dynamics function, may be continuous or discrete
 # x_primal  - [in] primal state linearization point
 # u         - [in] primal control linearization point
 # A_lin     - [out] continuous or discrete time linearization of dyn_func wrt state eval at x,u
 # B_lin     - [out] continuous or discrete time linearization of dyn_func wrt control eval at x,u
-    xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     dyn_func_xu = lambda xu_k: dyn_func(xu_k[:x_k_len], xu_k[x_k_len:])
-    ab_lin_cat  = jax.jacfwd(dyn_func_xu)(xu_k_jax)
-    a_lin       = np.array(ab_lin_cat[:x_k_len,:x_k_len], dtype=np.float64)
-    b_lin       = np.array(ab_lin_cat[:x_k_len,x_k_len:], dtype=np.float64)
+    ab_lin_cat  = jax.jacfwd(dyn_func_xu)(xu_k)
+    a_lin       = ab_lin_cat[:x_k_len,:x_k_len]
+    b_lin       = ab_lin_cat[:x_k_len,x_k_len:]
     return a_lin, b_lin
 
 def step_euler_forward(
@@ -151,13 +149,14 @@ def calculate_linearized_state_space_seq(
         u_len   = len(u_seq[0,:])
         a_lin_array = np.zeros((len_seq, x_len, x_len))
         b_lin_array = np.zeros((len_seq, x_len, u_len))
+        xu_seq = jnp.concatenate((x_seq, u_seq), axis=1)
         for idx in range(len_seq):
-            a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, x_seq[idx], u_seq[idx])
-            a_lin_array[idx] = a_lin
-            b_lin_array[idx] = b_lin
+            a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, xu_seq[idx], x_len)
+            a_lin_array[idx] = np.array(a_lin)
+            b_lin_array[idx] = np.array(b_lin)
     return a_lin_array, b_lin_array
 
-def discretize_continuous_state_space(input_state_space:stateSpace, time_step:float, c2d_method:str = 'Euler') -> stateSpace:
+def discretize_continuous_state_space(input_state_space:stateSpace, time_step:float, c2d_method:str = 'euler') -> stateSpace:
 #   A - (nxn) - continuous state transition matrix
 #   B - (nxm) - continuous control matrix
 #   C - (pxn) - continuous state measurement matrix

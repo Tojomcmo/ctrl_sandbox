@@ -56,6 +56,37 @@ class single_pm_pend_dyn():
         ss_cont = gen_ctrl.stateSpace(A, B, C, D)
         return ss_cont
 
+class single_pend_dyn():
+    def __init__(self,m:float, moi:float, g:float, b:float, l:float) -> None:
+        self.m   = m
+        self.moi = moi
+        self.g   = g
+        self.b   = b
+        self.d   = l
+        self.create_lumped_parameters()
+
+    def create_lumped_parameters(self):
+        self.m_divide = 1 / (self.m*self.d**2 + self.moi)    
+        self.B_1 = self.b * self.m_divide
+        self.G_1 = self.m * self.g * self.d * self.m_divide
+
+    def cont_dyn_func(self, x_vec:jnp.ndarray, u_vec:jnp.ndarray)->jnp.ndarray:
+        '''
+        continuous time dynamic equation for simple pendulum 
+        time[in]       - time component, necessary prarmeter for ode integration
+        state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
+        control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
+        params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
+        state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        '''
+        state_dot = jnp.array([
+                    x_vec[1],
+                    -self.B_1*x_vec[1] - self.G_1*jnp.sin(x_vec[0]) + self.m_divide*u_vec[0]
+                    ])
+        return state_dot    
+    
+
+
 class double_pm_pend_dyn():
     def __init__(self, g:float, m1:float,          l1:float, 
                                 m2:float,          l2:float,
@@ -382,6 +413,7 @@ class double_pend_rel_dyn():
                         'd1' : self.d1,
                         'd2' : self.d2}
         return animate_vals
+    
 class ua_double_pend_rel_dyn():
     '''
     https://underactuated.mit.edu/multibody.html#Jain11
