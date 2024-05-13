@@ -35,15 +35,12 @@ def step_rk4(cont_dyn_func, dt, state_k, control_k):
 
 #define pendulum of approximately point mass, length 1.0, -9.81 gravity
 mjcf_pend_model ="""<mujoco>
-                        <option gravity="0 0 -9.81">
-                            <flag sensornoise="disable"/>
+                        <option gravity="0 0 -1.0" integrator="RK4">
                         </option>
                         <worldbody>
-                            <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
-                            <camera name="fixed" pos="0 -4 2" xyaxes="1 0 0 0 0 1"/>
                             <body name="pendulum1" pos="0 0 0">
                                 <joint name="joint1" type="hinge" axis="0 1 0" pos="0 0 0"/>
-                                <geom type="cylinder" size="0.05 0.5" pos="0 0 -1.0" rgba="0.8 0.1 0.1 1"/>
+                                <geom type="cylinder" size="0.05 0.5" pos="0 0 -1.0"/>
                                 <inertial pos="0 0 -1.0" mass="1" diaginertia="0.00001 0.00001 0.000001"/>/>
                             </body>   
                         </worldbody>
@@ -54,21 +51,21 @@ mjcf_pend_model ="""<mujoco>
                     """
 
 if __name__=="__main__":
-
     np.set_printoptions(precision=7, suppress=True, linewidth=100)
     dt = 0.01
+    dt_mj = dt
     state_lin   = np.array([0.0, 0.0])
     control_lin = np.array([0.0]) 
     state_k     = state_lin
-    control_k   = np.array([1.0])
+    control_k   = np.array([10.0])
 
     mj_model = mujoco.MjModel.from_xml_string(mjcf_pend_model)
-    mj_model.opt.timestep = dt
+    mj_model.opt.timestep = dt_mj
     mj_data = mujoco.MjData(mj_model)
     nu = mj_model.nu
     nx = mj_model.nv    
 
-    pend_sys = undamped_simple_pend_dyn(g=9.81, l=1.0)
+    pend_sys = undamped_simple_pend_dyn(g=1.0, l=1.0)
     ss_cont = pend_sys.cont_lti_pend_ss_down()
     ss_disc = ss_cont.to_discrete(dt)
 
@@ -91,6 +88,7 @@ if __name__=="__main__":
 
     print('linear discrete model A matrix: \n', ss_disc.A)
     print('mujoco transition FD A matrix: \n', A_mj)
+    print('diff A matrices: \n', (ss_disc.A - A_mj))
     print('linear discrete model B matrix: \n', ss_disc.B)
     print('mujoco transition FD B matrix: \n', B_mj)
 

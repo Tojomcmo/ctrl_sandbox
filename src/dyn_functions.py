@@ -79,9 +79,8 @@ class single_pend_dyn():
         params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
         state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
         '''
-        state_dot = jnp.array([
-                    x_vec[1],
-                    -self.B_1*x_vec[1] - self.G_1*jnp.sin(x_vec[0]) + self.m_divide*u_vec[0]
+        state_dot = jnp.array([x_vec[1],
+                     -self.B_1*x_vec[1] - self.G_1*jnp.sin(x_vec[0]) + self.m_divide*u_vec[0]
                     ])
         return state_dot    
     

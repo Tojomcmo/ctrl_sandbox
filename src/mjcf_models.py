@@ -2,7 +2,7 @@
 def create_MJCF_single_pend_m_d_mod(mass, damping, length):
     mjcf_pend_model = """
                       <mujoco>
-                      <option gravity="0 0 -9.81">
+                      <option gravity="0 0 -9.81" integrator="RK4">
                           <flag sensornoise="enable"/>
                       </option>
 
@@ -27,7 +27,7 @@ def create_MJCF_single_pend_m_d_mod(mass, damping, length):
 
 def create_MJCF_pm_pend_dev():
     mjcf_pend_model ="""<mujoco>
-                          <option gravity="0 0 -9.81">
+                          <option gravity="0 0 -9.81" integrator="RK4">
                               <flag sensornoise="disable"/>
                           </option>
 
@@ -52,7 +52,7 @@ def create_MJCF_pm_pend_dev():
 
 def create_MJCF_single_pend_dev():
     mjcf_pend_model ="""<mujoco>
-                          <option gravity="0 0 -9.81">
+                          <option gravity="0 0 -9.81" integrator="RK4">
                               <flag sensornoise="disable"/>
                           </option>
 
@@ -79,7 +79,7 @@ def create_MJCF_single_pend_dev():
 
 def create_MJCF_double_pend_dev():
     mjcf_pend_model = """<mujoco>
-                          <option gravity="0 0 -9.81">
+                          <option gravity="0 0 -9.81" integrator="RK4">
                               <flag sensornoise="disable"/>
                           </option>
 
