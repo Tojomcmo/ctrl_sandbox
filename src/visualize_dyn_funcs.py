@@ -12,6 +12,7 @@ from typing import Optional
 
 import dyn_functions as dyn
 import analyze_ilqr_output_funcs as analyze
+import ilqr_funcs as ilqr
 
 
 class double_pm_pend_animation():
@@ -263,3 +264,17 @@ class double_pend_animation():
         writer = animation.FFMpegWriter(fps=self.fps,
                                         metadata=dict(artist='Me'))
         self.ani.save((filename+'.mp4'), writer=writer)
+
+
+def plot_dpend_act_and_cost_axes(shoulder_act:bool, elbow_act:bool, controller_output:ilqr.ilqrControllerState, u_sim_seq, ax2:Axes, ax3:Axes):
+    if shoulder_act is True and elbow_act is True:
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control effort')
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control effort')
+       ax2.legend() 
+    else:
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq, label = 'control effort')
+       ax2.legend() 
+    ax3.plot(controller_output.time_seq, controller_output.cost_seq, label='total cost')
+    ax3.plot(controller_output.time_seq, controller_output.x_cost_seq, label='state cost')
+    ax3.plot(controller_output.time_seq, controller_output.u_cost_seq, label='control cost')    
+    ax3.legend()        

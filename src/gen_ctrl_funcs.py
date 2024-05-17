@@ -149,7 +149,7 @@ def calculate_linearized_state_space_seq(
         u_len   = len(u_seq[0,:])
         a_lin_array = np.zeros((len_seq, x_len, x_len))
         b_lin_array = np.zeros((len_seq, x_len, u_len))
-        xu_seq = jnp.concatenate((x_seq, u_seq), axis=1)
+        xu_seq = jnp.concatenate((x_seq[:-1], u_seq), axis=1)
         for idx in range(len_seq):
             a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, xu_seq[idx], x_len)
             a_lin_array[idx] = np.array(a_lin)

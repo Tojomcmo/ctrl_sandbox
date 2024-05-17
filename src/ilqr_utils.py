@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 import numpy as np
 import numpy.typing as npt
+from typing import Union
 
 # ---------- utility functions ----------#
 
@@ -31,3 +32,9 @@ def array_to_row(array_1D:npt.NDArray):
 def get_vec_from_seq_as_col(vec_seq:npt.NDArray, k:int):
     col_vec = vec_seq[k].reshape(-1,1)
     return col_vec
+
+def check_inf_or_nan_array(arr:Union[np.ndarray,jnp.ndarray]) -> bool:
+    if jnp.any(jnp.isinf(arr) | jnp.isnan(arr)):
+        return True
+    else:
+        return False

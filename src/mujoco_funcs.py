@@ -12,7 +12,7 @@ def create_mujoco_model(mjcf_model:str,time_step):
 
 def fwd_sim_mj_w_ctrl_step(model, data, x, u):
     set_mj_state_vec(data, x) 
-    data.ctrl  = (u[0]).reshape(-1)      
+    data.ctrl  = u.reshape(-1)      
     # mujoco.mj_forward(model,data)
     mujoco.mj_step(model, data)   
     return get_state_vec(data)
@@ -69,7 +69,7 @@ def linearize_mujoco_state_and_control(model, data, eps=1e-6, flg_centered=True)
     A = np.zeros((2*nx, 2*nx))
     B = np.zeros((2*nx,   nu))
     mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
-    return A, B
+    return A, B 
 
 def get_state_vec(data):
     return np.hstack((data.qpos, data.qvel)).reshape(-1) 

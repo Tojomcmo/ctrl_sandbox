@@ -12,7 +12,7 @@ if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
 
     # mjcf_model  = mj_models.create_MJCF_double_pend_m_d_mod(1,1,1)
-    mjcf_model  = mj_models.create_MJCF_double_pend_dev(1,1,1)
+    mjcf_model  = mj_models.create_MJCF_double_pend_fa_dev()
     model = mujoco.MjModel.from_xml_string(mjcf_model)
     data = mujoco.MjData(model)
 
@@ -31,9 +31,9 @@ if __name__ == "__main__":
     # update model and data parameters
     time_step = 0.005
     model.opt.timestep = time_step
-    steps     = 600
-    data.ctrl = np.array([0.0,1.0])
-    x_init = np.array([1.0,1.0,0.0,0.0])
+    steps     = 1000
+    data.ctrl = np.array([6.0,4.0])
+    x_init = np.array([0.0,0.0,0.0,0.0])
     mj_funcs.set_mj_state_vec(data, x_init)
     mujoco.mj_forward(model,data)
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1) 
     control_vec = np.array(data.ctrl).reshape(-1,1)
     A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)    
-    state_next_pred = state_next_pred = (A @ state_vec) + (B @ control_vec)
+    state_next_pred  = (A @ state_vec) + (B @ control_vec)
     
     x_vec_seq = np.zeros((steps, 4))
     x_vec_seq[0] = state_vec.reshape(-1)
@@ -54,15 +54,13 @@ if __name__ == "__main__":
         img_set = []
         fig1, ax1 = plt.subplots()
 
-    for idx in range(steps):      
+    for idx in range(steps):         
         mujoco.mj_step(model, data)
-        print('ctrl_forces: ', data.actuator_force[0], ',  ', data.actuator_force[1])
         state_vec = np.hstack((data.qpos.copy(), data.qvel.copy())).reshape(-1,1)   
         x_vec_seq[idx] = state_vec.reshape(-1)  
-        # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
         A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered=False)
         control_vec = np.array(data.ctrl).reshape(-1,1)
-        state_next_pred = (A @ state_vec) + (B @ control_vec)
+
         # update frame
         if show_plot is True:  
             mj_vis.update_plt_frame(renderer, data, frames, img_set)
@@ -81,17 +79,17 @@ if __name__ == "__main__":
 
 ###################################
 
-    for idx in range(steps):
-        print('state_predict: ', state_next_pred)         
-        mujoco.mj_step(model, data)
-        state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)      
-        print('state_actual: ', state_vec)
-        A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)  
-        # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
-        print('A: ', A)
-        print('B: ', B)    
-        state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
-        control_vec = np.array(data.ctrl).reshape(-1,1)
-        state_next_pred = A @ state_vec + B @   control_vec
+    # for idx in range(steps):
+    #     print('state_predict: ', state_next_pred)         
+    #     mujoco.mj_step(model, data)
+    #     state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)      
+    #     print('state_actual: ', state_vec)
+    #     A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)  
+    #     # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
+    #     print('A: ', A)
+    #     print('B: ', B)    
+    #     state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
+    #     control_vec = np.array(data.ctrl).reshape(-1,1)
+    #     state_next_pred = A @ state_vec + B @   control_vec
 
 

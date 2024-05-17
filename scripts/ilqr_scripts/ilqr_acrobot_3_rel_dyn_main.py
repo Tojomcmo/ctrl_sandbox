@@ -1,3 +1,4 @@
+import jax
 from jax import numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,31 +12,48 @@ import cost_functions as cost
 import analyze_ilqr_output_funcs as analyze
 import gen_ctrl_funcs as gen_ctrl
 import visualize_dyn_funcs as vis_dyn
+import mujoco_funcs as mj_funcs
+import mjcf_models as mjcf
+
+def plot_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3):
+    if shoulder_act is True and elbow_act is True:
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control effort')
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control effort')
+       ax2.legend() 
+    else:
+       ax2.plot(controller_output.time_seq[:-1],u_sim_seq, label = 'control effort')
+       ax2.legend() 
+    ax3.plot(controller_output.time_seq, controller_output.cost_seq, label='total cost')
+    ax3.plot(controller_output.time_seq, controller_output.x_cost_seq, label='state cost')
+    ax3.plot(controller_output.time_seq, controller_output.u_cost_seq, label='control cost')    
+    ax3.legend()
 
 if __name__ == "__main__":
+   jax.config.update("jax_enable_x64", True)
    #------- Define controller configuration -------#
-   save_ani_bool = True
+   save_ani_bool = False
+   sim_with_mj = False
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.04
-   len_seq    = 70
+   time_step  = 0.01
+   len_seq    = 100
    num_states = 4
    num_controls = 1
-   shoulder_act = False
-   elbow_act = True
+   shoulder_act = True 
+   elbow_act = False
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   ,0  ],
-                       [0   ,0   ,0.1   ,0  ],
-                       [0   ,0   ,0   ,0.5  ]],
-                       dtype=float) * 10.0
+                       [0   ,0   ,1.0   ,0  ],
+                       [0   ,0   ,0   ,1.0  ]],
+                       dtype=float) * 500.0  
    R_cost  = np.array([[1.0]],dtype=float)*1.0
-   # R_cost  = np.array([[5.0, 0],[0, 1.0]],dtype=float)*0.5
+   # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 4000.0
+                       dtype=float) * 2000.0
    
    h_bar = 1.0
    r_bar = 0.05
@@ -48,18 +66,18 @@ if __name__ == "__main__":
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
    ilqr_config.converge_crit = 1e-5
-   ilqr_config.max_iter = 50
-
+   ilqr_config.max_iter = 20
+   ilqr_config.fp_max_iter=6
 
    #---------- create simulation system for post algorithm test ----------#
    dyn_func_sys_sim = dyn_func_sys_ctrl
    # dyn_func_sys_sim = dyn.double_pend_abs_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=0.0,
    #                                               shoulder_act=shoulder_act, elbow_act=elbow_act)
 
-   x_sim_init_vec = np.array([0.0,0.0,0.0,0.0])
+   x_sim_init_vec = np.array([3.0,0.0,0.0,0.0])
 
    #---------- set system state init and desired trajectories ----------#
-   x_tg_init_vec = np.array([0.0,0.0,0.0,0.0])
+   x_tg_init_vec = np.array([3.0,0.0,0.0,0.0])
    x_init_vec = x_tg_init_vec
 
    ctrl_target_condition = 2
@@ -104,7 +122,15 @@ if __name__ == "__main__":
    controller_output = ilqr.run_ilqr_controller(ilqr_config, controller_state)
    #------- Simulate controller output --------#
 
-   sim_dyn_disc_func = lambda x,u: gen_ctrl.step_rk4(dyn_func_sys_sim.cont_dyn_func, ilqr_config.time_step, x, u)
+
+   if sim_with_mj is True:
+      mjcf_obj = mjcf.mjcf_dpend(shoulder_act, elbow_act)
+      mj_model, _, mj_data = mj_funcs.create_mujoco_model(mjcf_obj.get_mjcf_model(), time_step=time_step)
+      sim_dyn_disc_func = lambda x_k, u_k: mj_funcs.fwd_sim_mj_w_ctrl_step(mj_model, mj_data, np.array(x_k), np.array(u_k))
+      print('simulating with mujoco...')
+   else:   
+      sim_dyn_disc_func = lambda x_k,u_k: gen_ctrl.step_rk4(dyn_func_sys_sim.cont_dyn_func, ilqr_config.time_step, x_k, u_k)
+      print('simulating with dpend func...')
    x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(sim_dyn_disc_func, controller_output, x_sim_init_vec)
 
    #------- plot simulation and controller outputs ------#
@@ -115,17 +141,7 @@ if __name__ == "__main__":
    ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
    ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
    
-   if shoulder_act is True and elbow_act is True:
-      ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control effort')
-      ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control effort')
-      ax2.legend() 
-   else:
-      ax2.plot(controller_output.time_seq[:-1],u_sim_seq, label = 'control effort')
-      ax2.legend() 
-   ax3.plot(controller_output.time_seq, controller_output.cost_seq, label='total cost')
-   ax3.plot(controller_output.time_seq, controller_output.x_cost_seq, label='state cost')
-   ax3.plot(controller_output.time_seq, controller_output.u_cost_seq, label='control cost')    
-   ax3.legend()  
+   plot_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3)  
 
    pend_animation = vis_dyn.double_pend_animation(dyn_func_sys_sim.get_animate_value_dict(), x_sim_seq, time_step, fig, ax1, th2='rel')
    pend_animation.create_double_pend_animation()

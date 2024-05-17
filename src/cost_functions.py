@@ -70,9 +70,9 @@ class cost_quad_x_and_u():
                  Qf:npt.NDArray[np.float64], 
                  x_des_seq:npt.NDArray[np.float64], 
                  u_des_seq:npt.NDArray[np.float64]) -> None:
-        self.Q  = Q
-        self.R  = R
-        self.Qf = Qf
+        self.Q  = jnp.array(Q)
+        self.R  = jnp.array(R)
+        self.Qf = jnp.array(Qf)
         self.x_des_seq = jnp.array(x_des_seq)
         self.u_des_seq = jnp.array(u_des_seq)
 
@@ -90,26 +90,23 @@ class cost_quad_x_and_u():
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
     # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
     # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
-        Q  = jnp.array(self.Q)
-        R  = jnp.array(self.R)
-        Qf = jnp.array(self.Qf)
         # x_des_seq_jax = np.array(cost_func_params.x_des_seq)
         # u_des_seq_jax = np.array(cost_func_params.u_des_seq)
         # check that dimensions match [TODO]
         if is_final_bool:
             x_k_corr:jnp.ndarray = x_k.reshape(-1,1) - (self.x_des_seq[k_step]).reshape(-1,1)
-            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Qf @ x_k_corr))
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ self.Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
         elif k_step == 0:
             u_k_corr:jnp.ndarray = u_k.reshape(-1,1) - (self.u_des_seq[k_step]).reshape(-1,1)
             x_cost     = jnp.array([0.0])    
-            u_cost     = jnp.array((0.5) * (u_k_corr.T  @ R  @ u_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T  @ self.R  @ u_k_corr))
             total_cost = u_cost
         else:
             x_k_corr:jnp.ndarray = x_k.reshape(-1,1) - (self.x_des_seq[k_step]).reshape(-1,1) 
             u_k_corr:jnp.ndarray = u_k.reshape(-1,1) - (self.u_des_seq[k_step]).reshape(-1,1)
-            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
-            u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
-            total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ self.Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T @ self.R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((x_k_corr.T @ self.Q @ x_k_corr)+(u_k_corr.T @ self.R @ u_k_corr)))
         return total_cost, x_cost, u_cost   
