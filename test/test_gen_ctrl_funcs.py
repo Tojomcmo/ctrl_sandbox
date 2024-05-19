@@ -1,5 +1,6 @@
 import unittest
 from jax import numpy as jnp
+from jax import lax
 import numpy as np
 import scipy
 import numpy.typing as npt
@@ -100,7 +101,7 @@ class stateSpace_tests(unittest.TestCase):
         self.assertEqual(str(assert_error_NaN.exception), 'invalid time step definition nan. time_step must be a positive float or None')      
 
 class simulate_forward_dynamics_tests(unittest.TestCase):
-    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+    def pend_unit_dyn_func(self, state:jnp.ndarray, control:jnp.ndarray)-> jnp.ndarray:
         x_k_jax = jnp.array(state)
         u_k_jax = jnp.array(control)
         g = 1.0
@@ -129,7 +130,7 @@ class simulate_forward_dynamics_tests(unittest.TestCase):
 
 class linearize_dynamics_tests(unittest.TestCase):
 
-    def pend_unit_dyn_func(self, state:npt.NDArray[np.float64], control:npt.NDArray[np.float64])-> npt.NDArray:
+    def pend_unit_dyn_func(self, state:jnp.ndarray, control:jnp.ndarray)-> jnp.ndarray:
         x_k_jax = jnp.array(state)
         u_k_jax = jnp.array(control)
         g = 1.0
@@ -140,10 +141,10 @@ class linearize_dynamics_tests(unittest.TestCase):
         return state_dot  
        
     def step_rk4(self,
-            dyn_func_ad:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+            dyn_func_ad:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
             h:float, 
-            x_k:npt.NDArray[np.float64], 
-            u_k:npt.NDArray[np.float64]) -> npt.NDArray:
+            x_k:jnp.ndarray, 
+            u_k:jnp.ndarray) -> jnp.ndarray:
         #rk4 integration with zero-order hold on u
         f1 = dyn_func_ad(x_k            , u_k)
         f2 = dyn_func_ad(x_k + 0.5*h*f1 , u_k)
@@ -153,10 +154,11 @@ class linearize_dynamics_tests(unittest.TestCase):
     
     def test_linearize_dynamics_accepts_valid_case(self):
         h = 0.1
-        x = np.array([1., 1.])
-        u = np.array([1.])
+        x = jnp.array([1., 1.])
+        u = jnp.array([1.])
         discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
-        a_lin, b_lin    = gen_ctrl.linearize_dynamics(discrete_dyn_func,x,u)
+        xu = jnp.concatenate((x, u))
+        a_lin, b_lin    = gen_ctrl.linearize_dynamics(discrete_dyn_func,xu,len(x))
         g = 1.0
         l = 1.0
         b = 1.0
@@ -197,8 +199,8 @@ class calculate_linearized_state_space_seq_tests(unittest.TestCase):
     def test_calculate_linearized_state_space_seq_accepts_valid_system(self):
         len_seq     = 4
         h           = 0.005
-        u_seq = np.ones((3,1), dtype=np.float64)
-        x_seq   = np.ones((4,2), dtype=np.float64)
+        u_seq = jnp.ones((3,1), dtype=np.float64)
+        x_seq = jnp.ones((4,2), dtype=np.float64)
         discrete_dyn_func = lambda x,u: self.step_rk4(self.pend_unit_dyn_func,h,x,u)
         A_lin_d_seq, B_lin_d_seq = gen_ctrl.calculate_linearized_state_space_seq(discrete_dyn_func,
                                                                                 x_seq, 
@@ -294,10 +296,9 @@ class discretize_state_space_tests(unittest.TestCase):
 class calculate_total_cost_tests(unittest.TestCase):
 
     def cost_func_quad_state_and_control(self, 
-                                         x_k:npt.NDArray[np.float64], 
-                                         u_k:npt.NDArray[np.float64], 
-                                         k_step:int, 
-                                         is_final_bool:bool) -> Tuple[float,float,float]:
+                                         x_k:jnp.ndarray, 
+                                         u_k:jnp.ndarray, 
+                                         k:int) -> Tuple[float,float,float]:
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
@@ -306,31 +307,32 @@ class calculate_total_cost_tests(unittest.TestCase):
         Q  = jnp.array([[1.,0],[0,1.]])
         R  = jnp.array([[1.]])
         Qf = jnp.array([[1.,0],[0,1.]])
-        x_des_seq   = np.ones([3,2,1]) * 0.1
-        u_des_seq   = np.ones([2,1,1]) * 0.1
+        x_des_seq   = jnp.ones([3,2,1]) * 0.1
+        u_des_seq   = jnp.ones([2,1,1]) * 0.1
+        len_seq     = len(x_des_seq)
         # check that dimensions match [TODO]
-        if is_final_bool:
-            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq[k_step], shape='col')
+        if k == len_seq-1:
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
-        elif k_step == 0:
-            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
+        elif k == 0:
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
             x_cost     = jnp.array([0.0])    
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
             total_cost = u_cost
         else:
-            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq[k_step], shape='col')   
-            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
-            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
-            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
-            total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
         return total_cost.item(), x_cost.item(), u_cost.item()                      
 
     def test_accepts_valid_inputs(self):
         cost_func_for_calc = self.cost_func_quad_state_and_control
-        x_seq = np.ones([3,2,1])
-        u_seq = np.ones([2,1,1])
+        x_seq = jnp.ones([3,2])
+        u_seq = jnp.ones([2,1])
         total_cost, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(cost_func_for_calc, x_seq, u_seq)
         total_cost_expect = (0.5*(0.9*0.9)) + (0.5*(2*(0.9*0.9)+(0.9*0.9))) + (0.5*(2*(0.9*0.9)))
         cost_seq_expect   = np.array([0.5*(0.9*0.9), (0.5*(2*(0.9*0.9)+(0.9*0.9))), (0.5*(2*(0.9*0.9)))]) 
@@ -345,10 +347,9 @@ class calculate_total_cost_tests(unittest.TestCase):
 class taylor_expand_cost_tests(unittest.TestCase):  
     
     def cost_func_quad_state_and_control(self, 
-                                         x_k:npt.NDArray[np.float64], 
-                                         u_k:npt.NDArray[np.float64], 
-                                         k_step:int, 
-                                         is_final_bool:bool) -> npt.NDArray:
+                                         x_k:jnp.ndarray, 
+                                         u_k:jnp.ndarray, 
+                                         k:int) -> jnp.ndarray:
     # This function calculates a quadratic cost wrt state and control
     # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
     # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
@@ -357,50 +358,147 @@ class taylor_expand_cost_tests(unittest.TestCase):
         Q  = jnp.array([[1.,0],[0,1.]])
         R  = jnp.array([[1.]])
         Qf = jnp.array([[1.,0],[0,1.]])
-        x_des_seq   = np.ones([3,2,1]) * 0.1
-        u_des_seq   = np.ones([2,1,1]) * 0.1
+        x_des_seq   = jnp.ones([3,2]) * 0.1
+        u_des_seq   = jnp.ones([2,1]) * 0.1
+        len_seq     = len(x_des_seq)
         # check that dimensions match [TODO]
-        if is_final_bool:
-            x_k_corr = util.calc_and_shape_array_diff(x_k  , x_des_seq[k_step], shape='col') # type: ignore (NDArray and Jax NDArray)
+        if k == len_seq -1:
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
             x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
             u_cost     = jnp.array([0.0])
             total_cost = x_cost
-        elif k_step == 0:
-            u_k_corr   = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
+        elif k == 0:
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
             x_cost     = jnp.array([0.0])    
             u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
             total_cost = u_cost
         else:
-            x_k_corr = util.calc_and_shape_array_diff(x_k, x_des_seq[k_step], shape='col')   
-            u_k_corr = util.calc_and_shape_array_diff(u_k, u_des_seq[k_step], shape='col')
-            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Q @ x_k_corr))
-            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr) @ R @ u_k_corr))
-            total_cost = jnp.array((0.5) * ((jnp.transpose(x_k_corr) @ Q @ x_k_corr)+(jnp.transpose(u_k_corr) @ R @ u_k_corr)))
-        return total_cost     # type:ignore (Jax NDArray)            
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
+        return total_cost             
  
     def test_taylor_expand_cost_accepts_list_of_arrays(self):
         cost_func_for_diff = self.cost_func_quad_state_and_control
-        x_seq      = np.ones([3,2,1])
-        u_seq      = np.ones([2,1,1])
-        k_step     = 1
-
-        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func_for_diff,x_seq[k_step],u_seq[k_step],k_step) #type:ignore (Jax NDArray)
+        x_seq      = jnp.ones([3,2])
+        u_seq      = jnp.ones([2,1])
+        k     = 1
+        xu_seq  = jnp.concatenate((x_seq[:-1], u_seq), axis=1)
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func_for_diff,xu_seq[k],len(x_seq[0]),k) #type:ignore (Jax NDArray)
         cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
                              'R'  : np.array([[1.]]),
                              'Qf' : np.array([[1.,0],[0,1.]])} 
-        x_des_seq  = np.ones([3,2,1]) * 0.1
-        u_des_seq  = np.ones([2,1,1]) * 0.1
-        l_x_expected  = cost_func_params['Q'] @ (x_seq[k_step]-x_des_seq[k_step])
-        l_u_expected  = cost_func_params['R'] @ (u_seq[k_step]-u_des_seq[k_step])
+        x_des_seq  = np.ones([3,2]) * 0.1
+        u_des_seq  = np.ones([2,1]) * 0.1
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[k]-x_des_seq[k]).reshape(-1,1)
+        l_u_expected  = cost_func_params['R'] @ (u_seq[k]-u_des_seq[k]).reshape(-1,1)
         l_xx_expected = cost_func_params['Q']
         l_uu_expected = cost_func_params['R']  
         l_ux_expected = np.zeros([len(u_seq[0]),len(x_seq[0])])
 
-        numpy.testing.assert_allclose(l_x, l_x_expected,rtol=1e-6, atol=1e-6)
-        numpy.testing.assert_allclose(l_u, l_u_expected,rtol=1e-6, atol=1e-6)
-        numpy.testing.assert_allclose(l_xx, l_xx_expected,rtol=1e-6, atol=1e-6)
-        numpy.testing.assert_allclose(l_uu, l_uu_expected,rtol=1e-6, atol=1e-6)
-        numpy.testing.assert_allclose(l_ux, l_ux_expected,rtol=1e-6, atol=1e-6)            
+        numpy.testing.assert_allclose(l_x, l_x_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_u, l_u_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_xx, l_xx_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_uu, l_uu_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_ux, l_ux_expected,rtol=1e-7, atol=1e-7)            
+
+
+class taylor_expand_cost_seq_tests(unittest.TestCase):  
+    
+    def cost_func_quad_state_and_control_old(self, 
+                                         x_k:jnp.ndarray, 
+                                         u_k:jnp.ndarray, 
+                                         k:int) -> jnp.ndarray:
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q  = jnp.array([[1.,0],[0,1.]])
+        R  = jnp.array([[1.]])
+        Qf = jnp.array([[1.,0],[0,1.]])
+        x_des_seq   = jnp.ones([3,2]) * 0.1
+        u_des_seq   = jnp.ones([2,1]) * 0.1
+        # check that dimensions match [TODO]
+        if k == 0:
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array([0.0])    
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
+            total_cost = u_cost
+        elif k == len(x_des_seq) -1:
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
+            u_cost     = jnp.array([0.0])
+            total_cost = x_cost
+        else:
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
+        return total_cost             
+ 
+    def cost_func_quad_state_and_control(self, 
+                                         x_k:jnp.ndarray, 
+                                         u_k:jnp.ndarray, 
+                                         k:int) -> jnp.ndarray:
+    # This function calculates a quadratic cost wrt state and control
+    # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
+    # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
+    # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
+    # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs   
+        Q  = jnp.array([[1.,0],[0,1.]])
+        R  = jnp.array([[1.]])
+        Qf = jnp.array([[1.,0],[0,1.]])
+        x_des_seq   = jnp.ones([3,2]) * 0.1
+        u_des_seq   = jnp.ones([2,1]) * 0.1
+        # check that dimensions match [TODO]
+        def first_index_case():
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array([0.0])    
+            u_cost     = jnp.array((0.5) * (jnp.transpose(u_k_corr)  @ R  @ u_k_corr))
+            total_cost = u_cost
+            return total_cost
+        def last_index_case():
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (jnp.transpose(x_k_corr) @ Qf @ x_k_corr))
+            u_cost     = jnp.array([0.0])
+            total_cost = x_cost
+            return total_cost
+        def default_case():
+            x_k_corr = x_k.reshape(-1,1) - (x_des_seq[k]).reshape(-1,1)   
+            u_k_corr = u_k.reshape(-1,1) - (u_des_seq[k]).reshape(-1,1)   
+            x_cost     = jnp.array((0.5) * (x_k_corr.T @ Q @ x_k_corr))
+            u_cost     = jnp.array((0.5) * (u_k_corr.T @ R @ u_k_corr))
+            total_cost = jnp.array((0.5) * ((x_k_corr.T @ Q @ x_k_corr)+(u_k_corr.T @ R @ u_k_corr)))
+            return total_cost
+        is_first_case = (k == 0)
+        is_last_case  = (k == len(x_des_seq)-1)
+        return lax.cond(is_first_case, first_index_case, lambda : lax.cond(is_last_case, last_index_case, default_case))   
+
+    def test_taylor_expand_cost_accepts_list_of_arrays(self):
+        cost_func_for_diff = self.cost_func_quad_state_and_control
+        x_seq      = jnp.ones([3,2])
+        u_seq      = jnp.ones([2,1])
+        l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost_seq(cost_func_for_diff,x_seq, u_seq)
+        cost_func_params  = {'Q'  : np.array([[1.,0],[0,1.]]), 
+                             'R'  : np.array([[1.]]),
+                             'Qf' : np.array([[1.,0],[0,1.]])} 
+        x_des_seq  = np.ones([3,2]) * 0.1
+        u_des_seq  = np.ones([2,1]) * 0.1
+        l_x_expected  = cost_func_params['Q'] @ (x_seq[1]-x_des_seq[1]).reshape(-1,1)
+        l_u_expected  = cost_func_params['R'] @ (u_seq[1]-u_des_seq[1]).reshape(-1,1)
+        l_xx_expected = cost_func_params['Q']
+        l_uu_expected = cost_func_params['R']  
+        l_ux_expected = np.zeros([len(u_seq[0]),len(x_seq[0])])
+
+        numpy.testing.assert_allclose(l_x[1], l_x_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_u[1], l_u_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_xx[1], l_xx_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_uu[1], l_uu_expected,rtol=1e-7, atol=1e-7)
+        numpy.testing.assert_allclose(l_ux[1], l_ux_expected,rtol=1e-7, atol=1e-7)            
 
 
 class prep_xu_vecs_for_diff_tests(unittest.TestCase):
@@ -422,7 +520,7 @@ class prep_xu_vecs_for_diff_tests(unittest.TestCase):
 
 
 class prep_cost_func_for_diff_tests(unittest.TestCase):
-    def cost_func(self, vec_1:npt.NDArray[np.float64], vec_2:npt.NDArray[np.float64], input_int:int, input_bool:bool): 
+    def cost_func(self, vec_1:jnp.ndarray, vec_2:jnp.ndarray, input_int:int): 
         cost_val_1 = jnp.sum(vec_1)
         cost_val_2 = jnp.sum(vec_2)
         combined_cost = cost_val_1 + cost_val_2
@@ -430,13 +528,12 @@ class prep_cost_func_for_diff_tests(unittest.TestCase):
     
     def test_accepts_valid_cost_func_inputs(self):
         #create test conditions
-        x_k = np.array([1,2])
-        u_k = np.array([3,4])
+        x_k = jnp.array([1,2])
+        u_k = jnp.array([3,4])
         input_int = 1
-        input_bool = False
         #test function
         cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(self.cost_func) # type: ignore (NDArray to Jax NDArray)
-        combined_cost = cost_func_for_diff(x_k, u_k, input_int,input_bool)
+        combined_cost = cost_func_for_diff(x_k, u_k, input_int)
         # create expected output
         combined_cost_expected = jnp.array([10])
         #compare outputs

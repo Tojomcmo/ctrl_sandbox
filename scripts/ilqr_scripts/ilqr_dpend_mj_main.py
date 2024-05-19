@@ -21,7 +21,7 @@ import visualize_dyn_funcs as dyn_vis
 if __name__ == "__main__":
    #------- Define controller configuration -------#
    time_step  = 0.005 
-   len_seq    = 400
+   len_seq    = 300
    num_states = 4
    num_controls = 1
    shoulder_act = True
@@ -30,8 +30,8 @@ if __name__ == "__main__":
    dpend_model_obj = mj_models.mjcf_dpend(shoulder_act, elbow_act)
    Q_cost  = np.array([[10,0 ,0 ,0 ],
                        [0 ,1,0 ,0 ],
-                       [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 100.0
+                       [0 ,0 ,0.1 ,0 ],
+                       [0 ,0 ,0 ,1.0 ]], dtype=float) * 100.0
    R_cost  = np.array([[1]], dtype=float) * (1.0)
    # R_cost  = np.array([[5, 0 ],[0 , 1 ]], dtype=float) * 0.5
    Qf_cost = np.array([[10,0 ,0 ,0 ],
@@ -41,8 +41,9 @@ if __name__ == "__main__":
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
-   ilqr_config.max_iter = 5
+   ilqr_config.max_iter = 20
    ilqr_config.fp_max_iter = 5
+   ilqr_config.converge_crit = 1e-6
    #---------- create desired trajectory ----------#
    # traj_gen_dyn_func_params = dyn.nlPendParams(g=9.81,b=5.0,l=1.0)
    # x_tg_init_vec = np.array([[0.0],[0.0],[0.0],[0.0]])
@@ -52,7 +53,7 @@ if __name__ == "__main__":
    # x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
    #---------- set system init ----------#
-   x_init_vec = np.array([3.1,0.0,0.0,0.0])
+   x_init_vec = np.array([0.0,0.0,0.0,0.0])
    x_tg_init_vec = x_init_vec
    x_sim_init_vec = x_init_vec
 
@@ -80,7 +81,7 @@ if __name__ == "__main__":
       ilqr_config.config_for_mujoco(dpend_model_obj.get_mjcf_model())
    else:
       pass
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -116,7 +117,7 @@ if __name__ == "__main__":
    gs2 =  gridspec.GridSpec(2, 2)
    ax1 = fig2.add_subplot(gs2[:, 0]) # row 0, col 0
    ax2 = fig2.add_subplot(gs2[0, 1]) # row 0, col 1
-   dyn_vis.plot_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax1, ax2)
+   dyn_vis.plot_ilqr_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax1, ax2)
 
    # analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, cost_func_obj.x_des_seq, x_sim_seq, u_sim_seq)
    plt.show()

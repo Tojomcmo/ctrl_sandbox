@@ -376,10 +376,10 @@ class double_pend_rel_dyn():
         Thetas are both reference to intertial frame down position
         '''
 
-        if util.check_inf_or_nan_array(x_vec) or util.check_inf_or_nan_array(u_vec):
-            print('x_vec: ', x_vec)
-            print('u_vec: ', u_vec)
-            raise ValueError('Algorithm has overflowed state or control, invalid dynamics')
+        # if util.check_inf_or_nan_array(x_vec) or util.check_inf_or_nan_array(u_vec):
+        #     print('x_vec: ', x_vec)
+        #     print('u_vec: ', u_vec)
+        #     raise ValueError('Algorithm has overflowed state or control, invalid dynamics')
         
         s2 = jnp.sin(x_vec[1])    
         G2s12 = self.G_2 * jnp.sin(x_vec[0]+x_vec[1])

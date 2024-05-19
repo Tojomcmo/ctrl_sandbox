@@ -1,10 +1,14 @@
 import jax
 import jax.numpy as jnp
+from jax import lax
 import numpy as np
 import scipy 
+import time
+
 from numpy import typing as npt
 from typing import  Callable, Tuple
 from scipy.integrate import solve_ivp
+
 
 class stateSpace:
     def __init__(self, a_mat:npt.NDArray, b_mat:npt.NDArray, c_mat:npt.NDArray, d_mat:npt.NDArray, time_step = None):
@@ -36,10 +40,29 @@ class stateSpace:
             else:
                 raise ValueError(f'invalid time step definition {time_step}. time_step must be a positive float or None')
 
+# def simulate_forward_dynamics_seq(
+#         discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
+#         x_init:npt.NDArray[np.float64], 
+#         u_seq:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+#     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
+#     # dyn_func[in]     - continuous dynamics function (pre-populated with *params) for integration
+#     # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
+#     # state_init[in]   - starting state for integration (vector, must match dyn_func state dim)
+#     # time_step[in]    - time interval between sequence points (scalar > 0)
+#     # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
+#     # sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'    
+#     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
+#     len_seq  = len(u_seq)  
+#     x_seq    = np.zeros([(len_seq+1),len(x_init)], dtype=float)
+#     x_seq[0] = x_init # type: ignore
+#     for idx in range(len_seq):
+#         x_seq[idx+1] = np.array(discrete_dyn_func(jnp.array(x_seq[idx]), jnp.array(u_seq[idx]))) # type: ignore    
+#     return x_seq
+
 def simulate_forward_dynamics_seq(
         discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
-        x_init:npt.NDArray[np.float64], 
-        u_seq:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        x_init:jnp.ndarray, 
+        u_seq:jnp.ndarray) -> jnp.ndarray:
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory
     # dyn_func[in]     - continuous dynamics function (pre-populated with *params) for integration
     # control_seq[in]  - sequence of control inputs (scalar or vector depending on control dimension -- must match dyn_func control dim)
@@ -48,18 +71,19 @@ def simulate_forward_dynamics_seq(
     # t_final[in]      - final time projected for integration ((len(control_seq)+1) * time_step must equal final time)
     # sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'    
     # state_seq[out]   - jax array shape[iter+1,state_dim] of sequences of state space
-    len_seq  = len(u_seq)  
-    x_seq    = np.zeros([(len_seq+1),len(x_init)], dtype=float)
-    x_seq[0] = x_init # type: ignore
-    for idx in range(len_seq):
-        x_seq[idx+1] = np.array(discrete_dyn_func(jnp.array(x_seq[idx]), jnp.array(u_seq[idx]))) # type: ignore    
-    return x_seq
+    discrete_dyn_func_scan = lambda carry_x_k, u_seq: scan_dyn_for_sim(discrete_dyn_func, carry_x_k, u_seq)
+    _, x_seq_out = lax.scan(discrete_dyn_func_scan, x_init,u_seq)
+    return jnp.append(x_init.reshape(1,-1), x_seq_out, axis=0)
+
+def scan_dyn_for_sim(discrete_dyn_func, carry_x_k, u_seq)->Tuple[jnp.ndarray, jnp.ndarray]:
+    x_kp1 = discrete_dyn_func(carry_x_k, u_seq)
+    return x_kp1, x_kp1
 
 def simulate_forward_dynamics_step(
         dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
-        x_k:npt.NDArray[np.float64], u_k:npt.NDArray[np.float64], 
+        x_k:jnp.ndarray, u_k:jnp.ndarray, 
         time_step:float, 
-        sim_method:str = 'rk4') -> npt.NDArray[np.float64]:
+        sim_method:str = 'rk4') -> jnp.ndarray:
     '''
     # This function integrates the nonlinear dynamics forward to formulate the corresponding trajectory\n
     dyn_func[in]   - continuous dynamics function (pre-populated with *params) for integration\n
@@ -69,23 +93,19 @@ def simulate_forward_dynamics_step(
     sim_method[in] - step integration method, must be 'rk4'(default), 'euler', or 'solve_ivp_zoh'\n
     x_kp1[out]     - array shape[1,state_dim] of state vector at next time step
     '''   
-    x_len      = len(x_k)  
-    x_kp1      = np.zeros([x_len], dtype=float)
-    x_jax = jnp.array(x_k)
-    u_jax = jnp.array(u_k)
     if   sim_method == 'rk4':
-        x_kp1        = step_rk4(dyn_func, time_step, x_jax, u_jax)
+        x_kp1        = step_rk4(dyn_func, time_step, x_k, u_k)
     elif sim_method == 'euler':
-        x_kp1        = x_jax + dyn_func(x_jax, u_jax) * time_step
+        x_kp1        = x_k + dyn_func(x_k, u_k) * time_step
     elif sim_method == 'solve_ivp_zoh':
         time_span    = (0,time_step)
-        dyn_func_zoh = (lambda time_dyn, state: dyn_func(state, u_jax.reshape(-1)))
-        y_0          = (x_jax).reshape(-1)
+        dyn_func_zoh = (lambda time_dyn, state: dyn_func(state, u_k.reshape(-1)))
+        y_0          = (x_k).reshape(-1)
         result_ivp   = solve_ivp(dyn_func_zoh, time_span, y_0)
-        x_kp1        = [result_ivp.y[:,-1]]
+        x_kp1        = jnp.array(result_ivp.y[:,-1])
     else:
         raise ValueError("invalid simulation method")
-    return np.array(x_kp1).reshape(-1)
+    return x_kp1.reshape(-1)
 
 def linearize_dynamics(
         dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
@@ -102,11 +122,16 @@ def linearize_dynamics(
     b_lin       = ab_lin_cat[:x_k_len,x_k_len:]
     return a_lin, b_lin
 
+def scan_dyn_func_For_lin(dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],x_len:int, 
+                      carry:None, x_and_u_k:jnp.ndarray) -> Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]:
+    a_lin, b_lin = linearize_dynamics(dyn_func, x_and_u_k, x_len)
+    return carry, (a_lin, b_lin)
+
 def step_euler_forward(
-        dyn_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray], 
+        dyn_func:Callable[[jnp.ndarray, jnp.ndarray], npt.NDArray], 
         h:float, 
-        x_k:npt.NDArray[np.float64], 
-        u_k:npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        x_k:jnp.ndarray, 
+        u_k:jnp.ndarray) -> jnp.ndarray:
     return x_k + dyn_func(x_k, u_k) * h
 
 def step_rk4(
@@ -135,8 +160,8 @@ def step_solve_ivp(
 
 def calculate_linearized_state_space_seq(
         discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
-        x_seq:npt.NDArray[np.float64], 
-        u_seq:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        x_seq:jnp.ndarray, 
+        u_seq:jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
     # walk through state and control sequences
     # for each element, linearize the dyn_func dynamics
     # calculate the discretized dynamics for each linearized element
@@ -144,17 +169,12 @@ def calculate_linearized_state_space_seq(
     if len(x_seq) != (len(u_seq)+1):
         raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
     else:
-        len_seq = len(u_seq)
         x_len   = len(x_seq[0,:])
-        u_len   = len(u_seq[0,:])
-        a_lin_array = np.zeros((len_seq, x_len, x_len))
-        b_lin_array = np.zeros((len_seq, x_len, u_len))
         xu_seq = jnp.concatenate((x_seq[:-1], u_seq), axis=1)
-        for idx in range(len_seq):
-            a_lin, b_lin     = linearize_dynamics(discrete_dyn_func, xu_seq[idx], x_len)
-            a_lin_array[idx] = np.array(a_lin)
-            b_lin_array[idx] = np.array(b_lin)
-    return a_lin_array, b_lin_array
+        carry = None
+        lin_scan_func_curried = lambda carry, xu_seq: scan_dyn_func_For_lin(discrete_dyn_func,x_len, carry, xu_seq)
+        _, (a_lin_seq, b_lin_seq) = lax.scan(lin_scan_func_curried, carry, xu_seq)
+    return a_lin_seq, b_lin_seq
 
 def discretize_continuous_state_space(input_state_space:stateSpace, time_step:float, c2d_method:str = 'euler') -> stateSpace:
 #   A - (nxn) - continuous state transition matrix
@@ -212,60 +232,76 @@ def discretize_continuous_state_space(input_state_space:stateSpace, time_step:fl
     d_state_space = stateSpace(a_d, b_d, c_d, d_d, time_step)
     return d_state_space
 
+
+def combine_x_u_for_cost_scan(x_seq:jnp.ndarray, u_seq:jnp.ndarray)->jnp.ndarray:
+    u_seq_end = jnp.zeros((1,u_seq.shape[1]), dtype=float)
+    u_seq_mod = jnp.append(u_seq, u_seq_end, axis=0)
+    return jnp.concatenate([x_seq, u_seq_mod], axis=1)
+
+def scan_cost_func_for_calc(cost_func:Callable[[jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]], 
+                            x_len, carry:Tuple[int, jnp.ndarray], xu_k)-> Tuple[Tuple[int,jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+    count, cost_sum = carry
+    (total_cost, x_cost, u_cost) = cost_func(xu_k[:x_len], xu_k[x_len:], carry[0])
+    new_carry = (count+1, cost_sum + total_cost.reshape(-1))
+    return new_carry, (total_cost, x_cost, u_cost)
+
 def calculate_total_cost(
-        cost_func:Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],Tuple[float,float,float]], 
-        x_seq:npt.NDArray[np.float64], 
-        u_seq:npt.NDArray[np.float64]) -> Tuple[float, npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+        cost_func:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]], 
+        x_seq:jnp.ndarray, 
+        u_seq:jnp.ndarray) -> Tuple[float, jnp.ndarray,jnp.ndarray,jnp.ndarray]:
     # check state_seq and control_seq are valid lengths
     # Calculate total cost
-    len_seq    = len(x_seq)
-    u_len      = len(u_seq[1])
-    cost_seq   = np.zeros([len_seq], dtype=float)
-    x_cost_seq = np.zeros([len_seq], dtype=float)    
-    u_cost_seq = np.zeros([len_seq], dtype=float)
-    total_cost = 0.0
-    is_final_bool:bool = False
-    for idx in range(len_seq):
-        if (idx == len_seq-1):
-            is_final_bool=True
-            inc_cost, inc_x_cost, inc_u_cost = cost_func(x_seq[idx], np.zeros([u_len], dtype=float), idx, is_final_bool)
-        else:
-            inc_cost, inc_x_cost, inc_u_cost = cost_func(x_seq[idx], u_seq[idx], idx, is_final_bool)
-        total_cost += inc_cost 
-        cost_seq[idx] = inc_cost
-        x_cost_seq[idx] = inc_x_cost
-        u_cost_seq[idx] = inc_u_cost        
-    return total_cost, cost_seq, x_cost_seq, u_cost_seq
+    xu_seq                             = combine_x_u_for_cost_scan(x_seq, u_seq)
+    init_carry:Tuple[int, jnp.ndarray] = (0, jnp.zeros([1], dtype=float))
+    scan_cost_func_for_calc_curried    = lambda carry, xu_k : scan_cost_func_for_calc(cost_func, x_seq.shape[1], carry, xu_k)
+    (_, total_cost), (total_cost_seq, x_cost_seq, u_cost_seq) = lax.scan(scan_cost_func_for_calc_curried, init_carry,xu_seq)
+    return total_cost.item(), total_cost_seq, x_cost_seq, u_cost_seq
 
 def taylor_expand_cost(
-        cost_func:Callable[[jnp.ndarray, jnp.ndarray, int, bool],jnp.ndarray], 
-        x_k:npt.NDArray[np.float64], 
-        u_k:npt.NDArray[np.float64], 
-        k_step:int, 
-        is_final_bool:bool=False)-> Tuple[
-            npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+        cost_func:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray], 
+        xu_k:jnp.ndarray,
+        x_k_len:int, k:int)-> Tuple[jnp.ndarray,
+                                    jnp.ndarray,
+                                    jnp.ndarray,
+                                    jnp.ndarray,
+                                    jnp.ndarray]:
     ''' 
     This function creates a quadratic approximation of the cost function Using taylor expansion.
     Expansion is approximated about the rolled out trajectory
     '''
-    # create concatenated state and control vector of primal points
-    xu_k_jax, xu_k_len, x_k_len = prep_xu_vec_for_diff(x_k, u_k)
     # create lambda function of reduced inputs to only a single vector
     cost_func_xu:Callable[[jnp.ndarray],jnp.ndarray] = lambda xu_k: cost_func(xu_k[:x_k_len], 
                                                                               xu_k[x_k_len:], 
-                                                                              k_step, 
-                                                                              is_final_bool)
+                                                                              k)
     # calculate the concatenated jacobian vector for the cost function at the primal point
-    jac_cat      = (jax.jacfwd(cost_func_xu)(xu_k_jax)).reshape(xu_k_len,1)
+    jac_cat  = (jax.jacfwd(cost_func_xu)(xu_k)).reshape(len(xu_k),1) 
     # calculate the lumped hessian matrix for the cost function at the primal point
-    hessian_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k_jax)).reshape(xu_k_len,xu_k_len)
-    l_x  = np.array((jac_cat[:x_k_len]),               dtype=float)
-    l_u  = np.array((jac_cat[x_k_len:]),               dtype=float)
-    l_xx = np.array((hessian_cat[:x_k_len,:x_k_len]) , dtype=float)
-    l_uu = np.array((hessian_cat[x_k_len:,x_k_len:]) , dtype=float)
-    l_ux = np.array((hessian_cat[x_k_len:,:x_k_len]) , dtype=float)
+    hes_cat  = (jax.jacfwd(jax.jacrev(cost_func_xu))(xu_k)).reshape(len(xu_k),len(xu_k))
+    l_x  = jac_cat[:x_k_len]
+    l_u  = jac_cat[x_k_len:]
+    l_xx = hes_cat[:x_k_len,:x_k_len]
+    l_uu = hes_cat[x_k_len:,x_k_len:]
+    l_ux = hes_cat[x_k_len:,:x_k_len]
     return l_x, l_u, l_xx, l_uu, l_ux
-    
+
+def taylor_expand_cost_seq(cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
+                                       x_seq:jnp.ndarray,
+                                       u_seq:jnp.ndarray)->Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    u_seq_end = jnp.zeros((1,u_seq.shape[1]), dtype=float)
+    u_seq_mod = jnp.append(u_seq, u_seq_end, axis=0)
+    xu_seq    = jnp.concatenate([x_seq, u_seq_mod], axis=1)
+    carry:int = 0
+    lin_scan_func_curried = lambda carry, xu_seq: scan_cost_func_for_exp(cost_func, x_seq.shape[1], carry, xu_seq)
+    carry, expanded_mats      = lax.scan(lin_scan_func_curried, carry, xu_seq)
+    return expanded_mats
+
+def scan_cost_func_for_exp(cost_func:Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],x_len:int, 
+                           carry:int, xu_k:jnp.ndarray) -> Tuple[int, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+    l_x, l_u, l_xx, l_uu, l_ux = taylor_expand_cost(cost_func, xu_k, x_len, carry)
+    carry += 1
+    return carry, (l_x, l_u, l_xx, l_uu, l_ux)
+
+
 def prep_xu_vec_for_diff(x_k:npt.NDArray[np.float64],u_k:npt.NDArray[np.float64])->Tuple[jnp.ndarray, int, int]:
     '''x_k and u_k must each be shape (n,) and (m,) respectively'''
     xu_k       = np.concatenate([x_k, u_k])
@@ -285,33 +321,30 @@ def calculate_s_xx_dot(Q_t:npt.NDArray[np.float64],
     return s_xx_dt
 
 def prep_cost_func_for_diff(cost_func:Callable[
-    [jnp.ndarray, jnp.ndarray, int, bool],
+    [jnp.ndarray, jnp.ndarray, int],
     Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]) -> Callable[
-    [jnp.ndarray, jnp.ndarray, int, bool],
-    jnp.ndarray]:
+    [jnp.ndarray, jnp.ndarray, int], jnp.ndarray]:
     '''
     Function for reducing generic cost function output to single queried value.\n
     useful for preparing functions for jax differentiation
     '''
-    def cost_func_for_diff(x_k:jnp.ndarray, u_k:jnp.ndarray, k_step:int, is_final_bool:bool) -> jnp.ndarray:
-        cost_out = cost_func(x_k, u_k, k_step, is_final_bool)
+    def cost_func_for_diff(x_k:jnp.ndarray, u_k:jnp.ndarray, k_step:int) -> jnp.ndarray:
+        cost_out = cost_func(x_k, u_k, k_step)
         return cost_out[0]
     return cost_func_for_diff
 
 def prep_cost_func_for_calc(cost_func:Callable[
-                            [jnp.ndarray,jnp.ndarray,int,bool],
+                            [jnp.ndarray,jnp.ndarray,int],
                             Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]) -> Callable[
-                            [npt.NDArray[np.float64],npt.NDArray[np.float64],int,bool],
+                            [npt.NDArray[np.float64],npt.NDArray[np.float64],int],
                             Tuple[float,float,float]]:
     
     def cost_func_for_calc(x_k:npt.NDArray[np.float64], 
                            u_k:npt.NDArray[np.float64], 
-                           k:int,
-                           is_final_bool:bool) -> Tuple[float,float,float]:
-        total_cost, x_cost, u_cost = cost_func(jnp.array(x_k), jnp.array(u_k), k, is_final_bool)
+                           k:int) -> Tuple[float,float,float]:
+        total_cost, x_cost, u_cost = cost_func(jnp.array(x_k), jnp.array(u_k), k)
         return total_cost.item(), x_cost.item(), u_cost.item() 
     return cost_func_for_calc
-
 
 def c2d_AB_zoh_combined(
         A:npt.NDArray[np.float64], 
@@ -325,7 +358,6 @@ def c2d_AB_zoh_combined(
     Bd   = a_b_d[:n,n:] 
     return Ad, Bd
         
-
 def convert_d2d_A_B(Ad_1, Bd_1, dt_1, dt_2):
     I =np.eye(Ad_1.shape[0])
     A = (1/dt_1)*scipy.linalg.logm(Ad_1)

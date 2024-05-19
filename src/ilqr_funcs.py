@@ -8,9 +8,10 @@ import jax.numpy as jnp
 import copy
 import numpy as np
 from numpy import typing as npt
-from typing import Sequence, Callable, Tuple
+from typing import Sequence, Callable, Tuple, Union
 import mujoco as mujoco
 import time
+import functools
 
 import ilqr_utils as util
 import gen_ctrl_funcs as gen_ctrl
@@ -39,15 +40,17 @@ class ilqrConfigStruct:
         self.is_curried:bool            = False
 
     def config_cost_func(self,
-            cost_func:Callable[
-                [jnp.ndarray, jnp.ndarray, int, bool],
-                Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
+            cost_func_calc:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]],
+            cost_func_diff:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
         '''
         This function receives the proposed cost function and parameters for the cost function, and generates
         The specific cost function for the controller to use with curried inputs
         ''' 
-        self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(cost_func)
-        self.cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func)
+        # self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(cost_func_calc)
+        self.cost_func_for_calc = cost_func_calc
+        self.cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func_diff)
+        self.quad_exp_cost_seq  = lambda x_seq, u_seq: gen_ctrl.taylor_expand_cost_seq(self.cost_func_for_diff,
+                                                                                        x_seq, u_seq)
         self.is_cost_configured = True
 
 
@@ -84,16 +87,16 @@ class ilqrConfigStruct:
 
     def curry_funcs_for_mujoco(self)->None:
         self.discrete_dyn_mj_func:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-             npt.NDArray[np.float64]] = lambda x, u : mj_funcs.fwd_sim_mj_w_ctrl_step(self.mj_model, self.mj_data, x, u)
+            [jnp.ndarray, jnp.ndarray], 
+             jnp.ndarray] = lambda x, u : mj_funcs.fwd_sim_mj_w_ctrl_step(self.mj_model, self.mj_data, x, u)
         
         self.simulate_fwd_dyn_seq:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            npt.NDArray[np.float64]] = lambda x_init, u_seq: mj_funcs.fwd_sim_mj_w_ctrl(self.mj_model, self.mj_data, x_init, u_seq)
+            [jnp.ndarray, jnp.ndarray], 
+            jnp.ndarray] = lambda x_init, u_seq: mj_funcs.fwd_sim_mj_w_ctrl(self.mj_model, self.mj_data, x_init, u_seq)
 
         self.linearize_dyn_seq:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = lambda x_seq, u_seq: mj_funcs.linearize_mj_seq(self.mj_model, self.mj_data,
+            [jnp.ndarray, jnp.ndarray], 
+            Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: mj_funcs.linearize_mj_seq(self.mj_model, self.mj_data,
                                                                                                                       x_seq, u_seq)
         
     def curry_funcs_for_dyn_funcs(self)->None:
@@ -102,13 +105,12 @@ class ilqrConfigStruct:
             jnp.ndarray] = lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
 
         self.simulate_fwd_dyn_seq:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            npt.NDArray[np.float64]] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.discrete_dyn_func, x_init, u_seq)
+            [jnp.ndarray, jnp.ndarray], 
+            jnp.ndarray] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.discrete_dyn_func, x_init, u_seq)
         
         self.linearize_dyn_seq:Callable[
-            [npt.NDArray[np.float64], npt.NDArray[np.float64]], 
-            Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq(
-                                                                                                                        self.discrete_dyn_func,
+            [jnp.ndarray, jnp.ndarray], 
+            Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq(self.discrete_dyn_func,
                                                                                                                         x_seq, u_seq) 
 
     def create_curried_analyze_cost_dec_func(self)-> None:
@@ -127,12 +129,12 @@ class ilqrConfigStruct:
 class ilqrControllerState:
     def __init__(self,
                  ilqr_config:ilqrConfigStruct, 
-                 seed_x_vec:npt.NDArray[np.float64], 
-                 seed_u_seq:npt.NDArray[np.float64]):
+                 seed_x_vec:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 seed_u_seq:Union[jnp.ndarray, npt.NDArray[np.float64]]):
         # direct parameter population
-        self.seed_x_vec         = seed_x_vec     
-        self.seed_u_seq         = seed_u_seq           
-        self.validate_input_data(ilqr_config, seed_x_vec, seed_u_seq)            
+        self.seed_x_vec         = jnp.array(seed_x_vec)     
+        self.seed_u_seq         = jnp.array(seed_u_seq)           
+        self.validate_input_data(ilqr_config, self.seed_x_vec, self.seed_u_seq)            
         self.cost_float         = 0.0
         self.prev_cost_float    = 0.0
         self.iter_int           = 0 
@@ -142,19 +144,19 @@ class ilqrControllerState:
         self.ro_reg_change_bool = False    
         
         # dependent parameter population
-        self.u_seq         = seed_u_seq   
+        self.u_seq         = jnp.array(seed_u_seq)   
         self.len_seq       = self.get_len_seq()
         self.x_len         = self.get_num_states()
         self.u_len         = self.get_num_controls()
-        self.seed_x_seq    = np.zeros([self.len_seq,self.x_len])      
-        self.x_seq         = np.zeros([self.len_seq,self.x_len])
-        self.time_seq      = np.arange(self.len_seq) * ilqr_config.time_step
-        self.K_seq         = np.zeros([self.len_seq-1, self.u_len, self.x_len])
-        self.d_seq         = np.zeros([self.len_seq-1, self.u_len,          1])
-        self.Del_V_vec_seq = np.zeros([self.len_seq-1, 2])
-        self.cost_seq      = np.zeros([self.len_seq])
-        self.x_cost_seq    = np.zeros([self.len_seq])
-        self.u_cost_seq    = np.zeros([self.len_seq])        
+        self.seed_x_seq    = jnp.zeros([self.len_seq,self.x_len])      
+        self.x_seq         = jnp.zeros([self.len_seq,self.x_len])
+        self.time_seq      = jnp.arange(self.len_seq) * ilqr_config.time_step
+        self.K_seq         = jnp.zeros([self.len_seq-1, self.u_len, self.x_len])
+        self.d_seq         = jnp.zeros([self.len_seq-1, self.u_len,          1])
+        self.Del_V_vec_seq = jnp.zeros([self.len_seq-1, 2])
+        self.cost_seq      = jnp.zeros([self.len_seq])
+        self.x_cost_seq    = jnp.zeros([self.len_seq])
+        self.u_cost_seq    = jnp.zeros([self.len_seq])        
 
         if ilqr_config.log_ctrl_history is True:
             self.u_seq_history:list         = []
@@ -168,7 +170,7 @@ class ilqrControllerState:
             self.cost_float_history:list    = []
             self.lsf_float_history:list     = []
 
-    def validate_input_data(self,ilqr_config:ilqrConfigStruct, seed_x_vec:npt.NDArray, seed_u_seq:npt.NDArray):
+    def validate_input_data(self,ilqr_config:ilqrConfigStruct, seed_x_vec:jnp.ndarray, seed_u_seq:jnp.ndarray):
         if self.get_len_seq() != ilqr_config.len_seq:
             ValueError("sequences are the wrong length")
         if self.get_num_states() != ilqr_config.num_states:
@@ -200,14 +202,14 @@ class ilqrControllerState:
 
 def initialize_ilqr_controller(ilqr_config:ilqrConfigStruct, 
                                ctrl_state:ilqrControllerState)-> Tuple[
-                                   npt.NDArray[np.float64], float, float, npt.NDArray[np.float64]]:
+                                   jnp.ndarray, float, float, jnp.ndarray]:
     # create object containing preconfigured functions with static parameters (currying and parameter encapsulation)
 
     # populate state sequence from seed control sequence
     x_seq = ilqr_config.simulate_fwd_dyn_seq(ctrl_state.seed_x_vec,ctrl_state.seed_u_seq)
 
     # calculate initial cost
-    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, x_seq, ctrl_state.u_seq)
+    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))
     # ensure seed_cost is initialized with larger differential than convergence bound
 
     prev_cost_float = cost_float + (1 + ilqr_config.converge_crit)
@@ -266,9 +268,9 @@ def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrContro
 #                                             the local linearized coordinate and the local description of the state residual
 #   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
 #   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
-    bp_start = time.time()
-    Ad_seq, Bd_seq = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)    
-    print('linearize seq time: ', time.time() - bp_start)
+    # Ad_seq, Bd_seq = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)    
+    dyn_lin_approx_seq   = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)
+    cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(ctrl_state.x_seq, ctrl_state.u_seq)
     P_N, p_N = calculate_final_ctg_approx(ilqr_config.cost_func_for_diff, 
                                                         ctrl_state.x_seq[-1], 
                                                         ctrl_state.u_len,
@@ -281,23 +283,19 @@ def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrContro
     else:
         ro_reg = ilqr_config.ro_reg_start
     is_valid_q_uu = False
-    now = time.time()
+    xu_seq = jnp.concatenate((ctrl_state.x_seq[:-1],ctrl_state.u_seq), axis=1)
     while is_valid_q_uu is False:
         for idx in range(ctrl_state.len_seq - 1):
-            lin_now = time.time()
             # solve newton-step condition backwards from sequence end
-            k_step = ctrl_state.len_seq - (idx + 2) 
+            k = ctrl_state.len_seq - (idx + 2) 
             is_valid_q_uu = True
             q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
-                                                                        ilqr_config.cost_func_for_diff,
-                                                                        Ad_seq[k_step],
-                                                                        Bd_seq[k_step],
-                                                                        ctrl_state.x_seq[k_step],
-                                                                        ctrl_state.u_seq[k_step],
+                                                                        dyn_lin_approx_seq,
+                                                                        cost_quad_approx_seq,
                                                                         P_kp1,
                                                                         p_kp1,
                                                                         ro_reg,
-                                                                        k_step)
+                                                                        k)
             # if q_uu_reg is not positive definite, reset loop to initial state and increase ro_reg
             if util.is_pos_def(q_uu_reg) is False:
                 is_valid_q_uu = False
@@ -310,11 +308,9 @@ def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrContro
             else:
                 K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
                 P_kp1, p_kp1, Del_V_vec_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
-                k_seq[k_step]         = K_k
-                d_seq[k_step]         = d_k
-                Del_V_vec_seq[k_step] = Del_V_vec_k
-            print('linearization step time: ', time.time() - lin_now)    
-        print('backwards pass time elapsed: ' , time.time() - bp_start)
+                k_seq = k_seq.at[k].set(K_k)
+                d_seq = d_seq.at[k].set(d_k)
+                Del_V_vec_seq = Del_V_vec_seq.at[k].set(Del_V_vec_k)  
     return k_seq, d_seq, Del_V_vec_seq, ro_reg
 
 def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState):
@@ -326,25 +322,23 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
     line_search_scale_param = ilqr_config.ls_scale_alpha_param
     iter_count = 0
     ro_reg_change_bool = False
-    now = time.time()
     while not in_bounds_bool and (iter_count < ilqr_config.fp_max_iter):
         for k in range(ctrl_state.len_seq-1):
             # calculate updated control value
-            u_seq_fp[k] = calculate_u_k_new(ctrl_state.u_seq[k], 
-                                        ctrl_state.x_seq[k],
-                                        x_seq_fp[k], 
-                                        ctrl_state.K_seq[k], 
-                                        ctrl_state.d_seq[k], 
-                                        lsf)
+            u_seq_fp = u_seq_fp.at[k].set(calculate_u_k_new(ctrl_state.u_seq[k], 
+                                                            ctrl_state.x_seq[k],
+                                                            x_seq_fp[k], 
+                                                            ctrl_state.K_seq[k], 
+                                                            ctrl_state.d_seq[k], 
+                                                            lsf))
             # calculate updated next state with dynamics function
             if ilqr_config.mj_ctrl is True:
-                x_seq_fp[k+1] = ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k])
+                x_seq_fp = x_seq_fp.at[k+1].set(ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k]))
             else:    
-                x_seq_fp[k+1] = ilqr_config.discrete_dyn_func(x_seq_fp[k], u_seq_fp[k])
-        print('forward pass time elapsed:', time.time()-now)
+                x_seq_fp = x_seq_fp.at[k+1].set(ilqr_config.discrete_dyn_func(x_seq_fp[k], u_seq_fp[k]))
         # shift sequences for cost calculation wrt desired trajectories
         # calculate new trajectory cost    
-        cost_float_fp, cost_seq_fp, x_cost_seq_fp, u_cost_seq_fp = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, x_seq_fp, u_seq_fp)
+        cost_float_fp, cost_seq_fp, x_cost_seq_fp, u_cost_seq_fp = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, jnp.array(x_seq_fp), jnp.array(u_seq_fp))
         # calculate the ratio between the expected cost decrease and actual cost decrease
         cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_fp, ctrl_state.Del_V_vec_seq, lsf) 
         in_bounds_bool = ilqr_config.analyze_cost_dec(cost_decrease_ratio)
@@ -364,36 +358,31 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
             iter_count += 1
     return x_seq_fp, u_seq_fp, cost_float_fp, cost_seq_fp,x_cost_seq_fp, u_cost_seq_fp, lsf, ro_reg_change_bool
 
-def initialize_backwards_pass(P_N:npt.NDArray, p_N:npt.NDArray, x_len:int, u_len:int, len_seq:int):
-    K_seq         = np.zeros([(len_seq-1), u_len, x_len])
-    d_seq         = np.zeros([(len_seq-1), u_len, 1])
-    Del_V_vec_seq = np.zeros([(len_seq-1), 2])
+def initialize_backwards_pass(P_N:jnp.ndarray, p_N:jnp.ndarray, x_len:int, u_len:int, len_seq:int):
+    K_seq         = jnp.zeros([(len_seq-1), u_len, x_len])
+    d_seq         = jnp.zeros([(len_seq-1), u_len, 1])
+    Del_V_vec_seq = jnp.zeros([(len_seq-1), 2])
     P_kp1 = P_N
     p_kp1 = p_N
     return P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq
 
-def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:npt.NDArray, len_seq:int):
-    control_seq_fp  = np.zeros([(len_seq-1),u_len])
-    x_seq_fp        = np.zeros([(len_seq),  x_len])
-    x_seq_fp[0][:]  = seed_state_vec
+def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:jnp.ndarray, len_seq:int):
+    control_seq_fp  = jnp.zeros([(len_seq-1),u_len])
+    x_seq_fp        = jnp.zeros([(len_seq),  x_len])
+    x_seq_fp.at[0].set(seed_state_vec)
     cost_float_fp   = 0.0
-    cost_seq_fp     = np.zeros([len_seq])
-    x_cost_seq_fp   = np.zeros([len_seq])   
-    u_cost_seq_fp   = np.zeros([len_seq]) 
+    cost_seq_fp     = jnp.zeros([len_seq])
+    x_cost_seq_fp   = jnp.zeros([len_seq])   
+    u_cost_seq_fp   = jnp.zeros([len_seq]) 
     in_bounds_bool  = False
     return x_seq_fp, control_seq_fp, cost_float_fp, cost_seq_fp, x_cost_seq_fp,u_cost_seq_fp,in_bounds_bool
 
-def taylor_expand_pseudo_hamiltonian(cost_func_for_diff:Callable[
-                                        [npt.NDArray[np.float64], npt.NDArray[np.float64], int, bool],
-                                        npt.NDArray], 
-                                     A_lin_k:npt.NDArray[np.float64],
-                                     B_lin_k:npt.NDArray[np.float64], 
-                                     x_k:npt.NDArray[np.float64], 
-                                     u_k:npt.NDArray[np.float64], 
+def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.ndarray],
+                                     cost_quad_approx_k: Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray], 
                                      P_kp1:npt.NDArray[np.float64], 
                                      p_kp1:npt.NDArray[np.float64], 
                                      ro_reg:float, 
-                                     k_step:int):
+                                     k:int):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
@@ -403,39 +392,46 @@ def taylor_expand_pseudo_hamiltonian(cost_func_for_diff:Callable[
 # q_ux = l_ux + B^T P' A
 # q_x  = l_x  + A^T p'
 # q_u  = l_u  + B^T p'
-    l_x, l_u, l_xx, l_uu, l_ux = gen_ctrl.taylor_expand_cost(cost_func_for_diff, x_k, u_k, k_step)
+    A_lin_k = (dyn_lin_approx_k[0])[k]
+    B_lin_k = (dyn_lin_approx_k[1])[k]
+    l_x     = (cost_quad_approx_k[0])[k]
+    l_u     = (cost_quad_approx_k[1])[k]
+    l_xx    = (cost_quad_approx_k[2])[k]
+    l_uu    = (cost_quad_approx_k[3])[k]
+    l_ux    = (cost_quad_approx_k[4])[k]
     if ro_reg > 0:
         P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
     else:
         P_kp1_reg = P_kp1    
-    q_x      = l_x  + A_lin_k.T @ p_kp1
-    q_u      = l_u  + B_lin_k.T @ p_kp1
-    q_xx     = l_xx + A_lin_k.T @ P_kp1     @ A_lin_k
-    q_uu     = l_uu + B_lin_k.T @ P_kp1     @ B_lin_k
-    q_ux     = l_ux + B_lin_k.T @ P_kp1     @ A_lin_k
-    q_uu_reg = l_uu + B_lin_k.T @ P_kp1_reg @ B_lin_k
-    q_ux_reg = l_ux + B_lin_k.T @ P_kp1_reg @ A_lin_k
+    q_x      = (l_x  + A_lin_k.T @ p_kp1)
+    q_u      = (l_u  + B_lin_k.T @ p_kp1)
+    q_xx     = (l_xx + A_lin_k.T @ P_kp1     @ A_lin_k)
+    q_uu     = (l_uu + B_lin_k.T @ P_kp1     @ B_lin_k)
+    q_ux     = (l_ux + B_lin_k.T @ P_kp1     @ A_lin_k)
+    q_uu_reg = (l_uu + B_lin_k.T @ P_kp1_reg @ B_lin_k)
+    q_ux_reg = (l_ux + B_lin_k.T @ P_kp1_reg @ A_lin_k)
     return q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg
 
-def calculate_final_ctg_approx(cost_func_for_diff:Callable[
-                                        [jnp.ndarray, jnp.ndarray, int, bool],
-                                        jnp.ndarray], 
-                                x_N:npt.NDArray[np.float64], u_len:int, len_seq:int) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+def calculate_final_ctg_approx(cost_func_for_diff:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray], 
+                                x_N:jnp.ndarray, u_len:int, len_seq:int) -> Tuple[jnp.ndarray,jnp.ndarray]:
     # approximates the final step cost-to-go as only the state with no control input
     # create concatenated state and control vector of primal points
     u_N = np.zeros([u_len], dtype=float)
+    xu_N = jnp.concatenate((x_N, u_N))
     k_step = len_seq - 1
-    p_N, _, P_N, _, _ = gen_ctrl.taylor_expand_cost(cost_func_for_diff, x_N, u_N, k_step, is_final_bool=True)
+    p_N, _, P_N, _, _ = gen_ctrl.taylor_expand_cost(cost_func_for_diff, xu_N,len(x_N), k_step)
     return P_N, p_N
 
-def calculate_backstep_ctg_approx(q_x:npt.NDArray[np.float64], 
-                                  q_u:npt.NDArray[np.float64], 
-                                  q_xx:npt.NDArray[np.float64], 
-                                  q_uu:npt.NDArray[np.float64], 
-                                  q_ux:npt.NDArray[np.float64], 
-                                  K_k:npt.NDArray[np.float64], 
-                                  d_k:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64],npt.NDArray[np.float64]]:
-    # P_k is the kth hessian approximation of the cost-to-go
+def calculate_backstep_ctg_approx(q_x:jnp.ndarray, 
+                                  q_u:jnp.ndarray,
+                                  q_xx:jnp.ndarray,
+                                  q_uu:jnp.ndarray,
+                                  q_ux:jnp.ndarray,
+                                  K_k:jnp.ndarray, 
+                                  d_k:jnp.ndarray) -> Tuple[jnp.ndarray,
+                                                            jnp.ndarray,
+                                                            jnp.ndarray]:
+    # P_k is the kth hessian approximation of the cost-to-go 
     # p_k is the kth jacobian approximation of the cost-to-go
     # Del_V_k is the kth expected change in the value function
     assert q_x.shape  == (len(q_x), 1), 'q_x must be column vector (n,1)' 
@@ -449,24 +445,24 @@ def calculate_backstep_ctg_approx(q_x:npt.NDArray[np.float64],
     P_k         = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k) 
     p_k         = (q_x ) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u ) + (q_xu @ d_k) 
     # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
-    Del_V_vec_k = np.array([(d_k.T @ q_u),((0.5) * (d_k.T @ q_uu @ d_k))]).reshape(1,-1) 
-    return P_k, p_k, Del_V_vec_k[0]
+    Del_V_vec_k = jnp.array([(d_k.T @ q_u),((0.5) * (d_k.T @ q_uu @ d_k))]).reshape(-1) 
+    return P_k, p_k, Del_V_vec_k
 
-def calculate_optimal_gains(q_uu_reg:npt.NDArray[np.float64], 
-                            q_ux:npt.NDArray[np.float64], 
-                            q_u:npt.NDArray[np.float64]) -> Tuple[npt.NDArray[np.float64],npt.NDArray[np.float64]]:
+def calculate_optimal_gains(q_uu_reg:jnp.ndarray, 
+                            q_ux:jnp.ndarray, 
+                            q_u:jnp.ndarray) -> Tuple[jnp.ndarray,jnp.ndarray]:
     # K_k is a linear feedback term related to del_x from nominal trajectory
     # d_k is a feedforward term related to trajectory correction
-    inverted_q_uu = np.linalg.inv(q_uu_reg)
+    inverted_q_uu = jnp.linalg.inv(q_uu_reg)
     K_k           = -inverted_q_uu @ q_ux
     d_k           = -inverted_q_uu @ q_u
     return K_k, d_k
 
-def calculate_u_k_new(u_nom_k:npt.NDArray[np.float64],
-                      x_nom_k:npt.NDArray[np.float64],
-                      x_new_k:npt.NDArray[np.float64], 
-                      K_k:npt.NDArray[np.float64], 
-                      d_k:npt.NDArray[np.float64], line_search_factor:float) -> npt.NDArray[np.float64]:
+def calculate_u_k_new(u_nom_k:jnp.ndarray,
+                      x_nom_k:jnp.ndarray,
+                      x_new_k:jnp.ndarray, 
+                      K_k:jnp.ndarray, 
+                      d_k:jnp.ndarray, line_search_factor:float) -> jnp.ndarray:
     # check valid dimensions
     assert K_k.shape    == (len(u_nom_k), len(x_nom_k)), "K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))"
     assert d_k.shape    == (len(u_nom_k), 1)           , "d_k incorrect shape, must be (len(u_nom_k), 1)"
@@ -477,7 +473,7 @@ def calculate_u_k_new(u_nom_k:npt.NDArray[np.float64],
     # form column vectors
     return (u_nom_k.reshape(-1,1) + K_k @ (x_new_k.reshape(-1,1) - x_nom_k.reshape(-1,1)) + line_search_factor * d_k).reshape(-1)
 
-def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, Del_V_vec_seq:npt.NDArray[np.float64], line_search_factor:float) -> float:
+def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, Del_V_vec_seq:jnp.ndarray, line_search_factor:float) -> float:
     """
     Calculates the ratio between the expected cost decrease from approximated dynamics and cost functions, and the calculated
     cost from the forward pass shooting method. The cost decrease is expected to be positive, as the Del_V_sum should be a negative
@@ -487,15 +483,11 @@ def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, D
     cost_decrease_ratio = (1 / Del_V_sum) * (new_cost_float - prev_cost_float)
     return cost_decrease_ratio
 
-def calculate_expected_cost_decrease(Del_V_vec_seq:npt.NDArray[np.float64], line_search_factor:float) -> float:
+def calculate_expected_cost_decrease(Del_V_vec_seq:jnp.ndarray, lsf:float) -> float:
     assert (Del_V_vec_seq.shape)[1] == 2, "Del_V_vec_seq is not the right shape, must be (:,2)" 
     Del_V_sum = 0.0
-    for idx in range(len(Del_V_vec_seq)):
-        Del_V_sum += ((line_search_factor * Del_V_vec_seq[idx,0]) + (line_search_factor**2 * Del_V_vec_seq[idx,1]))
-    if Del_V_sum > 0:
-        a = 1
-        # TODO include some logic or statement here that flags a failed decrease? may be unnecessary given the line search factor catch
-    return Del_V_sum    
+    Del_V_sum = jnp.sum((lsf * Del_V_vec_seq[:,0]) + (lsf**2 * Del_V_vec_seq[:,1]))
+    return Del_V_sum.item()    
 
 def analyze_cost_decrease(cost_decrease_ratio:float, cost_ratio_bounds:Tuple[float, float]) -> bool:
     if (cost_decrease_ratio > cost_ratio_bounds[0]) and (cost_decrease_ratio < cost_ratio_bounds[1]):

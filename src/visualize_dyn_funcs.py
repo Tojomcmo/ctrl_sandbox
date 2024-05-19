@@ -266,15 +266,19 @@ class double_pend_animation():
         self.ani.save((filename+'.mp4'), writer=writer)
 
 
-def plot_dpend_act_and_cost_axes(shoulder_act:bool, elbow_act:bool, controller_output:ilqr.ilqrControllerState, u_sim_seq, ax2:Axes, ax3:Axes):
+def plot_ilqr_dpend_act_and_cost_axes(shoulder_act:bool, elbow_act:bool, ctrl_out:ilqr.ilqrControllerState, u_sim_seq, ax2:Axes, ax3:Axes):
     if shoulder_act is True and elbow_act is True:
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control effort')
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control effort')
-       ax2.legend() 
+        ax2.plot(ctrl_out.time_seq[:-1],ctrl_out.u_seq[:,0], label = 'shoulder control ff torque')
+        ax2.plot(ctrl_out.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control sim effort')
+        ax2.plot(ctrl_out.time_seq[:-1],ctrl_out.u_seq[:,1], label = 'elbow control ff effort')     
+        ax2.plot(ctrl_out.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control sim effort')
+  
+        ax2.legend() 
     else:
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq, label = 'control effort')
-       ax2.legend() 
-    ax3.plot(controller_output.time_seq, controller_output.cost_seq, label='total cost')
-    ax3.plot(controller_output.time_seq, controller_output.x_cost_seq, label='state cost')
-    ax3.plot(controller_output.time_seq, controller_output.u_cost_seq, label='control cost')    
+        ax2.plot(ctrl_out.time_seq[:-1],u_sim_seq, label = 'control effort')
+        ax2.plot(ctrl_out.time_seq[:-1],ctrl_out.u_seq, label = 'control ff effort')
+        ax2.legend() 
+    ax3.plot(ctrl_out.time_seq, ctrl_out.cost_seq, label='total cost')
+    ax3.plot(ctrl_out.time_seq, ctrl_out.x_cost_seq, label='state cost')
+    ax3.plot(ctrl_out.time_seq, ctrl_out.u_cost_seq, label='control cost')    
     ax3.legend()        

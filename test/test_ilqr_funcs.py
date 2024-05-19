@@ -466,7 +466,7 @@ class calculate_cost_decrease_ratio_tests(unittest.TestCase):
 
 class calculate_expected_cost_decrease_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        Del_V_vec_seq = np.ones([3,2])
+        Del_V_vec_seq = jnp.ones([3,2])
         Del_V_vec_seq[:,1] *= 2.0
         line_search_factor = 2.0
         Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)
@@ -474,7 +474,7 @@ class calculate_expected_cost_decrease_tests(unittest.TestCase):
         self.assertEqual(Del_V_sum, expected_output)
 
     def test_reject_invalid_array_shape(self):
-        Del_V_vec_seq = np.ones([3,3]) 
+        Del_V_vec_seq = jnp.ones([3,3]) 
         line_search_factor = 2
         with self.assertRaises(AssertionError) as assert_seq_len_error:
             Del_V_sum = ilqr.calculate_expected_cost_decrease(Del_V_vec_seq, line_search_factor)

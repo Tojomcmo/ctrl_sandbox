@@ -88,7 +88,7 @@ if __name__ == "__main__":
                                                             u_des_seq=u_des_seq)
 
    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, gen_ctrl.step_rk4)
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#

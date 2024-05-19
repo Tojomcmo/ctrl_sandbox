@@ -36,18 +36,18 @@ if __name__ == "__main__":
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.01
-   len_seq    = 100
+   time_step  = 0.02
+   len_seq    = 150
    num_states = 4
    num_controls = 1
-   shoulder_act = True 
-   elbow_act = False
+   shoulder_act = False 
+   elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   ,0  ],
-                       [0   ,0   ,1.0   ,0  ],
-                       [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 500.0  
-   R_cost  = np.array([[1.0]],dtype=float)*1.0
+                       [0   ,0   ,0.1   ,0  ],
+                       [0   ,0   ,0   ,0.1  ]],
+                       dtype=float) * 100.0  
+   R_cost  = np.array([[1.0]],dtype=float)*0.1
    # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
@@ -65,19 +65,19 @@ if __name__ == "__main__":
 
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
-   ilqr_config.converge_crit = 1e-5
-   ilqr_config.max_iter = 20
-   ilqr_config.fp_max_iter=6
+   ilqr_config.converge_crit = 1e-6
+   ilqr_config.max_iter = 50
+   ilqr_config.fp_max_iter = 6
 
    #---------- create simulation system for post algorithm test ----------#
    dyn_func_sys_sim = dyn_func_sys_ctrl
    # dyn_func_sys_sim = dyn.double_pend_abs_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=0.0,
    #                                               shoulder_act=shoulder_act, elbow_act=elbow_act)
 
-   x_sim_init_vec = np.array([3.0,0.0,0.0,0.0])
+   x_sim_init_vec = np.array([0.1,-0.1,0.0,0.0])
 
    #---------- set system state init and desired trajectories ----------#
-   x_tg_init_vec = np.array([3.0,0.0,0.0,0.0])
+   x_tg_init_vec = np.array([0.0,0.0,0.0,0.0])
    x_init_vec = x_tg_init_vec
 
    ctrl_target_condition = 2
@@ -105,11 +105,12 @@ if __name__ == "__main__":
 
    #------- complete ilqr configuration --------#
    cost_func_obj = cost.cost_quad_x_and_u(Q_cost,R_cost,Qf_cost,
-                                                            x_des_seq=x_des_seq,
-                                                            u_des_seq=u_des_seq)
+                                          x_des_seq=x_des_seq,
+                                          u_des_seq=u_des_seq)
 
    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, gen_ctrl.step_rk4)
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff,
+                                cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -141,7 +142,7 @@ if __name__ == "__main__":
    ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
    ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns
    
-   plot_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3)  
+   vis_dyn.plot_ilqr_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3)  
 
    pend_animation = vis_dyn.double_pend_animation(dyn_func_sys_sim.get_animate_value_dict(), x_sim_seq, time_step, fig, ax1, th2='rel')
    pend_animation.create_double_pend_animation()
