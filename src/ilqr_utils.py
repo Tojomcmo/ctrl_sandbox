@@ -5,12 +5,12 @@ from typing import Union
 
 # ---------- utility functions ----------#
 
-def is_pos_def(x:npt.NDArray):
-    eigs = np.linalg.eigvals(x)
-    return np.all(eigs > 0)
+def is_pos_def(x:jnp.ndarray):
+    eigs = jnp.linalg.eigvals(x)
+    return jnp.all(eigs > 0)
 
-def reqularize_mat(mat:npt.NDArray, ro:float):
-    return mat + ro * np.eye(mat.shape[0], mat.shape[1])
+def reqularize_mat(mat:jnp.ndarray, ro:float):
+    return mat + ro * jnp.eye(mat.shape[0], mat.shape[1])
 
 def calc_and_shape_array_diff(current_array:npt.NDArray[np.float64],desired_array:npt.NDArray[np.float64],shape=None) -> npt.NDArray[np.float64]:  
     if shape == 'row':

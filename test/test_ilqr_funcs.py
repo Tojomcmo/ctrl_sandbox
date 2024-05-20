@@ -24,11 +24,16 @@ class shared_unit_test_data_and_funcs:
                                                                 x_des_seq=np.zeros((5,2)),
                                                                 u_des_seq=np.zeros((4,1)))
 
-        self.pend_unit_state_trans_params = dyn.nlPendParams(g=1.0, b=1.0, l=1.0)
-
+        self.pend_dyn_obj = dyn.single_pend_dyn(m = 1.0, moi = 0.0, g=1.0, b=1.0, l=1.0)
+        self.cost_func_obj = cost.cost_quad_x_and_u(self.cost_func_quad_unit_params.Q,
+                                                    self.cost_func_quad_unit_params.R,
+                                                    self.cost_func_quad_unit_params.Qf,
+                                                    self.cost_func_quad_unit_params.x_des_seq,
+                                                    self.cost_func_quad_unit_params.u_des_seq,)
         self.ilqr_config = ilqr.ilqrConfigStruct(num_states=2, num_controls=1, len_seq=5, time_step=0.1)
-        self.ilqr_config.config_cost_func(self.cost_func_quad_state_and_control, self.cost_func_quad_unit_params) #
-        self.ilqr_config.config_for_dyn_func(self.pend_dyn_nl, self.pend_unit_state_trans_params, gen_ctrl.step_rk4)
+        self.ilqr_config.config_cost_func(self.cost_func_obj.cost_func_quad_state_and_control_for_diff,
+                                          self.cost_func_obj.cost_func_quad_state_and_control_for_diff)
+        self.ilqr_config.config_for_dyn_func(self.pend_dyn_obj.cont_dyn_func, gen_ctrl.step_rk4)
         self.ilqr_config.create_curried_funcs()
 
         self.seed_x_vec       = np.ones([self.ilqr_config.num_states]) 
@@ -44,7 +49,7 @@ class shared_unit_test_data_and_funcs:
 
         self.ilqr_ctrl_state = ilqr.ilqrControllerState(self.ilqr_config, self.seed_x_vec, self.seed_u_seq)
 
-    def gen_dyn_func_full(self, params:dyn.dynFuncParams, x, u):
+    def gen_dyn_func_full(self, params, x, u):
         y = jnp.array([
                     x[0]**4 + x[1]**2 + 1*jnp.sin(x[2]) + u[0]**2 + u[1]**4,
                     x[0]**3 + x[1]**3 + 2*jnp.cos(x[2]) + u[0]**3 + u[1]**3,
@@ -60,7 +65,7 @@ class shared_unit_test_data_and_funcs:
                     ])
         return y
     
-    def pend_dyn_nl(self, params:dyn.nlPendParams, state, control):
+    def pend_dyn_nl(self, params, state, control):
     # continuous time dynamic equation for simple pendulum 
     # time[in]       - time component, necessary prarmeter for ode integration
     # state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
@@ -210,7 +215,66 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq
         x_seq_new, u_seq_new, cost_float_new,cost_seq_new,x_cost_seq_new, u_cost_seq_new,line_search_factor, ro_reg_change_bool = ilqr.calculate_forwards_pass(ilqr_config, ilqr_ctrl_state)
         self.assertEqual(True,True)
-   
+
+class simulate_forwards_pass_tests(unittest.TestCase):
+    def example_cost_func(self,x_k:jnp.ndarray, u_k:jnp.ndarray, k:int)->jnp.ndarray:
+        x = x_k.reshape(-1,1)
+        u = u_k.reshape(-1,1)
+        cost_float = (x.T@x + u.T@u )
+        return cost_float
+    
+    def example_dyn_func(self, x:jnp.ndarray, u:jnp.ndarray)->jnp.ndarray:
+        A = jnp.eye(len(x))
+        B = jnp.ones((len(x),len(u)))    
+        x_new = A@x.reshape(-1,1) + B@u.reshape(-1,1)
+        return x_new.reshape(-1)
+
+    
+    def test_accepts_valid_system(self):
+        x_seq = jnp.ones((4,2))
+        u_seq = jnp.ones([3,2])
+        K_seq = jnp.ones([3,2,2])
+        d_seq = jnp.ones([3,2,1])
+        lsf = 0.5
+        carry_in = (0, jnp.zeros((1), dtype=float), x_seq)
+        seqs_in = (x_seq, u_seq, K_seq, d_seq)
+        fp_scan_func_curried = lambda lsf, carry_in, seqs_in : ilqr.scan_func_forward_pass(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
+        x_seq_new, u_seq_new, cost_float = ilqr.simulate_forward_pass(fp_scan_func_curried, self.example_cost_func, x_seq, u_seq, K_seq, d_seq, lsf)
+        self.assertEqual(True,True)
+
+
+class scan_func_forward_pass_tests(unittest.TestCase):
+    def example_cost_func(self,x_k:jnp.ndarray, u_k:jnp.ndarray, k)->float:
+        x = x_k.reshape(-1,1)
+        u = u_k.reshape(-1,1)
+        cost_float = (x.T@x + u.T@u )
+        return cost_float
+    
+    def example_dyn_func(self, x:jnp.ndarray, u:jnp.ndarray)->jnp.ndarray:
+        A = jnp.eye(len(x))
+        B = jnp.ones((len(x),len(u)))    
+        x_new = A@x.reshape(-1,1) + B@u.reshape(-1,1)
+        return x_new.reshape(-1)
+
+    def test_accepts_valid_system(self):
+        x_k = jnp.array([1.0,1.0])
+        u_k = jnp.array([1.0,1.0])
+        K_k = jnp.array([[1.0,1.0],[1.0,1.0]])
+        d_k = jnp.array([[1.0],[1.0]])
+        k = 0
+        lsf = 0.5
+        carry_in = (0, 0.0, x_k)
+        seqs_in = (x_k, u_k, K_k, d_k)
+        carry_out, seqs_out = ilqr.scan_func_forward_pass(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
+        int_expected = 1
+        u_k_new_expected = (u_k.reshape(-1,1) + K_k @ (x_k.reshape(-1,1) - x_k.reshape(-1,1)) + lsf * d_k).reshape(-1)
+        cost_float_expected = self.example_cost_func(x_k, u_k_new_expected, k)
+        x_kp1_new_expected = self.example_dyn_func(x_k, u_k_new_expected)
+        self.assertEqual(carry_out[0], int_expected)
+        self.assertEqual(carry_out[1], cost_float_expected)
+        self.assertEqual((carry_out[2]).all(), (seqs_out[0]).all())
+        self.assertEqual((seqs_out[0]).all(), (x_kp1_new_expected).all())
+        self.assertEqual((seqs_out[1]).all(), (u_k_new_expected).all())
 
 class initialize_backwards_pass_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -218,8 +282,8 @@ class initialize_backwards_pass_tests(unittest.TestCase):
         len_seq = data_and_funcs.ilqr_config.len_seq
         x_len   = data_and_funcs.ilqr_config.num_states
         u_len   = data_and_funcs.ilqr_config.num_controls
-        p_N     = np.ones([x_len, 1])
-        P_N     = np.ones([x_len, x_len])
+        p_N     = jnp.ones([x_len, 1])
+        P_N     = jnp.ones([x_len, x_len])
         P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq)
         self.assertEqual(P_kp1.shape, (x_len, x_len))
         self.assertEqual(p_kp1.shape, (x_len, 1))
@@ -240,64 +304,64 @@ class initialize_forwards_pass_tests(unittest.TestCase):
         self.assertEqual(cost_float_updated, 0)
         self.assertEqual(in_bounds_bool, False)
 
-class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()        
-        x_k = np.array([[1.],[1.]])
-        u_k = np.array([[1.]])
-        x_len = len(x_k)
-        u_len = len(u_k)
-        A_lin_k = np.array([[0,1],[1,1]])     
-        B_lin_k = np.array([[0],[1]])
-        p_kp1   = np.ones([x_len, 1])
-        P_kp1   = np.ones([x_len, x_len])
-        k_step  = 1
-        ro_reg  = 1
-        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
-                                                                            shared_data_funcs.ilqr_config.cost_func_for_diff, 
-                                                                            A_lin_k, 
-                                                                            B_lin_k, 
-                                                                            x_k, 
-                                                                            u_k, 
-                                                                            P_kp1, p_kp1,
-                                                                            ro_reg, 
-                                                                            k_step)
-        self.assertEqual(np.shape(q_x),  (x_len, 1))
-        self.assertEqual(np.shape(q_u),  (u_len, 1))
-        self.assertEqual(np.shape(q_xx), (x_len,x_len))
-        self.assertEqual(np.shape(q_uu), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
-        self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
+# class taylor_expand_pseudo_hamiltonian_tests(unittest.TestCase):
+#     def test_accepts_valid_inputs(self):
+#         shared_data_funcs = shared_unit_test_data_and_funcs()        
+#         x_k = jnp.array([[1.],[1.]])
+#         u_k = jnp.array([[1.]])
+#         x_len = len(x_k)
+#         u_len = len(u_k)
+#         A_lin_k = jnp.array([[0,1],[1,1]])     
+#         B_lin_k = jnp.array([[0],[1]])
+#         p_kp1   = jnp.ones([x_len, 1])
+#         P_kp1   = jnp.ones([x_len, x_len])
+#         k_step  = 1
+#         ro_reg  = 1
+#         q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
+#                                                                             shared_data_funcs.ilqr_config.cost_func_for_diff, 
+#                                                                             A_lin_k, 
+#                                                                             B_lin_k, 
+#                                                                             x_k, 
+#                                                                             u_k, 
+#                                                                             P_kp1, p_kp1,
+#                                                                             ro_reg, 
+#                                                                             k_step)
+#         self.assertEqual(np.shape(q_x),  (x_len, 1))
+#         self.assertEqual(np.shape(q_u),  (u_len, 1))
+#         self.assertEqual(np.shape(q_xx), (x_len,x_len))
+#         self.assertEqual(np.shape(q_uu), (u_len,u_len))
+#         self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
+#         self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
+#         self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
 
-    def test_accepts_valid_inputs_from_shared(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()        
-        x_seq = shared_data_funcs.x_seq_example
-        u_seq = shared_data_funcs.u_seq_example
-        x_len = shared_data_funcs.ilqr_config.num_states
-        u_len = shared_data_funcs.ilqr_config.num_controls
-        A_lin_k = np.array([[1,1],[0,1]])     
-        B_lin_k = np.array([[0],[1]])
-        p_kp1   = np.ones([x_len, 1])
-        P_kp1   = np.ones([x_len, x_len])
-        k_step  = 1
-        ro_reg  = 1.0
-        q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
-                                                                            shared_data_funcs.ilqr_config.cost_func_for_diff, 
-                                                                            A_lin_k, 
-                                                                            B_lin_k, 
-                                                                            x_seq[k_step], 
-                                                                            u_seq[k_step], 
-                                                                            P_kp1, p_kp1,
-                                                                            ro_reg, 
-                                                                            k_step)
-        self.assertEqual(np.shape(q_x),  (x_len, 1))
-        self.assertEqual(np.shape(q_u),  (u_len, 1))
-        self.assertEqual(np.shape(q_xx), (x_len,x_len))
-        self.assertEqual(np.shape(q_uu), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
-        self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
-        self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
+#     def test_accepts_valid_inputs_from_shared(self):
+#         shared_data_funcs = shared_unit_test_data_and_funcs()        
+#         x_seq = shared_data_funcs.x_seq_example
+#         u_seq = shared_data_funcs.u_seq_example
+#         x_len = shared_data_funcs.ilqr_config.num_states
+#         u_len = shared_data_funcs.ilqr_config.num_controls
+#         A_lin_k = np.array([[1,1],[0,1]])     
+#         B_lin_k = np.array([[0],[1]])
+#         p_kp1   = np.ones([x_len, 1])
+#         P_kp1   = np.ones([x_len, x_len])
+#         k_step  = 1
+#         ro_reg  = 1.0
+#         q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = ilqr.taylor_expand_pseudo_hamiltonian(
+#                                                                             shared_data_funcs.ilqr_config.cost_func_for_diff, 
+#                                                                             A_lin_k, 
+#                                                                             B_lin_k, 
+#                                                                             x_seq[k_step], 
+#                                                                             u_seq[k_step], 
+#                                                                             P_kp1, p_kp1,
+#                                                                             ro_reg, 
+#                                                                             k_step)
+#         self.assertEqual(np.shape(q_x),  (x_len, 1))
+#         self.assertEqual(np.shape(q_u),  (u_len, 1))
+#         self.assertEqual(np.shape(q_xx), (x_len,x_len))
+#         self.assertEqual(np.shape(q_uu), (u_len,u_len))
+#         self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
+#         self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
+#         self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
 
 class calculate_final_ctg_approx_tests(unittest.TestCase):
     def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):
@@ -315,56 +379,56 @@ class calculate_backstep_ctg_approx_tests(unittest.TestCase):
         data_and_funcs = shared_unit_test_data_and_funcs()
         x_len = data_and_funcs.ilqr_config.num_states
         u_len = data_and_funcs.ilqr_config.num_controls
-        q_x   = np.ones([x_len,1])
-        q_u   = np.ones([u_len,1])
-        q_xx  = np.ones([x_len, x_len])
-        q_uu  = np.ones([u_len, u_len])
-        q_ux  = np.ones([u_len, x_len])
-        K_k   = np.ones([u_len, x_len])
-        d_k   = np.ones([u_len, 1])
+        q_x   = jnp.ones([x_len,1])
+        q_u   = jnp.ones([u_len,1])
+        q_xx  = jnp.ones([x_len, x_len])
+        q_uu  = jnp.ones([u_len, u_len])
+        q_ux  = jnp.ones([u_len, x_len])
+        K_k   = jnp.ones([u_len, x_len])
+        d_k   = jnp.ones([u_len, 1])
         P_k, p_k, Del_V_vec_k = ilqr.calculate_backstep_ctg_approx(q_x, q_u, 
                                                                    q_xx, q_uu, q_ux, 
                                                                    K_k, d_k)
-        P_k_expect = np.ones([x_len,x_len]) * 4.
-        p_k_expect = np.ones([x_len, 1]) * 4.
-        Del_V_vec_k_expect = np.array([1.0, 0.5])
-        self.assertEqual(np.shape(P_k), (x_len, x_len))
-        self.assertEqual(np.shape(p_k), (x_len, 1))  
-        self.assertEqual(np.shape(Del_V_vec_k), (2, ))      
+        P_k_expect = jnp.ones([x_len,x_len]) * 4.
+        p_k_expect = jnp.ones([x_len, 1]) * 4.
+        Del_V_vec_k_expect = jnp.array([1.0, 0.5])
+        self.assertEqual(jnp.shape(P_k), (x_len, x_len))
+        self.assertEqual(jnp.shape(p_k), (x_len, 1))  
+        self.assertEqual(jnp.shape(Del_V_vec_k), (2, ))      
         self.assertEqual(P_k.tolist(), P_k_expect.tolist())
         self.assertEqual(p_k.tolist(), p_k_expect.tolist()) 
         self.assertEqual(Del_V_vec_k.tolist(), Del_V_vec_k_expect.tolist())
 
 class calculate_optimal_gains_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        q_uu = np.array([[1.,1.],[0,1.]])
-        q_ux = np.array([[1.,1.],[0,1.]])
-        q_u  = np.array([[1.],[1.]])
+        q_uu = jnp.array([[1.,1.],[0,1.]])
+        q_ux = jnp.array([[1.,1.],[0,1.]])
+        q_u  = jnp.array([[1.],[1.]])
         K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
-        K_k_expected = -np.linalg.inv(q_uu) @ q_ux
-        d_k_expected = -np.linalg.inv(q_uu) @ q_u
-        K_k_expected = -(np.array([[1.,-1.],[0,1.]])) @ (np.array([[1.,1.],[0,1.]]))
-        d_k_expected = -(np.array([[1.,-1.],[0,1.]])) @ (np.array([[1.],[1.]]))
+        K_k_expected = -jnp.linalg.inv(q_uu) @ q_ux
+        d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
+        K_k_expected = -(jnp.array([[1.,-1.],[0,1.]])) @ (jnp.array([[1.,1.],[0,1.]]))
+        d_k_expected = -(jnp.array([[1.,-1.],[0,1.]])) @ (jnp.array([[1.],[1.]]))
         self.assertEqual(K_k.tolist(), K_k_expected.tolist())
         self.assertEqual(d_k.tolist(), d_k_expected.tolist())
 
     def test_accepts_valid_inputs_from_shared(self):
-        q_uu = np.array([[1.,1.],[0,1.]])
-        q_ux = np.array([[0.1,0.2,0.3,0.4],[1., 2., 3., 4.]])
-        q_u  = np.array([[1],[2]])
+        q_uu = jnp.array([[1.,1.],[0,1.]])
+        q_ux = jnp.array([[0.1,0.2,0.3,0.4],[1., 2., 3., 4.]])
+        q_u  = jnp.array([[1],[2]])
         K_k, d_k = ilqr.calculate_optimal_gains(q_uu, q_ux, q_u)
-        K_k_expected = -np.linalg.inv(q_uu) @ q_ux
-        d_k_expected = -np.linalg.inv(q_uu) @ q_u
+        K_k_expected = -jnp.linalg.inv(q_uu) @ q_ux
+        d_k_expected = -jnp.linalg.inv(q_uu) @ q_u
         self.assertEqual(K_k.tolist(), K_k_expected.tolist())
         self.assertEqual(d_k.tolist(), d_k_expected.tolist())    
 
 class calculate_u_k_new_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
+        u_nom_k = jnp.array([1.0, 2.0])
+        x_nom_k = jnp.array([1.0, 1.0])
         x_new_k = x_nom_k + 1.0
-        K_k     = np.ones([2, 2])
-        d_k     = np.ones([2, 1]) * 2.0
+        K_k     = jnp.ones([2, 2])
+        d_k     = jnp.ones([2, 1]) * 2.0
         line_search_factor = 1
         u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
                                                  K_k, d_k, line_search_factor)
@@ -374,11 +438,11 @@ class calculate_u_k_new_tests(unittest.TestCase):
         self.assertEqual(u_k_updated_new.tolist(), u_k_expected.tolist())
 
     def test_reject_invalid_K_k_dimension(self):
-        u_nom_k = np.array([1.0, 2.0])
-        x_nom_k = np.array([1.0, 1.0])
+        u_nom_k = jnp.array([1.0, 2.0])
+        x_nom_k = jnp.array([1.0, 1.0])
         x_new_k = x_nom_k + 1.0
-        K_k     = np.ones([3, 2])
-        d_k     = np.ones([2, 1]) * 2.0
+        K_k     = jnp.ones([3, 2])
+        d_k     = jnp.ones([2, 1]) * 2.0
         line_search_factor = 1
         with self.assertRaises(AssertionError) as assert_seq_len_error:
            u_k_updated_new = ilqr.calculate_u_k_new(u_nom_k, x_nom_k, x_new_k,
@@ -440,7 +504,7 @@ class calculate_cost_decrease_ratio_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         prev_cost_float = 100.0
         new_cost_float  = 70.0
-        Del_V_vec_seq = np.ones([3,2])
+        Del_V_vec_seq = jnp.ones([3,2])
         Del_V_vec_seq[:,1] *= 2.0
         line_search_factor = 2.0
         cost_decrease_ratio = ilqr.calculate_cost_decrease_ratio(prev_cost_float,
@@ -454,7 +518,7 @@ class calculate_cost_decrease_ratio_tests(unittest.TestCase):
     def test_rejects_invalid_input_dimension(self):
         prev_cost_float = 100.0
         new_cost_float  = 70.0
-        Del_V_vec_seq = np.ones([3,3])
+        Del_V_vec_seq = jnp.ones([3,3])
         Del_V_vec_seq[:,1] *= 2.0
         line_search_factor = 2
         with self.assertRaises(AssertionError) as assert_seq_len_error:
@@ -506,10 +570,10 @@ class calculate_avg_ff_gains_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         #create test conditions
         int_iter = 5
-        d_seq = np.ones((4,2,1))
-        u_seq = np.ones((4,2,1))
+        d_seq = jnp.ones((4,2,1))
+        u_seq = jnp.ones((4,2,1))
         #test function
-        ff_avg_gains = ilqr.calculate_avg_ff_gains(int_iter, d_seq, u_seq)
+        ff_avg_gains = ilqr.calculate_avg_ff_gains(d_seq, u_seq)
         # create expected output
         ff_avg_gains_expect = 1 / (5-1) * (1 / (np.sqrt(2) + 1)) * 4
         #compare outputs

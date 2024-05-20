@@ -15,45 +15,32 @@ import visualize_dyn_funcs as vis_dyn
 import mujoco_funcs as mj_funcs
 import mjcf_models as mjcf
 
-def plot_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3):
-    if shoulder_act is True and elbow_act is True:
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,0], label = 'shoulder control effort')
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq[:,1], label = 'elbow control effort')
-       ax2.legend() 
-    else:
-       ax2.plot(controller_output.time_seq[:-1],u_sim_seq, label = 'control effort')
-       ax2.legend() 
-    ax3.plot(controller_output.time_seq, controller_output.cost_seq, label='total cost')
-    ax3.plot(controller_output.time_seq, controller_output.x_cost_seq, label='state cost')
-    ax3.plot(controller_output.time_seq, controller_output.u_cost_seq, label='control cost')    
-    ax3.legend()
-
 if __name__ == "__main__":
    jax.config.update("jax_enable_x64", True)
    #------- Define controller configuration -------#
-   save_ani_bool = False
+   save_ani_bool = True
    sim_with_mj = False
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.02
+   time_step  = 0.03
    len_seq    = 150
    num_states = 4
    num_controls = 1
-   shoulder_act = False 
-   elbow_act = True
+   shoulder_act = True 
+   elbow_act = False
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   ,0  ],
                        [0   ,0   ,0.1   ,0  ],
-                       [0   ,0   ,0   ,0.1  ]],
-                       dtype=float) * 100.0  
-   R_cost  = np.array([[1.0]],dtype=float)*0.1
+                       [0   ,0   ,0   ,1.0  ]],
+                       dtype=float) * 10.0  
+   R_cost  = np.array([[1.0]],dtype=float)*2.0
    # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 2000.0
+                       dtype=float) * 10000.0
    
    h_bar = 1.0
    r_bar = 0.05
@@ -66,7 +53,7 @@ if __name__ == "__main__":
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
    ilqr_config.converge_crit = 1e-6
-   ilqr_config.max_iter = 50
+   ilqr_config.max_iter = 100
    ilqr_config.fp_max_iter = 6
 
    #---------- create simulation system for post algorithm test ----------#
@@ -74,10 +61,10 @@ if __name__ == "__main__":
    # dyn_func_sys_sim = dyn.double_pend_abs_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=0.0,
    #                                               shoulder_act=shoulder_act, elbow_act=elbow_act)
 
-   x_sim_init_vec = np.array([0.1,-0.1,0.0,0.0])
+   x_sim_init_vec = jnp.array([0.0,0.0,0.0,0.0])
 
    #---------- set system state init and desired trajectories ----------#
-   x_tg_init_vec = np.array([0.0,0.0,0.0,0.0])
+   x_tg_init_vec = jnp.array([0.0,0.0,0.0,0.0])
    x_init_vec = x_tg_init_vec
 
    ctrl_target_condition = 2
@@ -85,18 +72,18 @@ if __name__ == "__main__":
    if ctrl_target_condition == 1:
       dyn_func_sys_traj_dyn = dyn.double_pm_pend_dyn(g=9.81, m1=1.0, l1=1.0, m2=1.0, l2=1.0, b1=0.0, b2=0.0,
                                                       shoulder_act=shoulder_act, elbow_act=elbow_act)
-      u_tg_seq      = np.ones([len_seq-1,num_controls]) 
+      u_tg_seq      = jnp.ones([len_seq-1,num_controls]) 
       traj_gen_disc_dyn_func = lambda x,u: gen_ctrl.step_rk4(dyn_func_sys_traj_dyn.cont_dyn_func, ilqr_config.time_step, x, u)
       x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
-      u_init_seq = np.ones([len_seq-1, num_controls]) * (-1)
+      u_init_seq = jnp.ones([len_seq-1, num_controls]) * (-1)
       u_des_seq  = u_tg_seq 
       x_des_seq  = x_des_seq_traj_gen  
 
    elif ctrl_target_condition == 2:  
-      x_des_seq  = np.zeros([len_seq, num_states], dtype=float)
-      x_des_seq[:,0] = np.pi
-      x_des_seq[:,1] = 0    
+      x_des_seq  = jnp.zeros([len_seq, num_states], dtype=float)
+      x_des_seq  = x_des_seq.at[:,0].set(jnp.pi)
+      x_des_seq  = x_des_seq.at[:,1].set(0.0)
       u_init_seq = np.ones([len_seq-1, num_controls], dtype=float)*0.01
       u_des_seq  = np.zeros([len_seq-1, num_controls], dtype=float)
 
@@ -136,7 +123,7 @@ if __name__ == "__main__":
 
    #------- plot simulation and controller outputs ------#
 
-   fig = plt.figure(figsize=[16,8])
+   fig = plt.figure(figsize=(16,8))
    gs =  gridspec.GridSpec(2, 2)
    ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
    ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
@@ -144,7 +131,7 @@ if __name__ == "__main__":
    
    vis_dyn.plot_ilqr_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax2, ax3)  
 
-   pend_animation = vis_dyn.double_pend_animation(dyn_func_sys_sim.get_animate_value_dict(), x_sim_seq, time_step, fig, ax1, th2='rel')
+   pend_animation = vis_dyn.double_pend_animation(dyn_func_sys_sim.get_animate_value_dict(), np.array(x_sim_seq), time_step, fig, ax1, th2='rel')
    pend_animation.create_double_pend_animation()
    plt.tight_layout()
    plt.show()

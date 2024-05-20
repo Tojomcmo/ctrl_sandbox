@@ -159,21 +159,16 @@ def step_solve_ivp(
     return x_kp1
 
 def calculate_linearized_state_space_seq(
-        discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
+        lin_scan_func_curried:Callable[[None, jnp.ndarray],Tuple[None, jnp.ndarray]], 
         x_seq:jnp.ndarray, 
         u_seq:jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
     # walk through state and control sequences
     # for each element, linearize the dyn_func dynamics
     # calculate the discretized dynamics for each linearized element
     # return a 3d matrix of both state and control transition matrices for each time step
-    if len(x_seq) != (len(u_seq)+1):
-        raise ValueError('state and control sequences are incompatible lengths. state seq must be control seq length +1')
-    else:
-        x_len   = len(x_seq[0,:])
-        xu_seq = jnp.concatenate((x_seq[:-1], u_seq), axis=1)
-        carry = None
-        lin_scan_func_curried = lambda carry, xu_seq: scan_dyn_func_For_lin(discrete_dyn_func,x_len, carry, xu_seq)
-        _, (a_lin_seq, b_lin_seq) = lax.scan(lin_scan_func_curried, carry, xu_seq)
+    xu_seq = jnp.concatenate((x_seq[:-1], u_seq), axis=1)
+    carry = None
+    _, (a_lin_seq, b_lin_seq) = lax.scan(lin_scan_func_curried, carry, xu_seq)
     return a_lin_seq, b_lin_seq
 
 def discretize_continuous_state_space(input_state_space:stateSpace, time_step:float, c2d_method:str = 'euler') -> stateSpace:
@@ -231,7 +226,6 @@ def discretize_continuous_state_space(input_state_space:stateSpace, time_step:fl
             raise ValueError('invalid discretization method')
     d_state_space = stateSpace(a_d, b_d, c_d, d_d, time_step)
     return d_state_space
-
 
 def combine_x_u_for_cost_scan(x_seq:jnp.ndarray, u_seq:jnp.ndarray)->jnp.ndarray:
     u_seq_end = jnp.zeros((1,u_seq.shape[1]), dtype=float)

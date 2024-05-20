@@ -2,7 +2,7 @@ from jax import numpy as jnp
 from jax import lax
 import numpy as np
 import numpy.typing as npt
-from typing import Tuple
+from typing import Tuple, Union
 
 import ilqr_utils as util
 
@@ -68,11 +68,11 @@ def cost_func_quad_state_and_control(cost_func_params:costFuncQuadStateAndContro
 
 class cost_quad_x_and_u():
     def __init__(self, 
-                 Q:npt.NDArray[np.float64], 
-                 R:npt.NDArray[np.float64], 
-                 Qf:npt.NDArray[np.float64], 
-                 x_des_seq:npt.NDArray[np.float64], 
-                 u_des_seq:npt.NDArray[np.float64]) -> None:
+                 Q:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 R:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 Qf:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 x_des_seq:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 u_des_seq:Union[jnp.ndarray, npt.NDArray[np.float64]]) -> None:
         self.Q           = jnp.array(Q)
         self.R           = jnp.array(R)
         self.Qf          = jnp.array(Qf)
