@@ -18,23 +18,23 @@ import mjcf_models as mjcf
 if __name__ == "__main__":
    jax.config.update("jax_enable_x64", True)
    #------- Define controller configuration -------#
-   save_ani_bool = True
+   save_ani_bool = False
    sim_with_mj = False
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.03
-   len_seq    = 150
+   time_step  = 0.02
+   len_seq    = 200
    num_states = 4
    num_controls = 1
-   shoulder_act = True 
-   elbow_act = False
+   shoulder_act = False 
+   elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   ,0  ],
                        [0   ,0   ,0.1   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 10.0  
-   R_cost  = np.array([[1.0]],dtype=float)*2.0
+                       dtype=float) * 0.1  
+   R_cost  = np.array([[1.0]],dtype=float)*10.0
    # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],

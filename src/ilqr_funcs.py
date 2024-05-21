@@ -107,16 +107,19 @@ class ilqrConfigStruct:
             [jnp.ndarray, jnp.ndarray], 
             jnp.ndarray] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.discrete_dyn_func, x_init, u_seq)
         
-        scan_lin_dyn_func = lambda carry, xu_seq: gen_ctrl.scan_dyn_func_For_lin(self.discrete_dyn_func,self.num_states, carry, xu_seq)
+        scan_lin_dyn_func= lambda carry, xu_seq: gen_ctrl.scan_dyn_func_For_lin(self.discrete_dyn_func,self.num_states, carry, xu_seq)
         
         self.linearize_dyn_seq:Callable[
             [jnp.ndarray, jnp.ndarray], 
             Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq(scan_lin_dyn_func,
                                                                                                                         x_seq, u_seq) 
 
-        fp_scan_func = lambda lsf, carry, seqs: scan_func_forward_pass(self.discrete_dyn_func,
-                                                                       self.cost_func_for_diff,
-                                                                       lsf, carry, seqs)
+        fp_scan_func: Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],
+                                Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
+                                Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], 
+                                      Tuple[jnp.ndarray, jnp.ndarray]]]  = lambda lsf, carry, seqs: scan_func_forward_pass(self.discrete_dyn_func,
+                                                                                                                            self.cost_func_for_diff,
+                                                                                                                            lsf, carry, seqs)
 
         self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_for_diff, x_seq, u_seq, K_seq,d_seq, lsf)
     
@@ -280,47 +283,63 @@ def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrContro
     # Ad_seq, Bd_seq = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)    
     dyn_lin_approx_seq   = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)
     cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(ctrl_state.x_seq, ctrl_state.u_seq)
-    P_N, p_N = calculate_final_ctg_approx(ilqr_config.cost_func_for_diff, 
-                                                        ctrl_state.x_seq[-1], 
-                                                        ctrl_state.u_len,
-                                                        ctrl_state.len_seq)
-    
-    P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N, ctrl_state.x_len,
-                                                                          ctrl_state.u_len, ctrl_state.len_seq)
     if ctrl_state.ro_reg_change_bool is True:
         ro_reg = ctrl_state.ro_reg + ilqr_config.ro_reg_change
     else:
         ro_reg = ilqr_config.ro_reg_start
-    is_valid_q_uu = False
-    xu_seq = jnp.concatenate((ctrl_state.x_seq[:-1],ctrl_state.u_seq), axis=1)
-    while is_valid_q_uu is False:
-        for idx in range(ctrl_state.len_seq - 1):
-            # solve newton-step condition backwards from sequence end
-            k = ctrl_state.len_seq - (idx + 2) 
-            is_valid_q_uu = True
-            q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
-                                                                        dyn_lin_approx_seq,
-                                                                        cost_quad_approx_seq,
+    K_seq, d_seq, Del_V_vec_seq, ro_reg = sweep_back_pass(dyn_lin_approx_seq, cost_quad_approx_seq, ro_reg, ilqr_config.ro_reg_change)
+    return K_seq, d_seq, Del_V_vec_seq, ro_reg
+
+def sweep_back_pass(dyn_lin_approx_seqs:Tuple[jnp.ndarray, jnp.ndarray], 
+                    cost_quad_approx_seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray], 
+                    ro_reg:float, 
+                    ro_reg_change_float:float):
+    # Grab final cost-to-go approximation
+    p_N, _, P_N, _, _    = tuple(seq[-1] for seq in cost_quad_approx_seqs)
+    # Flip dynamics linearizations for backwards pass
+    A_lin_rev, B_lin_rev = tuple(jnp.flip(seq, axis=0) for seq in dyn_lin_approx_seqs)
+    # remove final step and flip cost approximations for backwards pass
+    l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev = tuple(jnp.flip(seq[:-1], axis=0) for seq in cost_quad_approx_seqs)
+    # create tuples for lax scan function
+    scan_seqs  = ((A_lin_rev, B_lin_rev), (l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev))
+    carry_init = (P_N, p_N, True)
+    is_pos_def_bool  = False
+    while is_pos_def_bool == False:
+        scan_func_curried = lambda carry, seqs : sweep_back_pass_scan_func(ro_reg, carry, seqs)
+        (_,_,is_pos_def_bool), (K_seq, d_seq, Del_V_vec_seq) = lax.scan(scan_func_curried, carry_init, scan_seqs)
+        if is_pos_def_bool is False:
+            ro_reg += ro_reg_change_float
+            #unflip the vectors to match forward time
+    return jnp.flip(K_seq, axis=0), jnp.flip(d_seq, axis=0), jnp.flip(Del_V_vec_seq, axis=0), ro_reg    
+
+
+def sweep_back_pass_scan_func(ro_reg:float, carry:Tuple[jnp.ndarray, jnp.ndarray, bool], 
+                              seqs:Tuple[Tuple[jnp.ndarray,jnp.ndarray],
+                                         Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]])->Tuple[
+                            Tuple[jnp.ndarray,jnp.ndarray, bool],
+                            Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]:
+    P_kp1, p_kp1, is_pos_def_bool = carry
+    dyn_lin_k, cost_quad_approx_k = seqs
+    if is_pos_def_bool is False:
+        return (P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+    q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
+                                                                        dyn_lin_k,
+                                                                        cost_quad_approx_k,
                                                                         P_kp1,
                                                                         p_kp1,
-                                                                        ro_reg,
-                                                                        k)
-            # if q_uu_reg is not positive definite, reset loop to initial state and increase ro_reg
-            if util.is_pos_def(q_uu_reg) is False:
-                is_valid_q_uu = False
-                ro_reg    = ro_reg + ilqr_config.ro_reg_change
-                P_kp1, p_kp1, k_seq, d_seq, Del_V_vec_seq = initialize_backwards_pass(P_N, p_N, ctrl_state.x_len,
-                                                                                      ctrl_state.u_len, ctrl_state.len_seq)
-                print('pos_def_fail!')
-                break
-                
-            else:
-                K_k,   d_k                = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
-                P_kp1, p_kp1, Del_V_vec_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
-                k_seq = k_seq.at[k].set(K_k)
-                d_seq = d_seq.at[k].set(d_k)
-                Del_V_vec_seq = Del_V_vec_seq.at[k].set(Del_V_vec_k)  
-    return k_seq, d_seq, Del_V_vec_seq, ro_reg
+                                                                        ro_reg)
+    if util.is_pos_def(q_uu_reg) is False:
+        is_pos_def_bool = False
+        return (P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+    K_k,   d_k          = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
+    P_kp1, p_kp1, D_V_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
+    return (P_kp1, p_kp1, is_pos_def_bool), (K_k, d_k, D_V_k)
+
+def set_back_pass_scan_output_to_null_arrays(dyn_lin_k:Tuple[jnp.ndarray, jnp.ndarray])->Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        K_null   = jnp.zeros((len(dyn_lin_k[1][1]), len(dyn_lin_k[0][1])))
+        d_null   = jnp.zeros((len(dyn_lin_k[1][1]), 1))
+        D_V_null = jnp.zeros((2,))
+        return K_null, d_null, D_V_null
 
 def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState):
     '''lsf is the line serach factor, scaling the size of the newton step'''
@@ -422,8 +441,7 @@ def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.nd
                                      cost_quad_approx_k: Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray], 
                                      P_kp1:jnp.ndarray, 
                                      p_kp1:jnp.ndarray, 
-                                     ro_reg:float, 
-                                     k:int):
+                                     ro_reg:float):
 
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
@@ -433,13 +451,8 @@ def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.nd
 # q_ux = l_ux + B^T P' A
 # q_x  = l_x  + A^T p'
 # q_u  = l_u  + B^T p'
-    A_lin_k = (dyn_lin_approx_k[0])[k]
-    B_lin_k = (dyn_lin_approx_k[1])[k]
-    l_x     = (cost_quad_approx_k[0])[k]
-    l_u     = (cost_quad_approx_k[1])[k]
-    l_xx    = (cost_quad_approx_k[2])[k]
-    l_uu    = (cost_quad_approx_k[3])[k]
-    l_ux    = (cost_quad_approx_k[4])[k]
+    A_lin_k, B_lin_k           = dyn_lin_approx_k
+    l_x, l_u, l_xx, l_uu, l_ux = cost_quad_approx_k
     if ro_reg > 0:
         P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
     else:
