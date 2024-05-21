@@ -18,12 +18,12 @@ import mjcf_models as mjcf
 if __name__ == "__main__":
    jax.config.update("jax_enable_x64", True)
    #------- Define controller configuration -------#
-   save_ani_bool = False
+   save_ani_bool = True
    sim_with_mj = False
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.02
+   time_step  = 0.03
    len_seq    = 200
    num_states = 4
    num_controls = 1
