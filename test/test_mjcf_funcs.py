@@ -3,9 +3,9 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 
-import src.mujoco_funcs as mj_funcs
-import src.mjcf_models as mjcf_models
-import src.visualize_mj_funcs as mj_vis
+import mujoco_funcs as mj_funcs
+import mjcf_models as mjcf_models
+import visualize_mj_funcs as mj_vis
 
 class shared_analysis_funcs():
     def __init__(self) -> None:

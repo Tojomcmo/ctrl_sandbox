@@ -6,39 +6,44 @@ import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
 import numpy.typing as npt
 
-import src.ilqr_funcs as ilqr
-import src.dyn_functions as dyn
-import src.cost_functions as cost
-import src.analyze_ilqr_output_funcs as analyze
-import src.gen_ctrl_funcs as gen_ctrl
+import ilqr_funcs as ilqr
+import dyn_functions as dyn
+import cost_functions as cost
+import analyze_ilqr_output_funcs as analyze
+import gen_ctrl_funcs as gen_ctrl
 
 import mujoco as mujoco
-import src.mjcf_models as mj_models
-import src.mujoco_funcs as mj_funcs
-import src.visualize_mj_funcs as mj_vis
+import mjcf_models as mj_models
+import mujoco_funcs as mj_funcs
+import visualize_mj_funcs as mj_vis
+import visualize_dyn_funcs as dyn_vis
 
 if __name__ == "__main__":
    #------- Define controller configuration -------#
-   time_step  = 0.05 
-   len_seq    = 60
+   time_step  = 0.005 
+   len_seq    = 300
    num_states = 4
-   num_controls = 2
+   num_controls = 1
+   shoulder_act = True
+   elbow_act = False
    mj_ctrl = True
+   dpend_model_obj = mj_models.mjcf_dpend(shoulder_act, elbow_act)
    Q_cost  = np.array([[10,0 ,0 ,0 ],
-                       [0 ,10,0 ,0 ],
-                       [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 10.0
-   # R_cost  = np.array([[1]], dtype=float) * (0.01)
-   R_cost  = np.eye(2, dtype=float) * (10.0)   
+                       [0 ,1,0 ,0 ],
+                       [0 ,0 ,0.1 ,0 ],
+                       [0 ,0 ,0 ,1.0 ]], dtype=float) * 100.0
+   R_cost  = np.array([[1]], dtype=float) * (1.0)
+   # R_cost  = np.array([[5, 0 ],[0 , 1 ]], dtype=float) * 0.5
    Qf_cost = np.array([[10,0 ,0 ,0 ],
                        [0 ,10,0 ,0 ],
                        [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 10.0
+                       [0 ,0 ,0 ,1 ]], dtype=float) * 5000.0
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
-   ilqr_config.max_iter = 10
-   ilqr_config.fp_max_iter = 20
+   ilqr_config.max_iter = 20
+   ilqr_config.fp_max_iter = 5
+   ilqr_config.converge_crit = 1e-6
    #---------- create desired trajectory ----------#
    # traj_gen_dyn_func_params = dyn.nlPendParams(g=9.81,b=5.0,l=1.0)
    # x_tg_init_vec = np.array([[0.0],[0.0],[0.0],[0.0]])
@@ -47,12 +52,10 @@ if __name__ == "__main__":
    # traj_gen_disc_dyn_func = lambda x,u: gen_ctrl.step_rk4(traj_gen_cont_dyn_func, ilqr_config.time_step, x, u)
    # x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
-   #---------- create simulation system ----------#
-   x_sim_init_vec = np.array([[1.0],[1.0],[1.0],[1.0]])
-
    #---------- set system init ----------#
-   x_tg_init_vec = np.array([[0.0],[0.0],[0.0],[0.0]])
-   x_init_vec = x_tg_init_vec
+   x_init_vec = np.array([0.0,0.0,0.0,0.0])
+   x_tg_init_vec = x_init_vec
+   x_sim_init_vec = x_init_vec
 
    ctrl_target_condition = 2
 
@@ -62,23 +65,23 @@ if __name__ == "__main__":
       # x_des_seq  = x_des_seq_traj_gen  
       pass
    elif ctrl_target_condition == 2:  
-      x_des_seq  = np.zeros([len_seq, num_states, 1])
+      x_des_seq  = np.zeros([len_seq, num_states])
       x_des_seq[:,0] = np.pi
-      u_init_seq = np.ones([len_seq-1, num_controls,1]) * (0.01)
-      u_des_seq  = np.zeros([len_seq-1, num_controls, 1])
+      u_init_seq = np.ones([len_seq-1, num_controls]) * (0.01)
+      u_des_seq  = np.zeros([len_seq-1, num_controls])
 
    else:
       raise ValueError('invalid ctrl_target_condition')   
 
    #------- complete ilqr configuration --------#
-   cost_func_params = cost.costFuncQuadStateAndControlParams(Q_cost,R_cost,Qf_cost,
-                                                            x_des_seq=x_des_seq,
-                                                            u_des_seq=u_des_seq)
+   cost_func_obj = cost.cost_quad_x_and_u(Q_cost,R_cost,Qf_cost,
+                                          x_des_seq=x_des_seq,
+                                          u_des_seq=u_des_seq)
    if mj_ctrl is True:
-      ilqr_config.config_for_mujoco(mj_models.create_acrobot())
+      ilqr_config.config_for_mujoco(dpend_model_obj.get_mjcf_model())
    else:
       pass
-   ilqr_config.config_cost_func(cost.cost_func_quad_state_and_control, cost_func_params)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -110,5 +113,11 @@ if __name__ == "__main__":
       ani = animate.ArtistAnimation(fig1, img_set, interval = int(1/framerate * 1000))
    #------- plot simulation and controller outputs ------#
 
-   analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, x_sim_seq, u_sim_seq)
+   fig2 = plt.figure(figsize=[16,8])
+   gs2 =  gridspec.GridSpec(2, 2)
+   ax1 = fig2.add_subplot(gs2[:, 0]) # row 0, col 0
+   ax2 = fig2.add_subplot(gs2[0, 1]) # row 0, col 1
+   dyn_vis.plot_ilqr_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax1, ax2)
+
+   # analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, cost_func_obj.x_des_seq, x_sim_seq, u_sim_seq)
    plt.show()

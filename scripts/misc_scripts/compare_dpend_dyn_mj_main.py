@@ -11,8 +11,6 @@ if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
 
     mjcf_model  = mj_models.create_MJCF_double_pend_m_d_mod(1,1,1)
-    # mjcf_model  = mj_models.MJCF_single_pend_2  
-    # mjcf_model  = mj_models.MJCF_dpend_outer_motor
     model = mujoco.MjModel.from_xml_string(mjcf_model)
     data = mujoco.MjData(model)
 
@@ -31,7 +29,7 @@ if __name__ == "__main__":
     time_step = 0.05
     model.opt.timestep = time_step
     steps     = 200
-    data.ctrl = np.array([50.0,0.0])
+    data.ctrl = np.array([10.0,0.0])
     mujoco.mj_forward(model,data)
 
     #initial linearization and predictiuon

@@ -18,7 +18,7 @@ if __name__ == "__main__":
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
    time_step  = 0.05
-   len_seq    = 80
+   len_seq    = 50
    num_states = 4
    num_controls = 1
    shoulder_act = True
@@ -29,19 +29,24 @@ if __name__ == "__main__":
                        [0   ,0   ,0   ,0.1  ]],
                        dtype=float) * 100.0
    R_cost  = np.array([[1.0]],dtype=float)*1.0
-   # R_cost  = np.array([[10.0, 0],[0, 1.0]],dtype=float)*0.1
+   # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.1
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
                        dtype=float) * 5000.0
-   dyn_func_sys_ctrl = dyn.double_pend_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=3.0,
+   h_bar = 1.0
+   m_bar = 1.0   
+   r_bar = 0.025
+   d_bar = h_bar
+   moi = (1/12)*h_bar*(m_bar**2 + 3*r_bar**2) * 0
+   dyn_func_sys_ctrl = dyn.double_pend_abs_dyn(g=9.81, m1=m_bar, moi1=moi, d1=d_bar, l1=h_bar, m2=m_bar, moi2=moi, d2=d_bar, l2=h_bar, b1=0.0, b2=0.0,
                                                  shoulder_act=shoulder_act, elbow_act=elbow_act)
 
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
    ilqr_config.converge_crit = 1e-5
-   ilqr_config.max_iter = 40
+   ilqr_config.max_iter = 50
 
 
    #---------- create simulation system for post algorithm test ----------#
@@ -70,7 +75,7 @@ if __name__ == "__main__":
    elif ctrl_target_condition == 2:  
       x_des_seq  = np.zeros([len_seq, num_states], dtype=float)
       x_des_seq[:,0] = np.pi
-      x_des_seq[:,1] = np.pi * 0      
+      x_des_seq[:,1] = np.pi    
       u_init_seq = np.ones([len_seq-1, num_controls], dtype=float)*0.1
       u_des_seq  = np.zeros([len_seq-1, num_controls], dtype=float)
 
@@ -83,7 +88,7 @@ if __name__ == "__main__":
                                                             u_des_seq=u_des_seq)
 
    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, gen_ctrl.step_rk4)
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -94,7 +99,7 @@ if __name__ == "__main__":
    controller_state.seed_x_seq = controller_state.x_seq
    # run ilqr controller
    controller_output = ilqr.run_ilqr_controller(ilqr_config, controller_state)
-   print("max control nominal: ", max(controller_output.u_seq))
+   # print("max control nominal: ", max((controller_output.u_seq).all()))
    #------- Simulate controller output --------#
 
    sim_dyn_disc_func = lambda x,u: gen_ctrl.step_rk4(dyn_func_sys_sim.cont_dyn_func, ilqr_config.time_step, x, u)
@@ -103,7 +108,7 @@ if __name__ == "__main__":
    #------- plot simulation and controller outputs ------#
 
    fig = plt.figure(figsize=[10,8])
-   pend_animation = vis_dyn.double_pend_animation(dyn_func_sys_sim.l1, dyn_func_sys_sim.l2, x_sim_seq, time_step, fig)
+   pend_animation = vis_dyn.double_pm_pend_animation(dyn_func_sys_sim.l1, dyn_func_sys_sim.l2, x_sim_seq, time_step, fig, th2='abs')
    pend_animation.create_double_pend_animation()
    pend_animation.show_plot()
 

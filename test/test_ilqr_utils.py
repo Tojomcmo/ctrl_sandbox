@@ -2,7 +2,7 @@ import unittest
 from jax import numpy as jnp
 import numpy as np
 
-import src.ilqr_utils as util
+import ilqr_utils as util
 
 
 class is_pos_def_tests(unittest.TestCase):
@@ -129,5 +129,35 @@ class get_vec_from_seq_as_col_tests(unittest.TestCase):
         self.assertEqual(x_k_vec.tolist(), x_k_vec_exp.tolist())
 
 
+class check_inf_or_nan_array_tests(unittest.TestCase):
+    def test_returns_false_with_no_nan_or_inf(self):
+        x = jnp.array([1.0,-1.0,0.000001,10000000])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, False)
+
+    def test_returns_true_with_inf(self):
+        x = jnp.array([1.0,-1.0,jnp.inf,10000000])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, True)
+
+    def test_returns_true_with_neg_inf(self):
+        x = jnp.array([1.0,-1.0,-jnp.inf,10000000])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, True)        
+
+    def test_returns_true_with_nan(self):
+        x = jnp.array([1.0,-1.0,0.0000001,jnp.nan])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, True)   
+
+    def test_returns_true_with_nan_and_inf(self):
+        x = jnp.array([1.0,-1.0,jnp.inf,jnp.nan])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, True)  
+
+    def test_accepts_np_input_array(self):
+        x = np.array([1.0,-1.0,np.inf,np.nan])
+        is_inf_or_nan_bool = util.check_inf_or_nan_array(x)
+        self.assertEqual(is_inf_or_nan_bool, True)               
 if __name__ == '__main__':
     unittest.main()
