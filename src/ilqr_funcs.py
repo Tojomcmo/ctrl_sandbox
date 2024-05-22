@@ -26,9 +26,9 @@ class ilqrConfigStruct:
         self.len_seq:int                = len_seq
         self.time_step:float            = time_step
         self.max_iter:int               = 20
-        self.converge_crit:float        = 1e-4
+        self.converge_crit:float        = 1e-6
         self.ff_gain_tol:float          = 1e-4
-        self.cost_ratio_bounds:Tuple[float,float] = (1e-7, 10)
+        self.cost_ratio_bounds:Tuple[float,float] = (1e-8, 10)
         self.ro_reg_start:float         = 0.0
         self.ro_reg_change:float        = 0.5
         self.fp_max_iter:int            = 5
@@ -39,16 +39,15 @@ class ilqrConfigStruct:
         self.is_curried:bool            = False
 
     def config_cost_func(self,
-            cost_func_calc:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-            cost_func_diff:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
+            cost_func:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
         '''
         This function receives the proposed cost function and parameters for the cost function, and generates
         The specific cost function for the controller to use with curried inputs
         ''' 
         # self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(cost_func_calc)
-        self.cost_func_for_calc = cost_func_calc
-        self.cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func_diff)
-        self.quad_exp_cost_seq  = lambda x_seq, u_seq: gen_ctrl.taylor_expand_cost_seq(self.cost_func_for_diff,
+        self.cost_func_verbose  = cost_func
+        self.cost_func_float    = gen_ctrl.prep_cost_func_for_diff(cost_func)
+        self.quad_exp_cost_seq  = lambda x_seq, u_seq: gen_ctrl.taylor_expand_cost_seq(self.cost_func_float,
                                                                                         x_seq, u_seq)
         self.is_cost_configured = True
 
@@ -84,6 +83,16 @@ class ilqrConfigStruct:
         mujoco.mj_forward(self.mj_model,self.mj_data)         # type: ignore
         self.mj_ctrl:bool              = True   
 
+    def create_curried_funcs(self):
+        if self.is_cost_configured is False or self.is_dyn_configured is False:
+            ValueError("Controller is not configured yet")
+        self._create_curried_analyze_cost_dec_func()
+        if self.mj_ctrl is True:
+            self._curry_funcs_for_mujoco()
+        else:
+            self._curry_funcs_for_dyn_funcs()
+        self.is_curried = True   
+
     def _curry_funcs_for_mujoco(self)->None:
         self.discrete_dyn_mj_func:Callable[
             [jnp.ndarray, jnp.ndarray], 
@@ -107,34 +116,29 @@ class ilqrConfigStruct:
             [jnp.ndarray, jnp.ndarray], 
             jnp.ndarray] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.discrete_dyn_func, x_init, u_seq)
         
-        scan_lin_dyn_func= lambda carry, xu_seq: gen_ctrl.scan_dyn_func_For_lin(self.discrete_dyn_func,self.num_states, carry, xu_seq)
+        scan_lin_dyn_func= gen_ctrl.curry_dyn_lin_scan_func(self.discrete_dyn_func,self.num_states)
         
         self.linearize_dyn_seq:Callable[
             [jnp.ndarray, jnp.ndarray], 
             Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq(scan_lin_dyn_func,
                                                                                                                         x_seq, u_seq) 
 
-        fp_scan_func: Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],
-                                Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-                                Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], 
-                                      Tuple[jnp.ndarray, jnp.ndarray]]]  = lambda lsf, carry, seqs: scan_func_forward_pass(self.discrete_dyn_func,
-                                                                                                                            self.cost_func_for_diff,
-                                                                                                                            lsf, carry, seqs)
+        fp_scan_func = curry_forward_pass_scan_func(self.discrete_dyn_func, self.cost_func_float)
+        self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_float, x_seq, u_seq, K_seq,d_seq, lsf)
 
-        self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_for_diff, x_seq, u_seq, K_seq,d_seq, lsf)
+
+    def _curry_forward_pass_scan_func(self)->Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
+                                                        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:
+        def fp_scan_func_curried(lsf:float, 
+                                 carry:Tuple[int,jnp.ndarray, jnp.ndarray], 
+                                 seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
+            carry_out, seq_out = forward_pass_scan_func(self.discrete_dyn_func,self.cost_func_float,lsf,carry,seqs)
+            return carry_out, seq_out
+        return fp_scan_func_curried
     
     def _create_curried_analyze_cost_dec_func(self)-> None:
         self.analyze_cost_dec = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, self.cost_ratio_bounds)
-  
-    def create_curried_funcs(self):
-        if self.is_cost_configured is False or self.is_dyn_configured is False:
-            ValueError("Controller is not configured yet")
-        self._create_curried_analyze_cost_dec_func()
-        if self.mj_ctrl is True:
-            self._curry_funcs_for_mujoco()
-        else:
-            self._curry_funcs_for_dyn_funcs()
-        self.is_curried = True   
+   
 
 class ilqrControllerState:
     def __init__(self,
@@ -219,7 +223,7 @@ def initialize_ilqr_controller(ilqr_config:ilqrConfigStruct,
     x_seq = ilqr_config.simulate_fwd_dyn_seq(ctrl_state.seed_x_vec,ctrl_state.seed_u_seq)
 
     # calculate initial cost
-    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))
+    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))
     # ensure seed_cost is initialized with larger differential than convergence bound
 
     prev_cost_float = cost_float + (1 + ilqr_config.converge_crit)
@@ -255,7 +259,7 @@ def run_ilqr_controller(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerS
         print('ff_gain_avg_measure: ', avg_ff_gain)        
         print('ro_reg_value: ', local_ctrl_state.ro_reg)
         print('need to increase ro?: ', local_ctrl_state.ro_reg_change_bool)
-        local_ctrl_state.cost_float, local_ctrl_state.cost_seq, local_ctrl_state.x_cost_seq, local_ctrl_state.u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, 
+        local_ctrl_state.cost_float, local_ctrl_state.cost_seq, local_ctrl_state.x_cost_seq, local_ctrl_state.u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, 
                                                                                                                                                         local_ctrl_state.x_seq, 
                                                                                                                                                         local_ctrl_state.u_seq)
 
@@ -363,7 +367,7 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
                 x_seq_fp = x_seq_fp.at[k+1].set(ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k]))
             # shift sequences for cost calculation wrt desired trajectories
             # calculate new trajectory cost    
-            cost_float_fp, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_for_calc, jnp.array(x_seq_fp), jnp.array(u_seq_fp))
+            cost_float_fp, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq_fp), jnp.array(u_seq_fp))
         else:
             x_seq_fp, u_seq_fp, cost_float_fp = ilqr_config.simulate_forward_pass(ctrl_state.x_seq, ctrl_state.u_seq, ctrl_state.K_seq, ctrl_state.d_seq, lsf)
 
@@ -389,7 +393,7 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControl
 def simulate_forward_pass(fp_scan_func:Callable[[float, 
                                                  Tuple[int, jnp.ndarray,jnp.ndarray], 
                                                  Tuple[jnp.ndarray, jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-                                                 Tuple[int, jnp.ndarray, jnp.ndarray]], 
+                                                 Tuple[Tuple[int, jnp.ndarray,jnp.ndarray],Tuple[jnp.ndarray, jnp.ndarray]]], 
                             cost_func_for_calc: Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray],                      
                             x_seq:jnp.ndarray, u_seq:jnp.ndarray, 
                             K_seq:jnp.ndarray, d_seq:jnp.ndarray, lsf:float)->Tuple[jnp.ndarray, 
@@ -403,28 +407,31 @@ def simulate_forward_pass(fp_scan_func:Callable[[float,
     cost_out = cost_float + (cost_func_for_calc(x_seq_new[-1], jnp.zeros((len(u_seq[1]))),  len(x_seq_new)-1))
     return x_seq_new, u_seq_new, cost_out.item()
 
-def scan_func_forward_pass(discrete_dyn_func,
-                           cost_func_for_calc,
+def forward_pass_scan_func(discrete_dyn_func,
+                           cost_func_float,
                            lsf:float, 
-                           carry:Tuple[int, float, jnp.ndarray], 
+                           carry:Tuple[int, jnp.ndarray, jnp.ndarray], 
                            seqs:Tuple[jnp.ndarray, jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[
-                            Tuple[int, float,jnp.ndarray],
+                            Tuple[int, jnp.ndarray,jnp.ndarray],
                             Tuple[jnp.ndarray, jnp.ndarray]]:
     x_k, u_k, K_k, d_k    = seqs
     k, cost_float, x_k_new = carry
     u_k_new     = calculate_u_k_new(u_k, x_k, x_k_new, K_k, d_k, lsf)
-    cost_float += (cost_func_for_calc(x_k_new, u_k_new, k)).reshape(-1)
+    cost_float += (cost_func_float(x_k_new, u_k_new, k)).reshape(-1)
     x_kp1_new   = discrete_dyn_func(x_k_new, u_k_new)
     k += 1
     return (k, cost_float, x_kp1_new), (x_kp1_new, u_k_new)
 
-def initialize_backwards_pass(P_N:jnp.ndarray, p_N:jnp.ndarray, x_len:int, u_len:int, len_seq:int):
-    K_seq         = jnp.zeros([(len_seq-1), u_len, x_len])
-    d_seq         = jnp.zeros([(len_seq-1), u_len, 1])
-    Del_V_vec_seq = jnp.zeros([(len_seq-1), 2])
-    P_kp1 = P_N
-    p_kp1 = p_N
-    return P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq
+def curry_forward_pass_scan_func(discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray],jnp.ndarray], 
+                                 cost_func_float:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray])->Callable[
+                                     [float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
+                                        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:
+    def fp_scan_func_curried(lsf:float, carry:Tuple[int,jnp.ndarray, jnp.ndarray], 
+                             seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], 
+                                                                                                 Tuple[jnp.ndarray, jnp.ndarray]]:
+        carry_out, seq_out = forward_pass_scan_func(discrete_dyn_func,cost_func_float,lsf,carry,seqs)
+        return carry_out, seq_out
+    return fp_scan_func_curried
 
 def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:jnp.ndarray, len_seq:int):
     control_seq_fp  = jnp.zeros([(len_seq-1),u_len])
@@ -442,7 +449,6 @@ def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.nd
                                      P_kp1:jnp.ndarray, 
                                      p_kp1:jnp.ndarray, 
                                      ro_reg:float):
-
 #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
 #   where V' is value function at the next time step
 #  https://alkzar.cl/blog/2022-01-13-taylor-approximation-and-jax/
@@ -465,16 +471,6 @@ def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.nd
     q_uu_reg = (l_uu + B_lin_k.T @ P_kp1_reg @ B_lin_k)
     q_ux_reg = (l_ux + B_lin_k.T @ P_kp1_reg @ A_lin_k)
     return q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg
-
-def calculate_final_ctg_approx(cost_func_for_diff:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray], 
-                                x_N:jnp.ndarray, u_len:int, len_seq:int) -> Tuple[jnp.ndarray,jnp.ndarray]:
-    # approximates the final step cost-to-go as only the state with no control input
-    # create concatenated state and control vector of primal points
-    u_N = np.zeros([u_len], dtype=float)
-    xu_N = jnp.concatenate((x_N, u_N))
-    k_step = len_seq - 1
-    p_N, _, P_N, _, _ = gen_ctrl.taylor_expand_cost(cost_func_for_diff, xu_N,len(x_N), k_step)
-    return P_N, p_N
 
 def calculate_backstep_ctg_approx(q_x:jnp.ndarray, 
                                   q_u:jnp.ndarray,
@@ -512,19 +508,20 @@ def calculate_optimal_gains(q_uu_reg:jnp.ndarray,
     d_k           = -inverted_q_uu @ q_u
     return K_k, d_k
 
-def calculate_u_k_new(u_nom_k:jnp.ndarray,
-                      x_nom_k:jnp.ndarray,
+def calculate_u_k_new(u_current_k:jnp.ndarray,
+                      x_current_k:jnp.ndarray,
                       x_new_k:jnp.ndarray, 
-                      K_k:jnp.ndarray, 
-                      d_k:jnp.ndarray, line_search_factor:float) -> jnp.ndarray:
+                      K_fb_k:jnp.ndarray, 
+                      d_ff_k:jnp.ndarray, line_search_factor:float) -> jnp.ndarray:
     # check valid dimensions
-    assert K_k.shape    == (len(u_nom_k), len(x_nom_k)), "K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))"
-    assert d_k.shape    == (len(u_nom_k), 1)           , "d_k incorrect shape, must be (len(u_nom_k), 1)"
-    assert len(x_new_k) ==  len(x_nom_k)               , "x_nom_k and x_new_k must be the same length"
-    assert (x_nom_k.shape) == (len(x_nom_k),), 'x_nom_k must be column vector (n,)'
-    assert (x_new_k.shape) == (len(x_new_k),), 'x_new_k must be column vector (n,)'    
-    assert (u_nom_k.shape) == (len(u_nom_k),), 'u_nom_k must be column vector (m,)'    
-    return (u_nom_k.reshape(-1,1) + K_k @ (x_new_k.reshape(-1,1) - x_nom_k.reshape(-1,1)) + line_search_factor * d_k).reshape(-1)
+    assert K_fb_k.shape        == (len(u_current_k), len(x_current_k)), "K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))"
+    assert d_ff_k.shape        == (len(u_current_k), 1)           , "d_k incorrect shape, must be (len(u_nom_k), )"
+    assert len(x_new_k)        ==  len(x_current_k)               , "x_nom_k and x_new_k must be the same length"
+    assert (x_current_k.shape) == (len(x_current_k),), 'x_nom_k must be column vector (n,)'
+    assert (x_new_k.shape)     == (len(x_new_k),), 'x_new_k must be column vector (n,)'    
+    assert (u_current_k.shape) == (len(u_current_k),), 'u_nom_k must be column vector (m,)'    
+    # return (u_nom_k.reshape(-1,1) + K_k @ (x_new_k.reshape(-1,1) - x_nom_k.reshape(-1,1)) + line_search_factor * d_k).reshape(-1)
+    return gen_ctrl.calculate_ff_fb_u(K_fb_k, u_current_k, x_current_k, x_new_k) + line_search_factor * d_ff_k.reshape(-1)
 
 def calculate_cost_decrease_ratio(prev_cost_float:float, new_cost_float:float, Del_V_vec_seq:jnp.ndarray, lsf:float) -> float:
     """
@@ -560,12 +557,12 @@ def calculate_u_star(k_fb_k:jnp.ndarray,
 
 
 def simulate_ilqr_output(sim_dyn_func_step:Callable[[jnp.ndarray,jnp.ndarray], jnp.ndarray], 
-    ctrl_out:ilqrControllerState, x_sim_init:jnp.ndarray) -> Tuple[jnp.ndarray,jnp.ndarray]:
-    x_sim_seq  = jnp.zeros([ctrl_out.len_seq, ctrl_out.x_len])
-    u_sim_seq  = jnp.zeros([ctrl_out.len_seq-1, ctrl_out.u_len])
+    ctrl_obj:ilqrControllerState, x_sim_init:jnp.ndarray) -> Tuple[jnp.ndarray,jnp.ndarray]:
+    x_sim_seq  = jnp.zeros([ctrl_obj.len_seq, ctrl_obj.x_len])
+    u_sim_seq  = jnp.zeros([ctrl_obj.len_seq-1, ctrl_obj.u_len])
     x_sim_seq  = x_sim_seq.at[0].set(x_sim_init)    
-    for k in range(ctrl_out.len_seq-1):
-        u_sim_seq = u_sim_seq.at[k].set(calculate_u_star(ctrl_out.K_seq[k], ctrl_out.u_seq[k], ctrl_out.x_seq[k], x_sim_seq[k]))
+    for k in range(ctrl_obj.len_seq-1):
+        u_sim_seq = u_sim_seq.at[k].set(gen_ctrl.calculate_ff_fb_u(ctrl_obj.K_seq[k], ctrl_obj.u_seq[k], ctrl_obj.x_seq[k], x_sim_seq[k]))
         x_sim_seq = x_sim_seq.at[k+1].set(sim_dyn_func_step(x_sim_seq[k], u_sim_seq[k]))
     return x_sim_seq,u_sim_seq
 

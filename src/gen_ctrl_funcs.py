@@ -122,10 +122,17 @@ def linearize_dynamics(
     b_lin       = ab_lin_cat[:x_k_len,x_k_len:]
     return a_lin, b_lin
 
-def scan_dyn_func_For_lin(dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],x_len:int, 
+def dyn_lin_scan_func(dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],x_len:int, 
                       carry:None, x_and_u_k:jnp.ndarray) -> Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]:
     a_lin, b_lin = linearize_dynamics(dyn_func, x_and_u_k, x_len)
     return carry, (a_lin, b_lin)
+
+def curry_dyn_lin_scan_func(discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
+                            num_states:int)->Callable[[None, jnp.ndarray],Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]]:
+    def dyn_lin_scan_func_curried(carry:None, xu_k:jnp.ndarray):
+        carry_out, A_B_k = dyn_lin_scan_func(discrete_dyn_func, num_states, carry, xu_k)
+        return carry_out, A_B_k
+    return dyn_lin_scan_func_curried
 
 def step_euler_forward(
         dyn_func:Callable[[jnp.ndarray, jnp.ndarray], npt.NDArray], 
@@ -159,7 +166,7 @@ def step_solve_ivp(
     return x_kp1
 
 def calculate_linearized_state_space_seq(
-        lin_scan_func_curried:Callable[[None, jnp.ndarray],Tuple[None, jnp.ndarray]], 
+        lin_scan_func_curried:Callable[[None, jnp.ndarray],Tuple[None, Tuple[jnp.ndarray,jnp.ndarray]]], 
         x_seq:jnp.ndarray, 
         u_seq:jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
     # walk through state and control sequences

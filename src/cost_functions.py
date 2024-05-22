@@ -109,7 +109,7 @@ class cost_quad_x_and_u():
         total_cost = jnp.array((0.5) * ((x_k_corr.T @ self.Q @ x_k_corr)+(u_k_corr.T @ self.R @ u_k_corr)))
         return total_cost.reshape(-1), x_cost.reshape(-1), u_cost.reshape(-1) 
 
-    def cost_func_quad_state_and_control_for_diff(self,  x_k:jnp.ndarray, 
+    def cost_func_quad_state_and_control_scan_compatible(self,  x_k:jnp.ndarray, 
                                                 u_k:jnp.ndarray, 
                                                 k:int)->Tuple[jnp.ndarray, 
                                                               jnp.ndarray, 

@@ -9,7 +9,6 @@ import os
 import ilqr_funcs as ilqr
 import dyn_functions as dyn
 import cost_functions as cost
-import analyze_ilqr_output_funcs as analyze
 import gen_ctrl_funcs as gen_ctrl
 import visualize_dyn_funcs as vis_dyn
 import mujoco_funcs as mj_funcs
@@ -97,8 +96,7 @@ if __name__ == "__main__":
                                           u_des_seq=u_des_seq)
 
    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, gen_ctrl.step_rk4)
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff,
-                                cost_func_obj.cost_func_quad_state_and_control_for_diff)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_scan_compatible)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#

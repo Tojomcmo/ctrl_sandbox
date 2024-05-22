@@ -31,8 +31,8 @@ class shared_unit_test_data_and_funcs:
                                                     self.cost_func_quad_unit_params.x_des_seq,
                                                     self.cost_func_quad_unit_params.u_des_seq,)
         self.ilqr_config = ilqr.ilqrConfigStruct(num_states=2, num_controls=1, len_seq=5, time_step=0.1)
-        self.ilqr_config.config_cost_func(self.cost_func_obj.cost_func_quad_state_and_control_for_diff,
-                                          self.cost_func_obj.cost_func_quad_state_and_control_for_diff)
+        self.ilqr_config.config_cost_func(self.cost_func_obj.cost_func_quad_state_and_control_scan_compatible,
+                                          self.cost_func_obj.cost_func_quad_state_and_control_scan_compatible)
         self.ilqr_config.config_for_dyn_func(self.pend_dyn_obj.cont_dyn_func, gen_ctrl.step_rk4)
         self.ilqr_config.create_curried_funcs()
 
@@ -238,7 +238,7 @@ class simulate_forwards_pass_tests(unittest.TestCase):
         lsf = 0.5
         carry_in = (0, jnp.zeros((1), dtype=float), x_seq)
         seqs_in = (x_seq, u_seq, K_seq, d_seq)
-        fp_scan_func_curried = lambda lsf, carry_in, seqs_in : ilqr.scan_func_forward_pass(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
+        fp_scan_func_curried = lambda lsf, carry_in, seqs_in : ilqr.forward_pass_scan_func(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
         x_seq_new, u_seq_new, cost_float = ilqr.simulate_forward_pass(fp_scan_func_curried, self.example_cost_func, x_seq, u_seq, K_seq, d_seq, lsf)
         self.assertEqual(True,True)
 
@@ -265,7 +265,7 @@ class scan_func_forward_pass_tests(unittest.TestCase):
         lsf = 0.5
         carry_in = (0, 0.0, x_k)
         seqs_in = (x_k, u_k, K_k, d_k)
-        carry_out, seqs_out = ilqr.scan_func_forward_pass(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
+        carry_out, seqs_out = ilqr.forward_pass_scan_func(self.example_dyn_func,self.example_cost_func, lsf,carry_in, seqs_in)
         int_expected = 1
         u_k_new_expected = (u_k.reshape(-1,1) + K_k @ (x_k.reshape(-1,1) - x_k.reshape(-1,1)) + lsf * d_k).reshape(-1)
         cost_float_expected = self.example_cost_func(x_k, u_k_new_expected, k)
@@ -275,21 +275,6 @@ class scan_func_forward_pass_tests(unittest.TestCase):
         self.assertEqual((carry_out[2]).all(), (seqs_out[0]).all())
         self.assertEqual((seqs_out[0]).all(), (x_kp1_new_expected).all())
         self.assertEqual((seqs_out[1]).all(), (u_k_new_expected).all())
-
-class initialize_backwards_pass_tests(unittest.TestCase):
-    def test_accepts_valid_inputs(self):
-        data_and_funcs = shared_unit_test_data_and_funcs()
-        len_seq = data_and_funcs.ilqr_config.len_seq
-        x_len   = data_and_funcs.ilqr_config.num_states
-        u_len   = data_and_funcs.ilqr_config.num_controls
-        p_N     = jnp.ones([x_len, 1])
-        P_N     = jnp.ones([x_len, x_len])
-        P_kp1, p_kp1, K_seq, d_seq, Del_V_vec_seq = ilqr.initialize_backwards_pass(P_N, p_N, x_len, u_len, len_seq)
-        self.assertEqual(P_kp1.shape, (x_len, x_len))
-        self.assertEqual(p_kp1.shape, (x_len, 1))
-        self.assertEqual(K_seq.shape, ((len_seq-1), u_len, x_len))           
-        self.assertEqual(d_seq.shape, ((len_seq-1), u_len, 1))        
-        self.assertEqual(Del_V_vec_seq.shape, (len_seq-1, 2)) 
 
 class initialize_forwards_pass_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
@@ -362,17 +347,6 @@ class initialize_forwards_pass_tests(unittest.TestCase):
 #         self.assertEqual(np.shape(q_ux), (u_len,x_len)) 
 #         self.assertEqual(np.shape(q_uu_reg), (u_len,u_len))
 #         self.assertEqual(np.shape(q_ux_reg), (u_len,x_len)) 
-
-class calculate_final_ctg_approx_tests(unittest.TestCase):
-    def test_calculate_final_cost_to_go_approximation_accepts_valid_system(self):
-        shared_data_funcs = shared_unit_test_data_and_funcs()
-        x_N = shared_data_funcs.x_seq_example[-1]
-        u_N = shared_data_funcs.u_seq_example[-1]
-        P_N, p_N = ilqr.calculate_final_ctg_approx(shared_data_funcs.ilqr_config.cost_func_for_diff,x_N,len(u_N),len_seq = 1)
-        p_N_expected = shared_data_funcs.cost_func_quad_unit_params.Qf @ x_N.reshape(-1,1)
-        P_N_expected = shared_data_funcs.cost_func_quad_unit_params.Qf
-        self.assertEqual(p_N.tolist(), p_N_expected.tolist())
-        self.assertEqual(P_N.tolist(), P_N_expected.tolist())
 
 class calculate_backstep_ctg_approx_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):

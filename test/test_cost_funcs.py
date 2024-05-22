@@ -18,7 +18,7 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         k_step         = 1
 
         cost_func_obj = cost.cost_quad_x_and_u(Q,R,Qf,state_des,control_des)
-        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control_for_diff(state,control,k_step)
+        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control_scan_compatible(state,control,k_step)
 
         state_corr   = (state - state_des[k_step]).reshape(-1,1)
         control_corr = (control - control_des[k_step]).reshape(-1,1)
@@ -37,7 +37,7 @@ class cost_func_quad_state_and_control_tests(unittest.TestCase):
         k_step         = 2
 
         cost_func_obj = cost.cost_quad_x_and_u(Q,R,Qf,state_des,control_des)
-        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control_for_diff(state,control,k_step)
+        j,j_state,j_control = cost_func_obj.cost_func_quad_state_and_control_scan_compatible(state,control,k_step)
 
         state_corr   = (state - state_des[k_step]).reshape(-1,1)
         control_corr = (control - control_des[k_step]).reshape(-1,1)

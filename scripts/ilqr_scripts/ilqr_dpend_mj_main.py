@@ -81,8 +81,8 @@ if __name__ == "__main__":
       ilqr_config.config_for_mujoco(dpend_model_obj.get_mjcf_model())
    else:
       pass
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff,
-                                cost_func_obj.cost_func_quad_state_and_control_for_diff)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_scan_compatible,
+                                cost_func_obj.cost_func_quad_state_and_control_scan_compatible)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
