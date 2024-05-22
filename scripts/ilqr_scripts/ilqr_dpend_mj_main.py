@@ -21,7 +21,7 @@ import visualize_dyn_funcs as dyn_vis
 if __name__ == "__main__":
    #------- Define controller configuration -------#
    time_step  = 0.005 
-   len_seq    = 300
+   len_seq    = 500
    num_states = 4
    num_controls = 1
    shoulder_act = True
@@ -31,13 +31,13 @@ if __name__ == "__main__":
    Q_cost  = np.array([[10,0 ,0 ,0 ],
                        [0 ,1,0 ,0 ],
                        [0 ,0 ,0.1 ,0 ],
-                       [0 ,0 ,0 ,1.0 ]], dtype=float) * 100.0
-   R_cost  = np.array([[1]], dtype=float) * (1.0)
+                       [0 ,0 ,0 ,1.0 ]], dtype=float) * 0.01
+   R_cost  = np.array([[1]], dtype=float) * (0.001)
    # R_cost  = np.array([[5, 0 ],[0 , 1 ]], dtype=float) * 0.5
    Qf_cost = np.array([[10,0 ,0 ,0 ],
                        [0 ,10,0 ,0 ],
                        [0 ,0 ,1 ,0 ],
-                       [0 ,0 ,0 ,1 ]], dtype=float) * 5000.0
+                       [0 ,0 ,0 ,1 ]], dtype=float) * 100.0
 
    #---------- initialize ilqr configuration object
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
@@ -53,7 +53,7 @@ if __name__ == "__main__":
    # x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
    #---------- set system init ----------#
-   x_init_vec = np.array([0.0,0.0,0.0,0.0])
+   x_init_vec = jnp.array([0.0,0.0,0.0,0.0])
    x_tg_init_vec = x_init_vec
    x_sim_init_vec = x_init_vec
 
@@ -65,10 +65,10 @@ if __name__ == "__main__":
       # x_des_seq  = x_des_seq_traj_gen  
       pass
    elif ctrl_target_condition == 2:  
-      x_des_seq  = np.zeros([len_seq, num_states])
-      x_des_seq[:,0] = np.pi
-      u_init_seq = np.ones([len_seq-1, num_controls]) * (0.01)
-      u_des_seq  = np.zeros([len_seq-1, num_controls])
+      x_des_seq  = jnp.zeros([len_seq, num_states])
+      x_des_seq  = x_des_seq.at[:,0].set(jnp.pi)
+      u_init_seq = jnp.ones([len_seq-1, num_controls]) * (0.01)
+      u_des_seq  = jnp.zeros([len_seq-1, num_controls])
 
    else:
       raise ValueError('invalid ctrl_target_condition')   
@@ -81,7 +81,8 @@ if __name__ == "__main__":
       ilqr_config.config_for_mujoco(dpend_model_obj.get_mjcf_model())
    else:
       pass
-   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff)
+   ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_for_diff,
+                                cost_func_obj.cost_func_quad_state_and_control_for_diff)
    ilqr_config.create_curried_funcs()   
 
    #----- Run iLQR algorithm -----#
@@ -119,5 +120,4 @@ if __name__ == "__main__":
    ax2 = fig2.add_subplot(gs2[0, 1]) # row 0, col 1
    dyn_vis.plot_ilqr_dpend_act_and_cost_axes(shoulder_act, elbow_act, controller_output, u_sim_seq, ax1, ax2)
 
-   # analyze.plot_ilqr_iter_sim_ctrl_cost(ilqr_config, controller_output, cost_func_obj.x_des_seq, x_sim_seq, u_sim_seq)
    plt.show()

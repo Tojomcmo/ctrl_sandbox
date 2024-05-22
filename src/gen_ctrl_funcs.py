@@ -370,3 +370,13 @@ def calculate_matrix_power_similarity_transform(A, exponent):
     evecs_inv = np.linalg.inv(evecs)
     A_to_exponent = evecs @ D**exponent @ evecs_inv
     return A_to_exponent
+
+
+def calculate_ff_fb_u(k_fb_k:jnp.ndarray, 
+                     u_ff_k:jnp.ndarray, 
+                     x_des_k:jnp.ndarray,
+                     x_k:jnp.ndarray) -> jnp.ndarray:
+    return (u_ff_k.reshape(-1,1) + k_fb_k @ (x_k.reshape(-1,1) - x_des_k.reshape(-1,1))).reshape(-1)
+
+def apply_cov_noise_to_vec(vec:jnp.ndarray, cov_mat:jnp.ndarray)->jnp.ndarray:
+    return vec + jax.random.multivariate_normal(cov_mat.shape[0],np.zeros(cov_mat.shape[0]),cov_mat)
