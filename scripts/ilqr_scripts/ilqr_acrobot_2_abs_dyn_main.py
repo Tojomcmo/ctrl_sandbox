@@ -96,7 +96,7 @@ if __name__ == "__main__":
    # initialize controller state and configured functions
    controller_state.x_seq, controller_state.cost_float, controller_state.prev_cost_float, controller_state.cost_seq \
    = ilqr.initialize_ilqr_controller(ilqr_config, controller_state)
-   controller_state.seed_x_seq = controller_state.x_seq
+   controller_state.init_x_seq = controller_state.x_seq
    # run ilqr controller
    controller_output = ilqr.run_ilqr_controller(ilqr_config, controller_state)
    # print("max control nominal: ", max((controller_output.u_seq).all()))

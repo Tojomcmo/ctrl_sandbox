@@ -23,24 +23,24 @@ if __name__ == "__main__":
    ani_save_location = "media_output/"
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
-   time_step  = 0.005
-   len_seq    = 750
+   time_step  = 0.01
+   len_seq    = 400
    num_states = 4
    num_controls = 1
-   shoulder_act = True 
-   elbow_act = False
+   shoulder_act = False 
+   elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
-                       [0   ,1. ,0   ,0  ],
+                       [0   ,1. ,0   , 0  ],
                        [0   ,0   ,0.1   ,0  ],
-                       [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 0.1  
-   R_cost  = np.array([[1.0]],dtype=float)*1.0
+                       [0   ,0   ,0   ,5.0  ]],
+                       dtype=float) * 0.05  
+   R_cost  = np.array([[1.0]],dtype=float)*5.0
    # R_cost  = np.array([[1.0, 0],[0, 1.0]],dtype=float)*0.5
    Qf_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,10. ,0   ,0  ],
                        [0   ,0   ,1.0   ,0  ],
                        [0   ,0   ,0   ,1.0  ]],
-                       dtype=float) * 1000.0
+                       dtype=float) * 10000.0
    
    h_bar = 1.0
    r_bar = 0.05
@@ -53,8 +53,8 @@ if __name__ == "__main__":
    #---------- initialize ilqr configuration object --------------#
    ilqr_config   = ilqr.ilqrConfigStruct(num_states, num_controls, len_seq, time_step)
    ilqr_config.converge_crit = 1e-6
-   ilqr_config.max_iter = 100
-   ilqr_config.fp_max_iter = 6
+   ilqr_config.max_iter = 500
+   ilqr_config.fp_max_iter = 10
 
    #---------- create simulation system for post algorithm test ----------#
    dyn_func_sys_sim = dyn_func_sys_ctrl
@@ -84,8 +84,8 @@ if __name__ == "__main__":
       x_des_seq  = jnp.zeros([len_seq, num_states], dtype=float)
       x_des_seq  = x_des_seq.at[:,0].set(jnp.pi)
       x_des_seq  = x_des_seq.at[:,1].set(0.0)
-      u_init_seq = np.ones([len_seq-1, num_controls], dtype=float)*0.01
-      u_des_seq  = np.zeros([len_seq-1, num_controls], dtype=float)
+      u_init_seq = jnp.ones([len_seq-1, num_controls], dtype=float)*0.01
+      u_des_seq  = jnp.zeros([len_seq-1, num_controls], dtype=float)
 
    else:
       raise ValueError('invalid ctrl_target_condition')   
@@ -101,11 +101,6 @@ if __name__ == "__main__":
 
    #----- Run iLQR algorithm -----#
    controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq)
-   # initialize controller state and configured functions
-   controller_state.x_seq, controller_state.cost_float, controller_state.prev_cost_float, controller_state.cost_seq \
-   = ilqr.initialize_ilqr_controller(ilqr_config, controller_state)
-   controller_state.seed_x_seq = controller_state.x_seq
-   # run ilqr controller
    ctrl_out = ilqr.run_ilqr_controller(ilqr_config, controller_state)
    #------- Simulate controller output --------#
 

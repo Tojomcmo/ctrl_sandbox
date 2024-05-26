@@ -26,14 +26,15 @@ def sim_dyn_scan_func(discrete_dyn_func:Callable[[int, jnp.ndarray, jnp.ndarray]
                              noise_func:Callable[[int, jnp.ndarray], jnp.ndarray],
                       carry:Tuple[jnp.ndarray,jnp.ndarray], seq:jnp.ndarray)->Tuple[Tuple[jnp.ndarray,jnp.ndarray],
                                                                                     Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+    #TODO fix typecheck error for k int as a ndarray of ints
     x_k, x_est_k      = carry
     k                 = seq
-    u_k               = control_func(k, x_est_k)
-    x_kp1_pre_disturb = discrete_dyn_func(k, x_k, u_k)
-    x_kp1             = disturb_func(k,x_kp1_pre_disturb)
-    y_kp1             = noise_func(k,x_kp1)
-    x_est_kp1         = measure_func(k,y_kp1)
-    return (x_kp1, x_est_kp1), (x_k, x_est_k, u_k)
+    u_k               = control_func(k, x_est_k)                #type:ignore 
+    x_kp1_pre_disturb = discrete_dyn_func(k, x_k, u_k)          #type:ignore
+    x_kp1             = disturb_func(k,x_kp1_pre_disturb)       #type:ignore
+    y_kp1             = noise_func(k,x_kp1)                     #type:ignore
+    x_est_kp1         = measure_func(k,y_kp1)                   #type:ignore
+    return (x_kp1, x_est_kp1), (x_k, x_est_k, u_k)              #type:ignore
 
 def curry_sim_dyn_scan_func(discrete_dyn_func:Callable[[int, jnp.ndarray, jnp.ndarray],jnp.ndarray],
                                  control_func:Callable[[int, jnp.ndarray], jnp.ndarray],

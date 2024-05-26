@@ -2,7 +2,8 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 import numpy as np
-import scipy 
+from scipy.signal import StateSpace
+
 import time
 
 from numpy import typing as npt
@@ -377,7 +378,6 @@ def calculate_matrix_power_similarity_transform(A, exponent):
     evecs_inv = np.linalg.inv(evecs)
     A_to_exponent = evecs @ D**exponent @ evecs_inv
     return A_to_exponent
-
 
 def calculate_ff_fb_u(k_fb_k:jnp.ndarray, 
                      u_ff_k:jnp.ndarray, 

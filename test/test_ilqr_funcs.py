@@ -209,7 +209,7 @@ class calculate_forwards_pass_tests(unittest.TestCase):
         k_seq, d_seq, Del_V_vec_seq, ro_reg = ilqr.calculate_backwards_pass(ilqr_config, ilqr_ctrl_state)
         ilqr_ctrl_state.K_seq         = k_seq
         ilqr_ctrl_state.d_seq         = d_seq
-        ilqr_ctrl_state.Del_V_vec_seq = Del_V_vec_seq                
+        ilqr_ctrl_state.d_v_seq = Del_V_vec_seq                
         # ctrl_state.K_seq         = data_and_funcs.K_seq
         # ctrl_state.d_seq         = data_and_funcs.d_seq
         # ctrl_state.Del_V_vec_seq = data_and_funcs.Del_V_vec_seq

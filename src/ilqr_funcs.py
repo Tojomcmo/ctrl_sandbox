@@ -30,7 +30,7 @@ class ilqrConfigStruct:
         self.ff_gain_tol:float          = 1e-4
         self.cost_ratio_bounds:Tuple[float,float] = (1e-8, 10)
         self.ro_reg_start:float         = 0.0
-        self.ro_reg_change:float        = 0.5
+        self.ro_reg_change:float        = 2.0
         self.fp_max_iter:int            = 5
         self.ls_scale_alpha_param:float = 0.5
         self.log_ctrl_history:bool      = False
@@ -50,7 +50,6 @@ class ilqrConfigStruct:
         self.quad_exp_cost_seq  = lambda x_seq, u_seq: gen_ctrl.taylor_expand_cost_seq(self.cost_func_float,
                                                                                         x_seq, u_seq)
         self.is_cost_configured = True
-
 
     def config_for_dyn_func(self,
                             cont_dyn_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], 
@@ -86,7 +85,7 @@ class ilqrConfigStruct:
     def create_curried_funcs(self):
         if self.is_cost_configured is False or self.is_dyn_configured is False:
             ValueError("Controller is not configured yet")
-        self._create_curried_analyze_cost_dec_func()
+        self._curry_analyze_cost_dec_func()
         if self.mj_ctrl is True:
             self._curry_funcs_for_mujoco()
         else:
@@ -126,7 +125,6 @@ class ilqrConfigStruct:
         fp_scan_func = curry_forward_pass_scan_func(self.discrete_dyn_func, self.cost_func_float)
         self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_float, x_seq, u_seq, K_seq,d_seq, lsf)
 
-
     def _curry_forward_pass_scan_func(self)->Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
                                                         Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:
         def fp_scan_func_curried(lsf:float, 
@@ -136,55 +134,45 @@ class ilqrConfigStruct:
             return carry_out, seq_out
         return fp_scan_func_curried
     
-    def _create_curried_analyze_cost_dec_func(self)-> None:
-        self.analyze_cost_dec = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, self.cost_ratio_bounds)
+    def _curry_analyze_cost_dec_func(self)-> None:
+        self.analyze_cost_dec:Callable[[float],bool] = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, self.cost_ratio_bounds)
    
-
 class ilqrControllerState:
     def __init__(self,
                  ilqr_config:ilqrConfigStruct, 
-                 seed_x_vec:Union[jnp.ndarray, npt.NDArray[np.float64]], 
-                 seed_u_seq:Union[jnp.ndarray, npt.NDArray[np.float64]]):
+                 init_x_vec:Union[jnp.ndarray, npt.NDArray[np.float64]], 
+                 init_u_seq:Union[jnp.ndarray, npt.NDArray[np.float64]]):
         # direct parameter population
-        self.seed_x_vec         = jnp.array(seed_x_vec)     
-        self.seed_u_seq         = jnp.array(seed_u_seq)           
-        self.validate_input_data(ilqr_config, self.seed_x_vec, self.seed_u_seq)            
+        self.init_x_vec         = jnp.array(init_x_vec)     
+        self.init_u_seq         = jnp.array(init_u_seq)           
+        self.validate_input_data(ilqr_config)            
         self.cost_float         = 0.0
-        self.prev_cost_float    = 0.0
         self.iter_int           = 0 
-        self.ff_gain_avg        = 0.0        
-        self.ro_reg             = 0.0
-        self.lsf_float          = 1.0
         self.ro_reg_change_bool = False    
         
         # dependent parameter population
-        self.u_seq         = jnp.array(seed_u_seq)   
+        self.u_seq         = self.init_u_seq  
         self.len_seq       = self.get_len_seq()
         self.x_len         = self.get_num_states()
-        self.u_len         = self.get_num_controls()
-        self.seed_x_seq    = jnp.zeros([self.len_seq,self.x_len])      
-        self.x_seq         = jnp.zeros([self.len_seq,self.x_len])
-        self.time_seq      = jnp.arange(self.len_seq) * ilqr_config.time_step
-        self.K_seq         = jnp.zeros([self.len_seq-1, self.u_len, self.x_len])
-        self.d_seq         = jnp.zeros([self.len_seq-1, self.u_len,          1])
-        self.Del_V_vec_seq = jnp.zeros([self.len_seq-1, 2])
-        self.cost_seq      = jnp.zeros([self.len_seq])
-        self.x_cost_seq    = jnp.zeros([self.len_seq])
-        self.u_cost_seq    = jnp.zeros([self.len_seq])        
+        self.u_len         = self.get_num_controls() 
+        self.time_seq      = jnp.arange(self.len_seq) * ilqr_config.time_step  
+        self.init_x_seq    = self.get_init_x_seq(ilqr_config.simulate_fwd_dyn_seq) 
+        self.u_seq         = self.init_u_seq 
+        self.x_seq         = self.init_x_seq
+        self.initialize_ctrl_state_zeros()
 
         if ilqr_config.log_ctrl_history is True:
             self.u_seq_history:list         = []
             self.x_seq_history:list         = []
             self.K_seq_history:list         = []
             self.d_seq_history:list         = []
-            self.Del_V_vec_seq_history:list = []
+            self.d_v_seq_history:list       = []
             self.cost_seq_history:list      = []
             self.x_cost_seq_history:list    = []                  
             self.u_cost_seq_history:list    = []
             self.cost_float_history:list    = []
-            self.lsf_float_history:list     = []
 
-    def validate_input_data(self,ilqr_config:ilqrConfigStruct, seed_x_vec:jnp.ndarray, seed_u_seq:jnp.ndarray):
+    def validate_input_data(self,ilqr_config:ilqrConfigStruct):
         if self.get_len_seq() != ilqr_config.len_seq:
             ValueError("sequences are the wrong length")
         if self.get_num_states() != ilqr_config.num_states:
@@ -194,14 +182,39 @@ class ilqrControllerState:
         # TODO create validation criteria
 
     def get_len_seq(self):
-        return len(self.seed_u_seq)+1
+        return len(self.init_u_seq)+1
     
     def get_num_states(self):
-        return len(self.seed_x_vec) 
+        return len(self.init_x_vec) 
     
     def get_num_controls(self):
-        return len(self.seed_u_seq[0])
+        return len(self.init_u_seq[0])
     
+    def get_init_x_seq(self, dyn_seq_func:Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray])->jnp.ndarray:
+        return dyn_seq_func(self.init_x_vec, self.init_u_seq)
+
+    def initialize_ctrl_state_zeros(self):
+        self.K_seq          = jnp.zeros([self.len_seq-1, self.u_len, self.x_len])
+        self.d_seq          = jnp.zeros([self.len_seq-1, self.u_len,          1])
+        self.d_v_seq        = jnp.zeros([self.len_seq-1, 2])
+        self.cost_seq       = jnp.zeros([self.len_seq])
+        self.x_cost_seq     = jnp.zeros([self.len_seq])
+        self.u_cost_seq     = jnp.zeros([self.len_seq])   
+
+    def set_ctrl_state(self,iter_int:int, x_seq:jnp.ndarray, u_seq:jnp.ndarray, K_seq:jnp.ndarray, 
+                            d_seq:jnp.ndarray, d_v_seq:jnp.ndarray, cost_seq:jnp.ndarray, 
+                            x_cost_seq:jnp.ndarray, u_cost_seq:jnp.ndarray, cost_float:float):
+        self.iter_int       = iter_int
+        self.x_seq          = x_seq
+        self.u_seq          = u_seq
+        self.K_seq          = K_seq
+        self.d_seq          = d_seq
+        self.d_v_seq        = d_v_seq
+        self.cost_seq       = cost_seq
+        self.x_cost_seq     = x_cost_seq
+        self.u_cost_seq     = u_cost_seq
+        self.cost_float     = cost_float
+
     def log_ctrl_state_to_history(self):
         self.u_seq_history.append(self.u_seq)
         self.x_seq_history.append(self.x_seq)
@@ -209,86 +222,60 @@ class ilqrControllerState:
         self.x_cost_seq_history.append(self.x_cost_seq) 
         self.u_cost_seq_history.append(self.u_cost_seq) 
         self.cost_float_history.append(self.cost_float)
-        self.lsf_float_history.append(self)
         self.K_seq_history.append(self.K_seq) 
         self.d_seq_history.append(self.d_seq)
-        self.Del_V_vec_seq_history.append(self.Del_V_vec_seq)   
+        self.d_v_seq_history.append(self.d_v_seq)   
 
-def initialize_ilqr_controller(ilqr_config:ilqrConfigStruct, 
-                               ctrl_state:ilqrControllerState)-> Tuple[
-                                   jnp.ndarray, float, float, jnp.ndarray]:
-    # create object containing preconfigured functions with static parameters (currying and parameter encapsulation)
 
-    # populate state sequence from seed control sequence
-    x_seq = ilqr_config.simulate_fwd_dyn_seq(ctrl_state.seed_x_vec,ctrl_state.seed_u_seq)
-
-    # calculate initial cost
-    cost_float, cost_seq, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))
-    # ensure seed_cost is initialized with larger differential than convergence bound
-
-    prev_cost_float = cost_float + (1 + ilqr_config.converge_crit)
-    # while within iteration limit and while cost has not converged    
-    return x_seq, cost_float, prev_cost_float, cost_seq
-
-def run_ilqr_controller(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState):
-    local_ctrl_state = copy.deepcopy(ctrl_state)
-    converge_measure = ilqr_config.converge_crit + 1
+def run_ilqr_controller(ilqr_config:ilqrConfigStruct, init_ctrl_state:ilqrControllerState)->ilqrControllerState:
+    ctrl_state = copy.deepcopy(init_ctrl_state)
+    u_seq = init_ctrl_state.init_u_seq
+    x_seq = init_ctrl_state.init_x_seq
+    cost_float, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))    
     converge_reached = False
-    while (local_ctrl_state.iter_int < ilqr_config.max_iter) and (converge_reached is False):
-        # retain previous cost value for convergence check
-        local_ctrl_state.iter_int += 1
-        local_ctrl_state.prev_cost_float = local_ctrl_state.cost_float
-        # perform backwards pass to calculate gains and expected value function change
-        local_ctrl_state.K_seq, local_ctrl_state.d_seq, local_ctrl_state.Del_V_vec_seq, local_ctrl_state.ro_reg = calculate_backwards_pass(ilqr_config, local_ctrl_state)
-        # perform forwards pass to calculate new trajectory and trajectory cost
-        local_ctrl_state.x_seq, local_ctrl_state.u_seq, local_ctrl_state.cost_float, local_ctrl_state.lsf_float, local_ctrl_state.ro_reg_change_bool = calculate_forwards_pass(ilqr_config, 
-                                                                                                                                                                                local_ctrl_state)
-        # log iteration output
-        if ilqr_config.log_ctrl_history is True and local_ctrl_state.ro_reg_change_bool is False:
-            local_ctrl_state.log_ctrl_state_to_history()                  
-        # calculate convergence measures
+    ro_reg = ilqr_config.ro_reg_start
+    reg_inc_bool = False
+    iter_int = 1
+    while (iter_int < ilqr_config.max_iter) and (converge_reached is False):
+        prev_cost_float = cost_float
+        K_seq, d_seq, d_v_seq, ro_reg                     = calculate_backwards_pass(ilqr_config,x_seq,u_seq,ro_reg,reg_inc_bool)
+        x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_forwards_pass(ilqr_config,x_seq,u_seq,K_seq,d_seq,d_v_seq,cost_float)              
+        converge_measure, converge_reached, avg_ff_gain   = analyze_ilqr_pass_for_convergence(ilqr_config, iter_int, reg_inc_bool, d_seq, 
+                                                                                              u_seq, cost_float, prev_cost_float, lsf_float)
+        print_ctrl_progress(u_seq, ro_reg, reg_inc_bool, iter_int, lsf_float, converge_measure, avg_ff_gain)
 
-        avg_ff_gain = calculate_avg_ff_gains(local_ctrl_state.d_seq, local_ctrl_state.u_seq)
-        converge_measure = jnp.abs((local_ctrl_state.prev_cost_float - local_ctrl_state.cost_float)/ctrl_state.cost_float).item()
+        if converge_reached is True:
+            _, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, x_seq, u_seq)
+            ctrl_state.set_ctrl_state(iter_int,x_seq,u_seq, K_seq, d_seq, d_v_seq, cost_seq, x_cost_seq, u_cost_seq, cost_float)
+        elif ilqr_config.log_ctrl_history is True and reg_inc_bool is False:
+            _, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, x_seq, u_seq)
+            ctrl_state.set_ctrl_state(iter_int,x_seq,u_seq, K_seq, d_seq, d_v_seq, cost_seq, x_cost_seq, u_cost_seq, cost_float)
+            ctrl_state.log_ctrl_state_to_history()    
+        iter_int += 1
+    return ctrl_state
+
+def print_ctrl_progress(u_seq, ro_reg, reg_inc_bool, iter_int, lsf_float, converge_measure, avg_ff_gain):
+    print('------------------')
+    print( 'iteration number    : ', iter_int)
+    print(f'converge_measure    : {converge_measure:.6f}')
+    print(f'max_control_effort  : {max(u_seq).item():.3f}')
+    print(f'ff_gain_avg_measure : {avg_ff_gain:.5f}')
+    print( 'interation lsf      : ', lsf_float)        
+    print( 'ro_reg_value        : ', ro_reg)
+    print( 'need to increase ro?: ', reg_inc_bool)
+
+def analyze_ilqr_pass_for_convergence(ilqr_config, iter_int, reg_inc_bool, d_seq, u_seq, cost_float, prev_cost_float, lsf_float):
+    avg_ff_gain = calculate_avg_ff_gains(d_seq, u_seq)
+    converge_measure = (jnp.abs((prev_cost_float - cost_float)/cost_float).item()) / lsf_float
         # determine convergence criteria
-        converge_reached = determine_convergence(ilqr_config, local_ctrl_state, converge_measure, avg_ff_gain)
-        # print controller info
-        print('iteration number: ', local_ctrl_state.iter_int)
-        print('converge_measure: ', converge_measure)
-        print('max_control_effort: ', max(local_ctrl_state.u_seq))
-        print('ff_gain_avg_measure: ', avg_ff_gain)        
-        print('ro_reg_value: ', local_ctrl_state.ro_reg)
-        print('need to increase ro?: ', local_ctrl_state.ro_reg_change_bool)
-        local_ctrl_state.cost_float, local_ctrl_state.cost_seq, local_ctrl_state.x_cost_seq, local_ctrl_state.u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, 
-                                                                                                                                                        local_ctrl_state.x_seq, 
-                                                                                                                                                        local_ctrl_state.u_seq)
+    converge_reached = determine_convergence(ilqr_config, iter_int,reg_inc_bool, converge_measure, avg_ff_gain)
+    return converge_measure,converge_reached,avg_ff_gain
 
-
-    return local_ctrl_state
-
-def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState):
-#   du_optimal = argmin over delu of Q(delx,delu) = k + (K * delx)
-#   k = - inv(q_uu) * q_u
-#   K = - inv(q_uu) * q_ux
-#   V_N = l(x_N)
-#   Vxx = q_xx -       transpose(K) * q_uu * K
-#   Vx  = q_x  -       transpose(K) * q_uu * k
-#   DV  =      - 1/2 * transpose(k) * q_uu * k
-
-#   Requires Cost function defined for final and intermediate steps (either quadratic Q, Qf >= 0 and R > 0, or function that is taylor expandable to 2nd order pos def?)
-#   Requires paired vectors of state and control, along with associated linearized dynamics at each step (x_lin_k, u_lin_k, Ad_k, Bd_k)
-#   Requires paired vectors of desired state and control (x_des, u_des), used to create the relative residuals for each time step:
-#       -- x_bar   = x       -  x_lin_k
-#       -- x_Del_k = x_des_k -  x_lin_k
-#       (x - x_des_k) = (x_bar - x_del_k)   : Residual between the current state and the desired state equals the relative vector create by the difference between
-#                                             the local linearized coordinate and the local description of the state residual
-#   Form of minimum cost is quadratic: Jstar(x,t) = x^T @ Sxx(t) @ x + 2 * x^T @ sx(t) + s0(t)
-#   Form of optimal control is u_star_k = u_des_k  - inv(R) @ B^T @[Sxx_k @ x_bar_k + sx_k] where x_bar_k = x_k - x_lin_k
-    # Ad_seq, Bd_seq = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)    
-    dyn_lin_approx_seq   = ilqr_config.linearize_dyn_seq(ctrl_state.x_seq, ctrl_state.u_seq)
-    cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(ctrl_state.x_seq, ctrl_state.u_seq)
-    if ctrl_state.ro_reg_change_bool is True:
-        ro_reg = ctrl_state.ro_reg + ilqr_config.ro_reg_change
+def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, x_seq:jnp.ndarray, u_seq:jnp.ndarray, ro_reg:float, ro_reg_increase_bool:bool):
+    dyn_lin_approx_seq   = ilqr_config.linearize_dyn_seq(x_seq, u_seq)
+    cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(x_seq, u_seq)
+    if ro_reg_increase_bool is True:
+        ro_reg += ilqr_config.ro_reg_change
     else:
         ro_reg = ilqr_config.ro_reg_start
     K_seq, d_seq, Del_V_vec_seq, ro_reg = sweep_back_pass(dyn_lin_approx_seq, cost_quad_approx_seq, ro_reg, ilqr_config.ro_reg_change)
@@ -296,8 +283,7 @@ def calculate_backwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrContro
 
 def sweep_back_pass(dyn_lin_approx_seqs:Tuple[jnp.ndarray, jnp.ndarray], 
                     cost_quad_approx_seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray], 
-                    ro_reg:float, 
-                    ro_reg_change_float:float):
+                    ro_reg:float, ro_reg_inc_val_float:float):
     # Grab final cost-to-go approximation
     p_N, _, P_N, _, _    = tuple(seq[-1] for seq in cost_quad_approx_seqs)
     # Flip dynamics linearizations for backwards pass
@@ -312,7 +298,7 @@ def sweep_back_pass(dyn_lin_approx_seqs:Tuple[jnp.ndarray, jnp.ndarray],
         scan_func_curried = lambda carry, seqs : sweep_back_pass_scan_func(ro_reg, carry, seqs)
         (_,_,is_pos_def_bool), (K_seq, d_seq, Del_V_vec_seq) = lax.scan(scan_func_curried, carry_init, scan_seqs)
         if is_pos_def_bool is False:
-            ro_reg += ro_reg_change_float
+            ro_reg += ro_reg_inc_val_float
             #unflip the vectors to match forward time
     return jnp.flip(K_seq, axis=0), jnp.flip(d_seq, axis=0), jnp.flip(Del_V_vec_seq, axis=0), ro_reg    
 
@@ -345,50 +331,65 @@ def set_back_pass_scan_output_to_null_arrays(dyn_lin_k:Tuple[jnp.ndarray, jnp.nd
         D_V_null = jnp.zeros((2,))
         return K_null, d_null, D_V_null
 
-def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState):
-    '''lsf is the line serach factor, scaling the size of the newton step'''
-    #initialize forward pass state vec, control_vec, cost and cost seqs, line search factor, armijo parameter bool
-    x_seq_fp,u_seq_fp,cost_float_fp, cost_seq_fp,x_cost_seq_fp,u_cost_seq_fp,in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
-                                                                                           ctrl_state.seed_x_vec, ctrl_state.len_seq)
+def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, x_seq_prev:jnp.ndarray, u_seq_prev:jnp.ndarray, 
+                                                          K_seq:jnp.ndarray, d_seq:jnp.ndarray, 
+                                                          d_v_seq:jnp.ndarray, cost_float_prev:float)-> Tuple[jnp.ndarray, jnp.ndarray, float, float,bool]:
     lsf = 1.0
-    line_search_scale_param = ilqr_config.ls_scale_alpha_param
     iter_count = 0
-    ro_reg_change_bool = False
+    reg_inc_bool = False
+    in_bounds_bool = False
     while not in_bounds_bool and (iter_count < ilqr_config.fp_max_iter):
-        if ilqr_config.mj_ctrl is True:
-            for k in range(ctrl_state.len_seq-1):
-                # calculate updated control value
-                u_seq_fp = u_seq_fp.at[k].set(calculate_u_k_new(ctrl_state.u_seq[k], 
-                                                                ctrl_state.x_seq[k],
-                                                                x_seq_fp[k], 
-                                                                ctrl_state.K_seq[k], 
-                                                                ctrl_state.d_seq[k], 
-                                                                lsf))
-                x_seq_fp = x_seq_fp.at[k+1].set(ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k]))
-            # shift sequences for cost calculation wrt desired trajectories
-            # calculate new trajectory cost    
-            cost_float_fp, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq_fp), jnp.array(u_seq_fp))
-        else:
-            x_seq_fp, u_seq_fp, cost_float_fp = ilqr_config.simulate_forward_pass(ctrl_state.x_seq, ctrl_state.u_seq, ctrl_state.K_seq, ctrl_state.d_seq, lsf)
-
-        # calculate the ratio between the expected cost decrease and actual cost decrease
-        cost_decrease_ratio = calculate_cost_decrease_ratio(ctrl_state.cost_float, cost_float_fp, ctrl_state.Del_V_vec_seq, lsf) 
+        x_seq_fp, u_seq_fp, cost_float_fp = ilqr_config.simulate_forward_pass(x_seq_prev, u_seq_prev, K_seq, d_seq, lsf)
+        cost_decrease_ratio = calculate_cost_decrease_ratio(cost_float_prev, cost_float_fp, d_v_seq, lsf) 
         in_bounds_bool = ilqr_config.analyze_cost_dec(cost_decrease_ratio)
-
         if in_bounds_bool:
             break    
         elif (iter_count == ilqr_config.fp_max_iter-1):
-            iter_count     += 1  
-            x_seq_fp   = ctrl_state.x_seq
-            u_seq_fp   = ctrl_state.u_seq
-            cost_float_fp  = ctrl_state.cost_float
-            ro_reg_change_bool = True
+            x_seq_fp      = x_seq_prev
+            u_seq_fp      = u_seq_prev
+            cost_float_fp = cost_float_prev
+            reg_inc_bool  = True 
         else:        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
-            x_seq_fp,u_seq_fp,cost_float_fp, cost_seq_fp,x_cost_seq_fp,u_cost_seq_fp, in_bounds_bool = initialize_forwards_pass(ctrl_state.x_len, ctrl_state.u_len, 
-                                                                                           ctrl_state.seed_x_vec, ctrl_state.len_seq)
-            lsf *= line_search_scale_param
+            lsf          *= ilqr_config.ls_scale_alpha_param
+        iter_count   += 1
+    return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
+
+def calculate_forwards_pass_mj(ilqr_config:ilqrConfigStruct, x_seq_prev:jnp.ndarray, u_seq_prev:jnp.ndarray, 
+                                                          K_seq:jnp.ndarray, d_seq:jnp.ndarray, 
+                                                          d_v_seq:jnp.ndarray, cost_float_prev:float):
+    '''lsf is the line search factor, scaling the size of the newton step'''
+    #initialize forward pass state vec, control_vec, cost and cost seqs, line search factor, armijo parameter bool
+    x_seq_fp,u_seq_fp,cost_float_fp,in_bounds_bool = initialize_forwards_pass(x_seq_prev.shape[1], u_seq_prev.shape[1], 
+                                                                              x_seq_prev[0], x_seq_prev.shape[0])
+    lsf = 1.0
+    iter_count = 0
+    reg_inc_bool = False
+    while not in_bounds_bool and (iter_count < ilqr_config.fp_max_iter):
+        for k in range(x_seq_prev.shape[0]-1):
+            u_seq_fp = u_seq_fp.at[k].set(calculate_u_k_new(u_seq_prev[k], 
+                                                            x_seq_prev[k],
+                                                            x_seq_fp[k], 
+                                                            K_seq[k], 
+                                                            d_seq[k], 
+                                                            lsf))
+            x_seq_fp = x_seq_fp.at[k+1].set(ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k])) 
+            cost_float_fp, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq_fp), jnp.array(u_seq_fp))
+        cost_decrease_ratio = calculate_cost_decrease_ratio(cost_float_prev, cost_float_fp, d_v_seq, lsf) 
+        in_bounds_bool = ilqr_config.analyze_cost_dec(cost_decrease_ratio)
+        if in_bounds_bool:
+            break    
+        elif (iter_count == ilqr_config.fp_max_iter-1):
+            iter_count        += 1  
+            x_seq_fp           = x_seq_prev
+            u_seq_fp           = u_seq_prev
+            cost_float_fp      = cost_float_prev
+            reg_inc_bool = True
+        else:        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
+            x_seq_fp,u_seq_fp,cost_float_fp,in_bounds_bool = initialize_forwards_pass(x_seq_prev.shape[1], u_seq_prev.shape[1], 
+                                                                                    x_seq_prev[0], x_seq_prev.shape[0])
+            lsf        *= ilqr_config.ls_scale_alpha_param
             iter_count += 1
-    return x_seq_fp, u_seq_fp, cost_float_fp, lsf, ro_reg_change_bool
+    return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
 
 def simulate_forward_pass(fp_scan_func:Callable[[float, 
                                                  Tuple[int, jnp.ndarray,jnp.ndarray], 
@@ -438,11 +439,8 @@ def initialize_forwards_pass(x_len:int, u_len:int, seed_state_vec:jnp.ndarray, l
     x_seq_fp        = jnp.zeros([(len_seq),  x_len])
     x_seq_fp.at[0].set(seed_state_vec)
     cost_float_fp   = 0.0
-    cost_seq_fp     = jnp.zeros([len_seq])
-    x_cost_seq_fp   = jnp.zeros([len_seq])   
-    u_cost_seq_fp   = jnp.zeros([len_seq]) 
     in_bounds_bool  = False
-    return x_seq_fp, control_seq_fp, cost_float_fp, cost_seq_fp, x_cost_seq_fp,u_cost_seq_fp,in_bounds_bool
+    return x_seq_fp, control_seq_fp, cost_float_fp, in_bounds_bool
 
 def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.ndarray],
                                      cost_quad_approx_k: Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray], 
@@ -537,6 +535,10 @@ def calculate_expected_cost_decrease(Del_V_vec_seq:jnp.ndarray, lsf:float) -> fl
     Del_V_sum = jnp.sum((lsf * Del_V_vec_seq[:,0]) + (lsf**2 * Del_V_vec_seq[:,1]))
     return Del_V_sum.item()    
 
+def calculate_expected_cost_decrease_step(Del_V_vec:jnp.ndarray, lsf:float) -> float:
+    Del_V_sum = (lsf * Del_V_vec[0]) + (lsf**2 * Del_V_vec[1])
+    return Del_V_sum.item() 
+
 def analyze_cost_decrease(cost_decrease_ratio:float, cost_ratio_bounds:Tuple[float, float]) -> bool:
     if (cost_decrease_ratio > cost_ratio_bounds[0]) and (cost_decrease_ratio < cost_ratio_bounds[1]):
         return True
@@ -566,14 +568,14 @@ def simulate_ilqr_output(sim_dyn_func_step:Callable[[jnp.ndarray,jnp.ndarray], j
         x_sim_seq = x_sim_seq.at[k+1].set(sim_dyn_func_step(x_sim_seq[k], u_sim_seq[k]))
     return x_sim_seq,u_sim_seq
 
-def determine_convergence(ilqr_config:ilqrConfigStruct, ctrl_state:ilqrControllerState, converge_measure:float, avg_ff_gain:float) -> bool:
+def determine_convergence(ilqr_config:ilqrConfigStruct, iter_int:int, reg_inc_bool:bool, converge_measure:float, avg_ff_gain:float) -> bool:
     converge_reached = False
-    if (converge_measure < ilqr_config.converge_crit) and (ctrl_state.ro_reg_change_bool is False):
+    if (converge_measure < ilqr_config.converge_crit) and (reg_inc_bool is False):
         converge_reached = True
         print('controller converged')
     elif avg_ff_gain < ilqr_config.ff_gain_tol:
         converge_reached = True    
         print('controller ff gains below convergence tolerance')            
-    elif ctrl_state.iter_int == ilqr_config.max_iter:  
+    elif iter_int == ilqr_config.max_iter:  
         print('controller reached iteration limit')
     return converge_reached
