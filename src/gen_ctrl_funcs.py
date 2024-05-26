@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from jax import lax
 import numpy as np
 from scipy.signal import StateSpace
-
+import scipy
 import time
 
 from numpy import typing as npt
