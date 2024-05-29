@@ -5,6 +5,8 @@
     "python.analysis.typeCheckingMode": "basic",
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": false,
+    "python.formatting.provider": "autopep8",
+    "editor.formatOnSave": true,
     "python.testing.unittestArgs": [
         "-v",
         "-s",
@@ -12,7 +14,6 @@
         "-p",
         "test_*.py"
     ],
-
     // "python.analysis.extraPaths": ["${workspaceFolder}/src;${workspaceFolder}/scripts"],
     // "terminal.integrated.env.windows": {
     //     "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests;${workspaceFolder}/scripts"

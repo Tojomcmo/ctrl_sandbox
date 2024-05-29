@@ -5,6 +5,7 @@ import numpy as np
 
 import mujoco_funcs as mj_funcs
 
+
 class shared_mjcf_models:
     def __init__(self) -> None:
         pass
@@ -58,9 +59,9 @@ class shared_mjcf_models:
                       </mujoco>
                                     """
         return mjcf_pend_model
-    
+
     def create_acrobot(self):
-        acrobot_model = '''
+        acrobot_model = """
 <mujoco>
   <option timestep="0.05" integrator="RK4">
     <flag sensornoise="enable" contact="disable" energy="enable"/>
@@ -90,20 +91,22 @@ class shared_mjcf_models:
     <motor name="torque_elbow" joint="elbow" gear="1" ctrlrange="-1000 1000" ctrllimited="true"/>
   </actuator>
 </mujoco>
-      '''
-        return acrobot_model    
+      """
+        return acrobot_model
+
 
 class fwd_sim_mj_w_ctrl_tests(unittest.TestCase):
     def test_function_recieves_valid_system(self):
         models = shared_mjcf_models()
-        model, _, data = mj_funcs.create_mujoco_model(models.create_MJCF_single_pend(), time_step=0.1)
+        model, _, data = mj_funcs.create_mujoco_model(
+            models.create_MJCF_single_pend(), time_step=0.1
+        )
         model.opt.timestep = 0.1
-        x_init = np.array([[0.0],[0.0]])
-        u_seq  = np.ones((3,1,1))
+        x_init = np.array([[0.0], [0.0]])
+        u_seq = np.ones((3, 1, 1))
         x_seq = mj_funcs.fwd_sim_mj_w_ctrl(model, data, x_init, u_seq)
-        self.assertEqual(True, True)        
+        self.assertEqual(True, True)
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

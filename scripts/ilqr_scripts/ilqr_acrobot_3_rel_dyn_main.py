@@ -106,9 +106,6 @@ if __name__ == "__main__":
    ilqr_config.create_curried_funcs()   
 
 
-   # end code profiling
-   profiler.disable()
-   profiler.dump_stats('profiler_out.stats')
    #----- Run iLQR algorithm -----#
    controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq)
    ctrl_out = ilqr.run_ilqr_controller(ilqr_config, controller_state)
@@ -139,7 +136,7 @@ if __name__ == "__main__":
    #------- plot simulation and controller outputs ------#
    print("animating simulation output...")
    fig = plt.figure(figsize=(16,8))
-   gs =  gridspec.GridSpec(2, 2)
+   gs  = gridspec.GridSpec(2, 2)
    ax1 = fig.add_subplot(gs[:, 0]) # row 0, col 0
    ax2 = fig.add_subplot(gs[0, 1]) # row 0, col 1
    ax3 = fig.add_subplot(gs[1, 1]) # row 1, span all columns

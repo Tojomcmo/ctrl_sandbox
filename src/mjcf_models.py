@@ -1,4 +1,3 @@
-
 def create_MJCF_single_pend_m_d_mod(mass, damping, length):
     mjcf_pend_model = """
                       <mujoco>
@@ -26,7 +25,7 @@ def create_MJCF_single_pend_m_d_mod(mass, damping, length):
 
 
 def create_MJCF_pm_pend_dev():
-    mjcf_pend_model ="""<mujoco>
+    mjcf_pend_model = """<mujoco>
                           <option gravity="0 0 -9.81" integrator="RK4">
                               <flag sensornoise="disable"/>
                           </option>
@@ -51,7 +50,7 @@ def create_MJCF_pm_pend_dev():
 
 
 def create_MJCF_single_pend_dev():
-    mjcf_pend_model ="""<mujoco>
+    mjcf_pend_model = """<mujoco>
                           <option gravity="0 0 -9.81" integrator="RK4">
                               <flag sensornoise="disable"/>
                           </option>
@@ -74,10 +73,11 @@ def create_MJCF_single_pend_dev():
                                         """
     return mjcf_pend_model
 
-                            #   <body name="base" pos="0 0 3">
-                            #     <!-- First pendulum arm -->
+    #   <body name="base" pos="0 0 3">
+    #     <!-- First pendulum arm -->
 
-class mjcf_dpend():
+
+class mjcf_dpend:
     def __init__(self, shoulder_act, elbow_act) -> None:
         self.shoulder_act = shoulder_act
         self.elbow_act = elbow_act
@@ -91,7 +91,7 @@ class mjcf_dpend():
             mjcf_model = self.create_MJCF_double_pend_elbow_dev()
         else:
             raise ValueError("invalid input to mjcf_dpend")
-        return  mjcf_model          
+        return mjcf_model
 
     def create_MJCF_double_pend_fa_dev(self):
         mjcf_pend_model = """<mujoco>
@@ -182,7 +182,7 @@ class mjcf_dpend():
                                             """
         return mjcf_pend_model
 
-        # <motor joint="joint2" name="torque2" gear="1" ctrllimited="true" ctrlrange="-1000 1000"/>    
+        # <motor joint="joint2" name="torque2" gear="1" ctrllimited="true" ctrlrange="-1000 1000"/>
 
     def create_MJCF_double_pend_elbow_dev(self):
         mjcf_pend_model = """<mujoco>
