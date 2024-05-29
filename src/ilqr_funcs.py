@@ -426,6 +426,14 @@ def calculate_backwards_pass(
     ro_reg: float,
     ro_reg_increase_bool: bool,
 ):
+    """
+    **Calculate iLQR backwards pass**
+    - linearize the discrete dynamics at each point along the trajectory
+    - quadratically expand the cost function at each point along the trajectory
+    - backwards calculate the Gauss-Newton minimization steps along the trajectory using the approximated time-varying LQR problem structure
+    - return the update feedforward, feedback, and expected value function reduction sequences,
+    along with the reqularization value used in the backwards pass.
+    """
     dyn_lin_approx_seq = ilqr_config.linearize_dyn_seq(x_seq, u_seq)
     cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(x_seq, u_seq)
     if ro_reg_increase_bool is True:
@@ -446,6 +454,14 @@ def sweep_back_pass(
     ro_reg: float,
     ro_reg_inc_val_float: float,
 ):
+    """
+    **Calculate backwards pass Gauss-Newton minimization step sequence values** \n
+    This function uses the supplied linearized dynamics sequence and quadratically approximated cost function sequence to
+    solve a time-varying LQR problem. The function calculates a sequence of feedforward control values
+    and feedback state-error gains that minimize the projected cost of the approximated linear quadratic problem.
+    These values are calculated through the backwards recursive bellman's relation of the locally approximated Q-function
+    (single-step state-action function).
+    """
     # Grab final cost-to-go approximation
     p_N, _, P_N, _, _ = tuple(seq[-1] for seq in cost_quad_approx_seqs)
     # Flip dynamics linearizations for backwards pass
