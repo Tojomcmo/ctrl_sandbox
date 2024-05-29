@@ -136,3 +136,6 @@ media_output/
 
 # mujogo files
 MUJOCO_LOG.txt
+
+#profiler data
+.stats

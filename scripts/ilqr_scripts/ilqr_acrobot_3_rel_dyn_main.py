@@ -14,8 +14,14 @@ import visualize_dyn_funcs as vis_dyn
 import mujoco_funcs as mj_funcs
 import mjcf_models as mjcf
 import simulate_funcs as sim
+import cProfile
+import pstats
+
 
 if __name__ == "__main__":
+   #start profiling
+   profiler = cProfile.Profile()
+   profiler.enable()
    jax.config.update("jax_enable_x64", True)
    #------- Define controller configuration -------#
    save_ani_bool = False
@@ -27,8 +33,8 @@ if __name__ == "__main__":
    len_seq    = 500
    num_states = 4
    num_controls = 1
-   shoulder_act = True 
-   elbow_act = False
+   shoulder_act = False 
+   elbow_act = True
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   , 0  ],
                        [0   ,0   ,0.1   ,0  ],
@@ -99,6 +105,10 @@ if __name__ == "__main__":
    ilqr_config.config_cost_func(cost_func_obj.cost_func_quad_state_and_control_scan_compatible)
    ilqr_config.create_curried_funcs()   
 
+
+   # end code profiling
+   profiler.disable()
+   profiler.dump_stats('profiler_out.stats')
    #----- Run iLQR algorithm -----#
    controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq)
    ctrl_out = ilqr.run_ilqr_controller(ilqr_config, controller_state)

@@ -149,26 +149,26 @@ class ilqrControllerState:
         self.ro_reg_change_bool = False    
         
         # dependent parameter population
-        self.u_seq         = self.init_u_seq  
-        self.len_seq       = self.get_len_seq()
-        self.x_len         = self.get_num_states()
-        self.u_len         = self.get_num_controls() 
-        self.time_seq      = jnp.arange(self.len_seq) * ilqr_config.time_step  
-        self.init_x_seq    = self.get_init_x_seq(ilqr_config.simulate_fwd_dyn_seq) 
-        self.u_seq         = self.init_u_seq 
-        self.x_seq         = self.init_x_seq
+        self.u_seq      = self.init_u_seq  
+        self.len_seq    = self.get_len_seq()
+        self.x_len      = self.get_num_states()
+        self.u_len      = self.get_num_controls() 
+        self.time_seq   = jnp.arange(self.len_seq) * ilqr_config.time_step  
+        self.init_x_seq = self.get_init_x_seq(ilqr_config.simulate_fwd_dyn_seq) 
+        self.u_seq      = self.init_u_seq 
+        self.x_seq      = self.init_x_seq
         self.initialize_ctrl_state_zeros()
 
         if ilqr_config.log_ctrl_history is True:
-            self.u_seq_history:list         = []
-            self.x_seq_history:list         = []
-            self.K_seq_history:list         = []
-            self.d_seq_history:list         = []
-            self.d_v_seq_history:list       = []
-            self.cost_seq_history:list      = []
-            self.x_cost_seq_history:list    = []                  
-            self.u_cost_seq_history:list    = []
-            self.cost_float_history:list    = []
+            self.u_seq_history:list      = []
+            self.x_seq_history:list      = []
+            self.K_seq_history:list      = []
+            self.d_seq_history:list      = []
+            self.d_v_seq_history:list    = []
+            self.cost_seq_history:list   = []
+            self.x_cost_seq_history:list = []                  
+            self.u_cost_seq_history:list = []
+            self.cost_float_history:list = []
 
     def validate_input_data(self,ilqr_config:ilqrConfigStruct):
         if self.get_len_seq() != ilqr_config.len_seq:
@@ -192,26 +192,26 @@ class ilqrControllerState:
         return dyn_seq_func(self.init_x_vec, self.init_u_seq)
 
     def initialize_ctrl_state_zeros(self):
-        self.K_seq          = jnp.zeros([self.len_seq-1, self.u_len, self.x_len])
-        self.d_seq          = jnp.zeros([self.len_seq-1, self.u_len,          1])
-        self.d_v_seq        = jnp.zeros([self.len_seq-1, 2])
-        self.cost_seq       = jnp.zeros([self.len_seq])
-        self.x_cost_seq     = jnp.zeros([self.len_seq])
-        self.u_cost_seq     = jnp.zeros([self.len_seq])   
+        self.K_seq      = jnp.zeros([self.len_seq-1, self.u_len, self.x_len])
+        self.d_seq      = jnp.zeros([self.len_seq-1, self.u_len,          1])
+        self.d_v_seq    = jnp.zeros([self.len_seq-1, 2])
+        self.cost_seq   = jnp.zeros([self.len_seq])
+        self.x_cost_seq = jnp.zeros([self.len_seq])
+        self.u_cost_seq = jnp.zeros([self.len_seq])   
 
     def set_ctrl_state(self,iter_int:int, x_seq:jnp.ndarray, u_seq:jnp.ndarray, K_seq:jnp.ndarray, 
                             d_seq:jnp.ndarray, d_v_seq:jnp.ndarray, cost_seq:jnp.ndarray, 
                             x_cost_seq:jnp.ndarray, u_cost_seq:jnp.ndarray, cost_float:float):
-        self.iter_int       = iter_int
-        self.x_seq          = x_seq
-        self.u_seq          = u_seq
-        self.K_seq          = K_seq
-        self.d_seq          = d_seq
-        self.d_v_seq        = d_v_seq
-        self.cost_seq       = cost_seq
-        self.x_cost_seq     = x_cost_seq
-        self.u_cost_seq     = u_cost_seq
-        self.cost_float     = cost_float
+        self.iter_int   = iter_int
+        self.x_seq      = x_seq
+        self.u_seq      = u_seq
+        self.K_seq      = K_seq
+        self.d_seq      = d_seq
+        self.d_v_seq    = d_v_seq
+        self.cost_seq   = cost_seq
+        self.x_cost_seq = x_cost_seq
+        self.u_cost_seq = u_cost_seq
+        self.cost_float = cost_float
 
     def log_ctrl_state_to_history(self):
         self.u_seq_history.append(self.u_seq)
@@ -226,14 +226,14 @@ class ilqrControllerState:
 
 
 def run_ilqr_controller(ilqr_config:ilqrConfigStruct, init_ctrl_state:ilqrControllerState)->ilqrControllerState:
-    ctrl_state = copy.deepcopy(init_ctrl_state)
-    u_seq = init_ctrl_state.init_u_seq
-    x_seq = init_ctrl_state.init_x_seq
+    ctrl_state          = copy.deepcopy(init_ctrl_state)
+    u_seq               = init_ctrl_state.init_u_seq
+    x_seq               = init_ctrl_state.init_x_seq
     cost_float, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq) 
-    converge_reached = False
-    ro_reg = ilqr_config.ro_reg_start
-    reg_inc_bool = False
-    iter_int = 1
+    converge_reached    = False
+    ro_reg              = ilqr_config.ro_reg_start
+    reg_inc_bool        = False
+    iter_int            = 1
     while (iter_int < ilqr_config.max_iter) and (converge_reached is False):
         prev_cost_float = cost_float
         K_seq, d_seq, d_v_seq, ro_reg                     = calculate_backwards_pass(ilqr_config,x_seq,u_seq,ro_reg,reg_inc_bool)
@@ -242,10 +242,10 @@ def run_ilqr_controller(ilqr_config:ilqrConfigStruct, init_ctrl_state:ilqrContro
                                                                                               u_seq, cost_float, prev_cost_float, lsf_float)
         print_ctrl_progress(u_seq, ro_reg, reg_inc_bool, iter_int, lsf_float, converge_measure, avg_ff_gain)
         if converge_reached is True:
-            _, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, x_seq, u_seq)
+            _, cost_seq, x_cost_seq, u_cost_seq = ilqr_config.calculate_total_cost(x_seq, u_seq) 
             ctrl_state.set_ctrl_state(iter_int,x_seq,u_seq, K_seq, d_seq, d_v_seq, cost_seq, x_cost_seq, u_cost_seq, cost_float)
         elif ilqr_config.log_ctrl_history is True and reg_inc_bool is False:
-            _, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, x_seq, u_seq)
+            _, cost_seq, x_cost_seq, u_cost_seq = ilqr_config.calculate_total_cost(x_seq, u_seq) 
             ctrl_state.set_ctrl_state(iter_int,x_seq,u_seq, K_seq, d_seq, d_v_seq, cost_seq, x_cost_seq, u_cost_seq, cost_float)
             ctrl_state.log_ctrl_state_to_history()    
         iter_int += 1
@@ -288,8 +288,8 @@ def sweep_back_pass(dyn_lin_approx_seqs:Tuple[jnp.ndarray, jnp.ndarray],
     # remove final step and flip cost approximations for backwards pass
     l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev = tuple(jnp.flip(seq[:-1], axis=0) for seq in cost_quad_approx_seqs)
     # create tuples for lax scan function
-    scan_seqs  = ((A_lin_rev, B_lin_rev), (l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev))
-    is_pos_def_bool  = False
+    scan_seqs       = ((A_lin_rev, B_lin_rev), (l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev))
+    is_pos_def_bool = False
     while is_pos_def_bool == False:
         carry_init = (ro_reg, P_N, p_N, True)
         (_,_,_,is_pos_def_bool), (K_seq, d_seq, Del_V_vec_seq) = lax.scan(sweep_back_pass_scan_func, carry_init, scan_seqs)
@@ -304,7 +304,7 @@ def sweep_back_pass_scan_func(carry:Tuple[float, jnp.ndarray, jnp.ndarray, bool]
                             Tuple[float, jnp.ndarray,jnp.ndarray, bool],
                             Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]:
     ro_reg, P_kp1, p_kp1, is_pos_def_bool = carry
-    dyn_lin_k, cost_quad_approx_k = seqs
+    dyn_lin_k, cost_quad_approx_k         = seqs
     if is_pos_def_bool is False:
         return (ro_reg,P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
     q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
@@ -346,7 +346,7 @@ def calculate_forwards_pass(ilqr_config:ilqrConfigStruct, x_seq_prev:jnp.ndarray
             reg_inc_bool  = True 
         else:        # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
             lsf          *= ilqr_config.ls_scale_alpha_param
-        iter_count   += 1
+        iter_count += 1
     return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
 
 def calculate_forwards_pass_mj(ilqr_config:ilqrConfigStruct, x_seq_prev:jnp.ndarray, u_seq_prev:jnp.ndarray, 
