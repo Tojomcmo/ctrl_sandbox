@@ -500,25 +500,6 @@ class taylor_expand_cost_seq_tests(unittest.TestCase):
         numpy.testing.assert_allclose(l_uu[1], l_uu_expected,rtol=1e-7, atol=1e-7)
         numpy.testing.assert_allclose(l_ux[1], l_ux_expected,rtol=1e-7, atol=1e-7)            
 
-
-class prep_xu_vecs_for_diff_tests(unittest.TestCase):
-    def test_accepts_valid_np_col_inputs(self):
-        #create test conditions
-        x_k = np.array([1,2,3])
-        u_k = np.array([4,5])
-        #test function
-        xu_k_jax, xu_k_len, x_k_len = gen_ctrl.prep_xu_vec_for_diff(x_k, u_k)
-        # create expected output
-        xu_k_jax_expected = jnp.array([1,2,3,4,5])
-        xu_k_len_expected = 5
-        x_k_len_expected  = 3
-        #compare outputs
-        self.assertEqual(jnp.shape(xu_k_jax), (5,))
-        self.assertEqual(xu_k_jax.tolist(), xu_k_jax_expected.tolist())
-        self.assertEqual(xu_k_len, xu_k_len_expected)
-        self.assertEqual(x_k_len, x_k_len_expected)
-
-
 class prep_cost_func_for_diff_tests(unittest.TestCase):
     def cost_func(self, vec_1:jnp.ndarray, vec_2:jnp.ndarray, input_int:int): 
         cost_val_1 = jnp.sum(vec_1)

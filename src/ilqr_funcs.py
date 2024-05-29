@@ -20,9 +20,9 @@ import cost_functions as cost
 import dyn_functions as dyn
 
 class ilqrConfigStruct:
-    def __init__(self, num_states:int, num_controls:int, len_seq:int, time_step:float)-> None:  
-        self.num_states:int             = num_states
-        self.num_controls:int           = num_controls
+    def __init__(self, x_len:int, u_len:int, len_seq:int, time_step:float)-> None:  
+        self.x_len:int                  = x_len
+        self.u_len:int                  = u_len
         self.len_seq:int                = len_seq
         self.time_step:float            = time_step
         self.max_iter:int               = 20
@@ -44,11 +44,16 @@ class ilqrConfigStruct:
         This function receives the proposed cost function and parameters for the cost function, and generates
         The specific cost function for the controller to use with curried inputs
         ''' 
-        # self.cost_func_for_calc = gen_ctrl.prep_cost_func_for_calc(cost_func_calc)
+        # store different forms of cost function requred
         self.cost_func_verbose  = cost_func
         self.cost_func_float    = gen_ctrl.prep_cost_func_for_diff(cost_func)
-        self.quad_exp_cost_seq  = lambda x_seq, u_seq: gen_ctrl.taylor_expand_cost_seq(self.cost_func_float,
-                                                                                        x_seq, u_seq)
+        # create taylor expansion sequence function
+        cost_exp_scan_fun = gen_ctrl._curry_cost_for_exp_scan_func(self.cost_func_float,self.x_len)
+        self.quad_exp_cost_seq  = lambda x_seq, u_seq : gen_ctrl.taylor_expand_cost_seq_pre_decorated(cost_exp_scan_fun, x_seq, u_seq)
+        # create cost calculation sequence function
+        cost_calc_scan_func     = gen_ctrl._curry_cost_for_calc_scan_func(self.cost_func_verbose, self.x_len)
+        self.calculate_total_cost = lambda x_seq, u_seq : gen_ctrl.calculate_total_cost_pre_decorated(cost_calc_scan_func, x_seq, u_seq)
+        # announce completion of cost configuration
         self.is_cost_configured = True
 
     def config_for_dyn_func(self,
@@ -111,18 +116,17 @@ class ilqrConfigStruct:
             [jnp.ndarray, jnp.ndarray], 
             jnp.ndarray] = lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
 
+        sim_dyn_scan_func = gen_ctrl._curry_dyn_for_sim_scan_func(self.discrete_dyn_func)
         self.simulate_fwd_dyn_seq:Callable[
             [jnp.ndarray, jnp.ndarray], 
-            jnp.ndarray] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq(self.discrete_dyn_func, x_init, u_seq)
+            jnp.ndarray] = lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq_pre_decorated(sim_dyn_scan_func, x_init, u_seq)
         
-        scan_lin_dyn_func= gen_ctrl.curry_dyn_lin_scan_func(self.discrete_dyn_func,self.num_states)
-        
+        lin_dyn_scan_func =  gen_ctrl._curry_dyn_lin_scan_func(self.discrete_dyn_func,self.x_len)
         self.linearize_dyn_seq:Callable[
             [jnp.ndarray, jnp.ndarray], 
-            Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq(scan_lin_dyn_func,
-                                                                                                                        x_seq, u_seq) 
+            Tuple[jnp.ndarray, jnp.ndarray]] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq_pre_decorated(lin_dyn_scan_func,x_seq, u_seq) 
 
-        fp_scan_func = curry_forward_pass_scan_func(self.discrete_dyn_func, self.cost_func_float)
+        fp_scan_func = _curry_forward_pass_scan_func(self.discrete_dyn_func, self.cost_func_float)
         self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_float, x_seq, u_seq, K_seq,d_seq, lsf)
 
     def _curry_forward_pass_scan_func(self)->Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
@@ -175,9 +179,9 @@ class ilqrControllerState:
     def validate_input_data(self,ilqr_config:ilqrConfigStruct):
         if self.get_len_seq() != ilqr_config.len_seq:
             ValueError("sequences are the wrong length")
-        if self.get_num_states() != ilqr_config.num_states:
+        if self.get_num_states() != ilqr_config.x_len:
             ValueError("incorrect state vector length")
-        if self.get_num_controls() != ilqr_config.num_controls:
+        if self.get_num_controls() != ilqr_config.u_len:
             ValueError("incorrect control vector length")    
         # TODO create validation criteria
 
@@ -231,7 +235,7 @@ def run_ilqr_controller(ilqr_config:ilqrConfigStruct, init_ctrl_state:ilqrContro
     ctrl_state = copy.deepcopy(init_ctrl_state)
     u_seq = init_ctrl_state.init_u_seq
     x_seq = init_ctrl_state.init_x_seq
-    cost_float, _, _, _ = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, jnp.array(x_seq), jnp.array(ctrl_state.u_seq))    
+    cost_float, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq) 
     converge_reached = False
     ro_reg = ilqr_config.ro_reg_start
     reg_inc_bool = False
@@ -423,7 +427,7 @@ def forward_pass_scan_func(discrete_dyn_func,
     k += 1
     return (k, cost_float, x_kp1_new), (x_kp1_new, u_k_new)
 
-def curry_forward_pass_scan_func(discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray],jnp.ndarray], 
+def _curry_forward_pass_scan_func(discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray],jnp.ndarray], 
                                  cost_func_float:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray])->Callable[
                                      [float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
                                         Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:

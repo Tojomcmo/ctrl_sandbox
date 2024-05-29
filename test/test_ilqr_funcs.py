@@ -30,21 +30,21 @@ class shared_unit_test_data_and_funcs:
                                                     self.cost_func_quad_unit_params.Qf,
                                                     self.cost_func_quad_unit_params.x_des_seq,
                                                     self.cost_func_quad_unit_params.u_des_seq,)
-        self.ilqr_config = ilqr.ilqrConfigStruct(num_states=2, num_controls=1, len_seq=5, time_step=0.1)
+        self.ilqr_config = ilqr.ilqrConfigStruct(x_len=2, u_len=1, len_seq=5, time_step=0.1)
         self.ilqr_config.config_cost_func(self.cost_func_obj.cost_func_quad_state_and_control_scan_compatible,
                                           self.cost_func_obj.cost_func_quad_state_and_control_scan_compatible)
         self.ilqr_config.config_for_dyn_func(self.pend_dyn_obj.cont_dyn_func, gen_ctrl.step_rk4)
         self.ilqr_config.create_curried_funcs()
 
-        self.seed_x_vec       = np.ones([self.ilqr_config.num_states]) 
-        self.seed_u_seq       = np.ones([self.ilqr_config.len_seq-1,self.ilqr_config.num_controls])
+        self.seed_x_vec       = np.ones([self.ilqr_config.x_len]) 
+        self.seed_u_seq       = np.ones([self.ilqr_config.len_seq-1,self.ilqr_config.u_len])
 
         self.x_seq_example            = np.ones([self.ilqr_config.len_seq,2])
         self.x_seq_example[:,1]      *= 2.0
         self.u_seq_example            = np.ones([self.ilqr_config.len_seq-1,1])
 
-        self.K_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.num_controls, self.ilqr_config.num_states])
-        self.d_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.num_controls, 1         ])
+        self.K_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.u_len, self.ilqr_config.x_len])
+        self.d_seq_example            = np.ones([self.ilqr_config.len_seq, self.ilqr_config.u_len, 1         ])
         self.Del_V_vec_seq_example    = np.ones([self.ilqr_config.len_seq, 1                            , 2         ])
 
         self.ilqr_ctrl_state = ilqr.ilqrControllerState(self.ilqr_config, self.seed_x_vec, self.seed_u_seq)
@@ -191,8 +191,8 @@ class calculate_backwards_pass_tests(unittest.TestCase):
         self.assertEqual(len(k_seq),data_and_funcs.ilqr_config.len_seq-1)
         self.assertEqual(len(d_seq),data_and_funcs.ilqr_config.len_seq-1)
         self.assertEqual(len(Del_V_vec_seq),data_and_funcs.ilqr_config.len_seq-1) 
-        self.assertEqual(jnp.shape(k_seq[0]),(data_and_funcs.ilqr_config.num_controls, data_and_funcs.ilqr_config.num_states))                  
-        self.assertEqual(jnp.shape(d_seq[0]),(data_and_funcs.ilqr_config.num_controls, 1))                       
+        self.assertEqual(jnp.shape(k_seq[0]),(data_and_funcs.ilqr_config.u_len, data_and_funcs.ilqr_config.x_len))                  
+        self.assertEqual(jnp.shape(d_seq[0]),(data_and_funcs.ilqr_config.u_len, 1))                       
         self.assertEqual(jnp.shape(Del_V_vec_seq[0]),(2,)) 
 
 class calculate_forwards_pass_tests(unittest.TestCase):
@@ -280,8 +280,8 @@ class initialize_forwards_pass_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         shared_data_funcs = shared_unit_test_data_and_funcs()
         seed_state_vec    = shared_data_funcs.seed_x_vec
-        u_len             = shared_data_funcs.ilqr_config.num_controls
-        x_len             = shared_data_funcs.ilqr_config.num_states
+        u_len             = shared_data_funcs.ilqr_config.u_len
+        x_len             = shared_data_funcs.ilqr_config.x_len
         len_seq           = shared_data_funcs.ilqr_config.len_seq
         state_seq_updated, control_seq_updated, cost_float_updated, cost_seq_updated, x_cost_seq_updated, u_cost_seq_updated, in_bounds_bool = ilqr.initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
         self.assertEqual(len(state_seq_updated), len_seq)
@@ -351,8 +351,8 @@ class initialize_forwards_pass_tests(unittest.TestCase):
 class calculate_backstep_ctg_approx_tests(unittest.TestCase):
     def test_accepts_valid_inputs(self):
         data_and_funcs = shared_unit_test_data_and_funcs()
-        x_len = data_and_funcs.ilqr_config.num_states
-        u_len = data_and_funcs.ilqr_config.num_controls
+        x_len = data_and_funcs.ilqr_config.x_len
+        u_len = data_and_funcs.ilqr_config.u_len
         q_x   = jnp.ones([x_len,1])
         q_u   = jnp.ones([u_len,1])
         q_xx  = jnp.ones([x_len, x_len])
