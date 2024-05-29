@@ -137,11 +137,13 @@ class double_pm_pend_animation:
 
     def save_animation_gif(self, filename: str | os.PathLike):
         writer = animation.PillowWriter(fps=self.fps, metadata=dict(artist="Me"))
-        self.ani.save((filename + ".gif"), writer=writer)
+        full_filename = f"{filename}{'.gif'}"
+        self.ani.save(full_filename, writer=writer)
 
     def save_animation_mp4(self, filename: str | os.PathLike):
         writer = animation.FFMpegWriter(fps=self.fps, metadata=dict(artist="Me"))
-        self.ani.save((filename + ".mp4"), writer=writer)
+        full_filename = f"{filename}{'.mp4'}"
+        self.ani.save(full_filename, writer=writer)
 
 
 class double_pend_animation:
@@ -297,11 +299,13 @@ class double_pend_animation:
 
     def save_animation_gif(self, filename: str | os.PathLike):
         writer = animation.PillowWriter(fps=self.fps, metadata=dict(artist="Me"))
-        self.ani.save((filename + ".gif"), writer=writer)
+        full_filename = f"{filename}{'.gif'}"
+        self.ani.save(full_filename, writer=writer)
 
     def save_animation_mp4(self, filename: str | os.PathLike):
         writer = animation.FFMpegWriter(fps=self.fps, metadata=dict(artist="Me"))
-        self.ani.save((filename + ".mp4"), writer=writer)
+        full_filename = f"{filename}{'.mp4'}"
+        self.ani.save(full_filename, writer=writer)
 
 
 def plot_ilqr_dpend_act_and_cost_axes(

@@ -207,12 +207,12 @@ class double_pm_pend_dyn:
         state_dot = jnp.array([x_jax[2], x_jax[3], theta_ddots[0], theta_ddots[1]])
         return state_dot
 
-    def calculate_potential_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
-        pot_energy_m1 = -self.g * (self.m1 + self.m2) * self.l1 * np.cos(x_vec[0])
-        pot_energy_m2 = -self.g * self.m2 * self.l2 * np.cos(x_vec[1])
-        return pot_energy_m1 + pot_energy_m2
+    def calculate_potential_energy(self, x_vec: jnp.ndarray) -> float:
+        pot_energy_m1 = -self.g * (self.m1 + self.m2) * self.l1 * jnp.cos(x_vec[0])
+        pot_energy_m2 = -self.g * self.m2 * self.l2 * jnp.cos(x_vec[1])
+        return (pot_energy_m1 + pot_energy_m2).item()
 
-    def calculate_kinetic_energy_2(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_kinetic_energy_2(self, x_vec: jnp.ndarray) -> float:
         return (
             (0.5 * (self.m1 + self.m2) * self.l1**2 * (x_vec[2]) ** 2)
             + (0.5 * (self.m2) * self.l2**2 * (x_vec[3]) ** 2)
@@ -222,16 +222,16 @@ class double_pm_pend_dyn:
                 * self.l2
                 * x_vec[2]
                 * x_vec[3]
-                * np.cos(x_vec[0] - x_vec[1])
+                * jnp.cos(x_vec[0] - x_vec[1])
             )
-        )
+        ).item()
 
-    def calculate_kinetic_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_kinetic_energy(self, x_vec: jnp.ndarray) -> float:
         mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1, 1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item()
 
-    def calculate_total_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_total_energy(self, x_vec: jnp.ndarray) -> float:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(
             x_vec
         )
@@ -360,12 +360,12 @@ class double_pend_abs_dyn:
         state_dot = jnp.array([x_vec[2], x_vec[3], theta_ddots[0], theta_ddots[1]])
         return state_dot
 
-    def calculate_kinetic_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_kinetic_energy(self, x_vec: jnp.ndarray) -> float:
         mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1, 1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item()
 
-    def calculate_potential_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_potential_energy(self, x_vec: jnp.ndarray) -> float:
         return (
             -self.g
             * (
@@ -374,7 +374,7 @@ class double_pend_abs_dyn:
             ).item()
         )
 
-    def calculate_total_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_total_energy(self, x_vec: jnp.ndarray) -> float:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(
             x_vec
         )
@@ -515,17 +515,17 @@ class double_pend_rel_dyn:
         state_dot = jnp.array([x_vec[2], x_vec[3], theta_ddots[0], theta_ddots[1]])
         return state_dot
 
-    def calculate_kinetic_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_kinetic_energy(self, x_vec: jnp.ndarray) -> float:
         mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
         x_vec_col = x_vec[2:].reshape(-1, 1)
         return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item()
 
-    def calculate_potential_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_potential_energy(self, x_vec: jnp.ndarray) -> float:
         return (
             -self.G_1 * jnp.cos(x_vec[0]) - self.G_2 * jnp.cos(x_vec[0] + x_vec[1])
         ).item()
 
-    def calculate_total_energy(self, x_vec: npt.NDArray[np.float64]) -> float:
+    def calculate_total_energy(self, x_vec: jnp.ndarray) -> float:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(
             x_vec
         )

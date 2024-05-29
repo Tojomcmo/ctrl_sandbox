@@ -302,17 +302,18 @@ class ilqrControllerState:
 
 
 def run_ilqr_controller(
-    ilqr_config: ilqrConfigStruct, init_ctrl_state: ilqrControllerState
+    ilqr_config: ilqrConfigStruct, init_x_vec: jnp.ndarray, init_u_seq: jnp.ndarray
 ) -> ilqrControllerState:
     """
     **Top-level function for running ilqr alorithm**
     - [in] ilqr_config - fully populated object of ilqr configuration values and functions
-    - [in] init_ctrl_state - fully populated ilqr controller state object containing initalized state information
+    - [in] init_x_vec - initial state vector as jax array dim (n,)
+    - [in] init_u_seq - initial control sequence guess as jax array dim (len_seq-1,m)
     - [out] ctrl_state_out - fully populated ilqr controller state containing algorithm output and optional stored algorithm information
     """
-    ctrl_state_out = copy.deepcopy(init_ctrl_state)
-    u_seq = init_ctrl_state.init_u_seq
-    x_seq = init_ctrl_state.init_x_seq
+    ctrl_state_out = ilqrControllerState(ilqr_config, init_x_vec, init_u_seq)
+    u_seq = init_u_seq
+    x_seq = ctrl_state_out.init_x_seq
     cost_float, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq)
     converge_reached = False
     ro_reg = ilqr_config.ro_reg_start

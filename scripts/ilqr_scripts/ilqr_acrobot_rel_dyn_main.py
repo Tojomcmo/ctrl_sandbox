@@ -81,48 +81,16 @@ if __name__ == "__main__":
 
     # ---------- create simulation system for post algorithm test ----------#
     dyn_func_sys_sim = dyn_func_sys_ctrl
-    # dyn_func_sys_sim = dyn.double_pend_abs_dyn(g=9.81, m1=1.0, moi1=1.0, d1=0.5, l1=1.0, m2=1.0, moi2=1.0, d2=0.5, l2=1.0, b1=0.0, b2=0.0,
-    #                                               shoulder_act=shoulder_act, elbow_act=elbow_act)
-
     # ---------- set system state init and desired trajectories ----------#
     x_init_vec = jnp.array([0.0, 0.0, 0.0, 0.0])
+    u_init_seq = jnp.ones([len_seq - 1, num_controls], dtype=float) * 0.01
+
     x_sim_init_vec = jnp.array([0.0, 0.0, 0.0, 0.0])
 
-    ctrl_target_condition = 2
-
-    if ctrl_target_condition == 1:
-        dyn_func_sys_traj_dyn = dyn.double_pm_pend_dyn(
-            g=9.81,
-            m1=1.0,
-            l1=1.0,
-            m2=1.0,
-            l2=1.0,
-            b1=0.0,
-            b2=0.0,
-            shoulder_act=shoulder_act,
-            elbow_act=elbow_act,
-        )
-        u_tg_seq = jnp.ones([len_seq - 1, num_controls])
-        traj_gen_disc_dyn_func = lambda x, u: gen_ctrl.step_rk4(
-            dyn_func_sys_traj_dyn.cont_dyn_func, ilqr_config.time_step, x, u
-        )
-        x_des_seq_traj_gen = gen_ctrl.simulate_forward_dynamics_seq(
-            traj_gen_disc_dyn_func, x_init_vec, u_tg_seq
-        )
-
-        u_init_seq = jnp.ones([len_seq - 1, num_controls]) * (0.001)
-        u_des_seq = u_tg_seq
-        x_des_seq = x_des_seq_traj_gen
-
-    elif ctrl_target_condition == 2:
-        x_des_seq = jnp.zeros([len_seq, num_states], dtype=float)
-        x_des_seq = x_des_seq.at[:, 0].set(jnp.pi)
-        x_des_seq = x_des_seq.at[:, 1].set(0.0)
-        u_init_seq = jnp.ones([len_seq - 1, num_controls], dtype=float) * 0.01
-        u_des_seq = jnp.zeros([len_seq - 1, num_controls], dtype=float)
-
-    else:
-        raise ValueError("invalid ctrl_target_condition")
+    x_des_seq = jnp.zeros([len_seq, num_states], dtype=float)
+    x_des_seq = x_des_seq.at[:, 0].set(jnp.pi)
+    x_des_seq = x_des_seq.at[:, 1].set(0.0)
+    u_des_seq = jnp.zeros([len_seq - 1, num_controls], dtype=float)
 
     # ------- complete ilqr configuration --------#
     cost_func_obj = cost.cost_quad_x_and_u(
@@ -136,8 +104,7 @@ if __name__ == "__main__":
     ilqr_config.create_curried_funcs()
 
     # ----- Run iLQR algorithm -----#
-    controller_state = ilqr.ilqrControllerState(ilqr_config, x_init_vec, u_init_seq)
-    ctrl_out = ilqr.run_ilqr_controller(ilqr_config, controller_state)
+    ctrl_out = ilqr.run_ilqr_controller(ilqr_config, x_init_vec, u_init_seq)
     # ------- Simulate controller output --------#
 
     if sim_with_mj is True:
