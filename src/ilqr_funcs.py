@@ -26,13 +26,13 @@ class ilqrConfigStruct:
         self.u_len: int = u_len
         self.len_seq: int = len_seq
         self.time_step: float = time_step
-        self.max_iter: int = 20
+        self.max_iter: int = 500
         self.converge_crit: float = 1e-6
-        self.ff_gain_tol: float = 1e-4
+        self.ff_gain_tol: float = 1e-5
         self.cost_ratio_bounds: Tuple[float, float] = (1e-8, 10)
         self.ro_reg_start: float = 0.0
         self.ro_reg_change: float = 2.0
-        self.fp_max_iter: int = 5
+        self.fp_max_iter: int = 10
         self.ls_scale_alpha_param: float = 0.5
         self.log_ctrl_history: bool = False
         self.is_dyn_configured: bool = False
@@ -129,6 +129,9 @@ class ilqrConfigStruct:
         self.is_curried = True
 
     def _curry_funcs_for_mujoco(self) -> None:
+        """
+        **Create simulate and linearize functions for mujoco-based dynamics**"
+        """
         self.discrete_dyn_mj_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
             lambda x, u: mj_funcs.fwd_sim_mj_w_ctrl_step(
                 self.mj_model, self.mj_data, x, u
@@ -148,6 +151,12 @@ class ilqrConfigStruct:
         )
 
     def _curry_funcs_for_dyn_funcs(self) -> None:
+        """
+        **Create lax.scan functions for ilqr algorithm using supplied dynamics function**
+        - simulate forward dynamics sequence function
+        - linearize forward dynamics sequence function
+        - simulate forward pass update function
+        """
         self.discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
             lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
         )
@@ -180,6 +189,7 @@ class ilqrConfigStruct:
         )
 
     def _curry_analyze_cost_dec_func(self) -> None:
+        """**create reduced cost decrease analysis function from configuration"""
         self.analyze_cost_dec: Callable[[float], bool] = (
             lambda cost_decrease_ratio: analyze_cost_decrease(
                 cost_decrease_ratio, self.cost_ratio_bounds
@@ -294,7 +304,13 @@ class ilqrControllerState:
 def run_ilqr_controller(
     ilqr_config: ilqrConfigStruct, init_ctrl_state: ilqrControllerState
 ) -> ilqrControllerState:
-    ctrl_state = copy.deepcopy(init_ctrl_state)
+    """
+    **Top-level function for running ilqr alorithm**
+    - [in] ilqr_config - fully populated object of ilqr configuration values and functions
+    - [in] init_ctrl_state - fully populated ilqr controller state object containing initalized state information
+    - [out] ctrl_state_out - fully populated ilqr controller state containing algorithm output and optional stored algorithm information
+    """
+    ctrl_state_out = copy.deepcopy(init_ctrl_state)
     u_seq = init_ctrl_state.init_u_seq
     x_seq = init_ctrl_state.init_x_seq
     cost_float, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq)
@@ -335,7 +351,7 @@ def run_ilqr_controller(
             _, cost_seq, x_cost_seq, u_cost_seq = ilqr_config.calculate_total_cost(
                 x_seq, u_seq
             )
-            ctrl_state.set_ctrl_state(
+            ctrl_state_out.set_ctrl_state(
                 iter_int,
                 x_seq,
                 u_seq,
@@ -351,7 +367,7 @@ def run_ilqr_controller(
             _, cost_seq, x_cost_seq, u_cost_seq = ilqr_config.calculate_total_cost(
                 x_seq, u_seq
             )
-            ctrl_state.set_ctrl_state(
+            ctrl_state_out.set_ctrl_state(
                 iter_int,
                 x_seq,
                 u_seq,
@@ -363,9 +379,9 @@ def run_ilqr_controller(
                 u_cost_seq,
                 cost_float,
             )
-            ctrl_state.log_ctrl_state_to_history()
+            ctrl_state_out.log_ctrl_state_to_history()
         iter_int += 1
-    return ctrl_state
+    return ctrl_state_out
 
 
 def print_ctrl_progress(
