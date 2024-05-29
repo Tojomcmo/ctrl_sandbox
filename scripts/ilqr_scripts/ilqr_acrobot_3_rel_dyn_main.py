@@ -24,11 +24,11 @@ if __name__ == "__main__":
    ani_save_name = "acrobot"
    os.makedirs(ani_save_location, exist_ok=True)
    time_step  = 0.01
-   len_seq    = 400
+   len_seq    = 500
    num_states = 4
    num_controls = 1
-   shoulder_act = False 
-   elbow_act = True
+   shoulder_act = True 
+   elbow_act = False
    Q_cost  = np.array([[10. ,0   ,0   ,0  ],
                        [0   ,1. ,0   , 0  ],
                        [0   ,0   ,0.1   ,0  ],

@@ -41,8 +41,11 @@ class ilqrConfigStruct:
     def config_cost_func(self,
             cost_func:Callable[[jnp.ndarray, jnp.ndarray, int],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]])-> None:
         '''
-        This function receives the proposed cost function and parameters for the cost function, and generates
-        The specific cost function for the controller to use with curried inputs
+        **Configure the cost function** \n
+        - prep the cost function for cost calculation and differentiation \n
+        Generate he respective sequence functions for: 
+        - calculating taylor expansions 
+        - calculating total cost and cost sequences
         ''' 
         # store different forms of cost function requred
         self.cost_func_verbose  = cost_func
@@ -128,15 +131,6 @@ class ilqrConfigStruct:
 
         fp_scan_func = _curry_forward_pass_scan_func(self.discrete_dyn_func, self.cost_func_float)
         self.simulate_forward_pass = lambda x_seq, u_seq, K_seq, d_seq, lsf : simulate_forward_pass(fp_scan_func,self.cost_func_float, x_seq, u_seq, K_seq,d_seq, lsf)
-
-    def _curry_forward_pass_scan_func(self)->Callable[[float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-                                                        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:
-        def fp_scan_func_curried(lsf:float, 
-                                 carry:Tuple[int,jnp.ndarray, jnp.ndarray], 
-                                 seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
-            carry_out, seq_out = forward_pass_scan_func(self.discrete_dyn_func,self.cost_func_float,lsf,carry,seqs)
-            return carry_out, seq_out
-        return fp_scan_func_curried
     
     def _curry_analyze_cost_dec_func(self)-> None:
         self.analyze_cost_dec:Callable[[float],bool] = lambda cost_decrease_ratio: analyze_cost_decrease(cost_decrease_ratio, self.cost_ratio_bounds)
@@ -247,7 +241,6 @@ def run_ilqr_controller(ilqr_config:ilqrConfigStruct, init_ctrl_state:ilqrContro
         converge_measure, converge_reached, avg_ff_gain   = analyze_ilqr_pass_for_convergence(ilqr_config, iter_int, reg_inc_bool, d_seq, 
                                                                                               u_seq, cost_float, prev_cost_float, lsf_float)
         print_ctrl_progress(u_seq, ro_reg, reg_inc_bool, iter_int, lsf_float, converge_measure, avg_ff_gain)
-
         if converge_reached is True:
             _, cost_seq, x_cost_seq, u_cost_seq = gen_ctrl.calculate_total_cost(ilqr_config.cost_func_verbose, x_seq, u_seq)
             ctrl_state.set_ctrl_state(iter_int,x_seq,u_seq, K_seq, d_seq, d_v_seq, cost_seq, x_cost_seq, u_cost_seq, cost_float)
@@ -296,26 +289,24 @@ def sweep_back_pass(dyn_lin_approx_seqs:Tuple[jnp.ndarray, jnp.ndarray],
     l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev = tuple(jnp.flip(seq[:-1], axis=0) for seq in cost_quad_approx_seqs)
     # create tuples for lax scan function
     scan_seqs  = ((A_lin_rev, B_lin_rev), (l_x_rev, l_u_rev, l_xx_rev, l_uu_rev, l_xu_rev))
-    carry_init = (P_N, p_N, True)
     is_pos_def_bool  = False
     while is_pos_def_bool == False:
-        scan_func_curried = lambda carry, seqs : sweep_back_pass_scan_func(ro_reg, carry, seqs)
-        (_,_,is_pos_def_bool), (K_seq, d_seq, Del_V_vec_seq) = lax.scan(scan_func_curried, carry_init, scan_seqs)
+        carry_init = (ro_reg, P_N, p_N, True)
+        (_,_,_,is_pos_def_bool), (K_seq, d_seq, Del_V_vec_seq) = lax.scan(sweep_back_pass_scan_func, carry_init, scan_seqs)
         if is_pos_def_bool is False:
             ro_reg += ro_reg_inc_val_float
             #unflip the vectors to match forward time
     return jnp.flip(K_seq, axis=0), jnp.flip(d_seq, axis=0), jnp.flip(Del_V_vec_seq, axis=0), ro_reg    
 
-
-def sweep_back_pass_scan_func(ro_reg:float, carry:Tuple[jnp.ndarray, jnp.ndarray, bool], 
+def sweep_back_pass_scan_func(carry:Tuple[float, jnp.ndarray, jnp.ndarray, bool], 
                               seqs:Tuple[Tuple[jnp.ndarray,jnp.ndarray],
                                          Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]])->Tuple[
-                            Tuple[jnp.ndarray,jnp.ndarray, bool],
+                            Tuple[float, jnp.ndarray,jnp.ndarray, bool],
                             Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]]:
-    P_kp1, p_kp1, is_pos_def_bool = carry
+    ro_reg, P_kp1, p_kp1, is_pos_def_bool = carry
     dyn_lin_k, cost_quad_approx_k = seqs
     if is_pos_def_bool is False:
-        return (P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+        return (ro_reg,P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
     q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
                                                                         dyn_lin_k,
                                                                         cost_quad_approx_k,
@@ -324,10 +315,10 @@ def sweep_back_pass_scan_func(ro_reg:float, carry:Tuple[jnp.ndarray, jnp.ndarray
                                                                         ro_reg)
     if util.is_pos_def(q_uu_reg) is False:
         is_pos_def_bool = False
-        return (P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+        return (ro_reg,P_kp1, p_kp1, is_pos_def_bool), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
     K_k,   d_k          = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
     P_kp1, p_kp1, D_V_k = calculate_backstep_ctg_approx(q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k)
-    return (P_kp1, p_kp1, is_pos_def_bool), (K_k, d_k, D_V_k)
+    return (ro_reg, P_kp1, p_kp1, is_pos_def_bool), (K_k, d_k, D_V_k)
 
 def set_back_pass_scan_output_to_null_arrays(dyn_lin_k:Tuple[jnp.ndarray, jnp.ndarray])->Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         K_null   = jnp.zeros((len(dyn_lin_k[1][1]), len(dyn_lin_k[0][1])))
@@ -395,46 +386,43 @@ def calculate_forwards_pass_mj(ilqr_config:ilqrConfigStruct, x_seq_prev:jnp.ndar
             iter_count += 1
     return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
 
-def simulate_forward_pass(fp_scan_func:Callable[[float, 
-                                                 Tuple[int, jnp.ndarray,jnp.ndarray], 
+def simulate_forward_pass(fp_scan_func:Callable[[Tuple[int, jnp.ndarray,jnp.ndarray,float], 
                                                  Tuple[jnp.ndarray, jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-                                                 Tuple[Tuple[int, jnp.ndarray,jnp.ndarray],Tuple[jnp.ndarray, jnp.ndarray]]], 
+                                                 Tuple[Tuple[int, jnp.ndarray,jnp.ndarray,float],Tuple[jnp.ndarray, jnp.ndarray]]], 
                             cost_func_for_calc: Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray],                      
                             x_seq:jnp.ndarray, u_seq:jnp.ndarray, 
                             K_seq:jnp.ndarray, d_seq:jnp.ndarray, lsf:float)->Tuple[jnp.ndarray, 
                                                                                     jnp.ndarray, 
                                                                                     float]:
-    scan_func_curried = lambda carry, seqs: fp_scan_func(lsf, carry, seqs)
     seqs = (x_seq[:-1], u_seq, K_seq, d_seq)
-    carry_init = (int(0),jnp.zeros((1),dtype=float), x_seq[0])
-    (_,cost_float,_),(x_seq_new, u_seq_new) = lax.scan(scan_func_curried, carry_init, seqs)
+    carry_init = (int(0),jnp.zeros((1),dtype=float), x_seq[0], lsf)
+    (_,cost_float,_,_),(x_seq_new, u_seq_new) = lax.scan(fp_scan_func, carry_init, seqs)
     x_seq_new = jnp.append((x_seq[0]).reshape(1,-1),x_seq_new, axis=0)
     cost_out = cost_float + (cost_func_for_calc(x_seq_new[-1], jnp.zeros((len(u_seq[1]))),  len(x_seq_new)-1))
     return x_seq_new, u_seq_new, cost_out.item()
 
 def forward_pass_scan_func(discrete_dyn_func,
-                           cost_func_float,
-                           lsf:float, 
-                           carry:Tuple[int, jnp.ndarray, jnp.ndarray], 
+                           cost_func_float, 
+                           carry:Tuple[int, jnp.ndarray, jnp.ndarray,float], 
                            seqs:Tuple[jnp.ndarray, jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[
-                            Tuple[int, jnp.ndarray,jnp.ndarray],
+                            Tuple[int, jnp.ndarray,jnp.ndarray,float],
                             Tuple[jnp.ndarray, jnp.ndarray]]:
-    x_k, u_k, K_k, d_k    = seqs
-    k, cost_float, x_k_new = carry
+    x_k, u_k, K_k, d_k         = seqs
+    k, cost_float, x_k_new,lsf = carry
     u_k_new     = calculate_u_k_new(u_k, x_k, x_k_new, K_k, d_k, lsf)
     cost_float += (cost_func_float(x_k_new, u_k_new, k)).reshape(-1)
     x_kp1_new   = discrete_dyn_func(x_k_new, u_k_new)
     k += 1
-    return (k, cost_float, x_kp1_new), (x_kp1_new, u_k_new)
+    return (k, cost_float, x_kp1_new,lsf), (x_kp1_new, u_k_new)
 
 def _curry_forward_pass_scan_func(discrete_dyn_func:Callable[[jnp.ndarray, jnp.ndarray],jnp.ndarray], 
                                  cost_func_float:Callable[[jnp.ndarray, jnp.ndarray, int],jnp.ndarray])->Callable[
-                                     [float,Tuple[int,jnp.ndarray, jnp.ndarray],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
-                                        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]]:
-    def fp_scan_func_curried(lsf:float, carry:Tuple[int,jnp.ndarray, jnp.ndarray], 
-                             seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[Tuple[int, jnp.ndarray, jnp.ndarray], 
+                                     [Tuple[int,jnp.ndarray, jnp.ndarray,float],Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray]],
+                                        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray,float], Tuple[jnp.ndarray, jnp.ndarray]]]:
+    def fp_scan_func_curried(carry:Tuple[int,jnp.ndarray, jnp.ndarray, float], 
+                             seqs:Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray,jnp.ndarray])->Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], 
                                                                                                  Tuple[jnp.ndarray, jnp.ndarray]]:
-        carry_out, seq_out = forward_pass_scan_func(discrete_dyn_func,cost_func_float,lsf,carry,seqs)
+        carry_out, seq_out = forward_pass_scan_func(discrete_dyn_func,cost_func_float,carry,seqs)
         return carry_out, seq_out
     return fp_scan_func_curried
 
@@ -461,10 +449,7 @@ def taylor_expand_pseudo_hamiltonian(dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.nd
 # q_u  = l_u  + B^T p'
     A_lin_k, B_lin_k           = dyn_lin_approx_k
     l_x, l_u, l_xx, l_uu, l_ux = cost_quad_approx_k
-    if ro_reg > 0:
-        P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
-    else:
-        P_kp1_reg = P_kp1    
+    P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)   
     q_x      = (l_x  + A_lin_k.T @ p_kp1)
     q_u      = (l_u  + B_lin_k.T @ p_kp1)
     q_xx     = (l_xx + A_lin_k.T @ P_kp1     @ A_lin_k)
