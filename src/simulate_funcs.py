@@ -14,6 +14,10 @@ def sim_dyn(
     x_init: jnp.ndarray,
     seq_len: int,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    **simulate dynamics from initial state with controller, disturbances, noise, and measurement functions**
+
+    """
     seq = jnp.arange(0, seq_len - 1, dtype=int)
     carry_init = (x_init, x_init)
     scan_func = curry_sim_dyn_scan_func(

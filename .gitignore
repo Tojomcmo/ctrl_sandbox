@@ -138,4 +138,4 @@ media_output/
 MUJOCO_LOG.txt
 
 #profiler data
-.stats
+profile_out.stat

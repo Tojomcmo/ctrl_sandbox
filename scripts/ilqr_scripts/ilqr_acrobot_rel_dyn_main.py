@@ -107,6 +107,9 @@ if __name__ == "__main__":
     ctrl_out = ilqr.run_ilqr_controller(ilqr_config, x_init_vec, u_init_seq)
     # ------- Simulate controller output --------#
 
+    profiler.disable()
+    profiler.dump_stats("profile_out.stat")
+
     if sim_with_mj is True:
         mjcf_obj = mjcf.mjcf_dpend(shoulder_act, elbow_act)
         mj_model, _, mj_data = mj_funcs.create_mujoco_model(

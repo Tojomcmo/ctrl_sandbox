@@ -385,7 +385,7 @@ class initialize_forwards_pass_tests(unittest.TestCase):
             x_cost_seq_updated,
             u_cost_seq_updated,
             in_bounds_bool,
-        ) = ilqr.initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
+        ) = ilqr._initialize_forwards_pass(x_len, u_len, seed_state_vec, len_seq)
         self.assertEqual(len(state_seq_updated), len_seq)
         self.assertEqual(len(control_seq_updated), len_seq - 1)
         self.assertEqual(cost_float_updated, 0)

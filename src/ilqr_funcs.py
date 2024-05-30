@@ -328,7 +328,7 @@ def run_ilqr_controller(
             ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
         )
         converge_measure, converge_reached, avg_ff_gain = (
-            analyze_ilqr_pass_for_convergence(
+            analyze_ilqr_pass_for_stop_condition(
                 ilqr_config,
                 iter_int,
                 reg_inc_bool,
@@ -398,7 +398,7 @@ def print_ctrl_progress(
     print("need to increase ro?: ", reg_inc_bool)
 
 
-def analyze_ilqr_pass_for_convergence(
+def analyze_ilqr_pass_for_stop_condition(
     ilqr_config,
     iter_int,
     reg_inc_bool,
@@ -408,15 +408,22 @@ def analyze_ilqr_pass_for_convergence(
     prev_cost_float,
     lsf_float,
 ):
+    """
+    **determine whether the algorithm has demonstrated convergence** \n
+    convergence conditions:
+    - average feedforward values (relative to control values) are sufficiently small
+    - trajectory cost decrease relative to "size of step is sufficiently small (size of step captured by line search factor)
+    - algorithm has reached maximum iterations
+    """
     avg_ff_gain = calculate_avg_ff_gains(d_seq, u_seq)
     converge_measure = (
         jnp.abs((prev_cost_float - cost_float) / cost_float).item()
     ) / lsf_float
     # determine convergence criteria
-    converge_reached = determine_convergence(
+    stop_bool = determine_stop_condition(
         ilqr_config, iter_int, reg_inc_bool, converge_measure, avg_ff_gain
     )
-    return converge_measure, converge_reached, avg_ff_gain
+    return converge_measure, stop_bool, avg_ff_gain
 
 
 def calculate_backwards_pass(
@@ -502,6 +509,17 @@ def sweep_back_pass_scan_func(
     Tuple[float, jnp.ndarray, jnp.ndarray, bool],
     Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
 ]:
+    """
+    ** lax.scan function for backwards pass recursive LQR solution** \n
+    - Recieve the single step dynamics linearization and cost function quadratic expansion,
+    along with the quadratic-approximated value function Vkp1(x)
+    - formaulate the quadratic-approximation of the Q-function
+    (single step cost-to-go plus next step value function).
+    - calculated optimal gain values via first order necessary condition of dQ/du = 0,
+    - quadraticly approximate the current value function Vk along with the expected cost decrease
+    - pass the Vk approximation on, and return the optimal gains and expected cost decrease \n
+    The function can be seen as the single-step calculation in the bellman optimal recursion.
+    """
     ro_reg, P_kp1, p_kp1, is_pos_def_bool = carry
     dyn_lin_k, cost_quad_approx_k = seqs
     if is_pos_def_bool is False:
@@ -510,7 +528,7 @@ def sweep_back_pass_scan_func(
             P_kp1,
             p_kp1,
             is_pos_def_bool,
-        ), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+        ), _set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
     q_x, q_u, q_xx, q_ux, q_uu, q_ux_reg, q_uu_reg = taylor_expand_pseudo_hamiltonian(
         dyn_lin_k, cost_quad_approx_k, P_kp1, p_kp1, ro_reg
     )
@@ -521,7 +539,7 @@ def sweep_back_pass_scan_func(
             P_kp1,
             p_kp1,
             is_pos_def_bool,
-        ), set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
+        ), _set_back_pass_scan_output_to_null_arrays(dyn_lin_k)
     K_k, d_k = calculate_optimal_gains(q_uu_reg, q_ux_reg, q_u)
     P_kp1, p_kp1, D_V_k = calculate_backstep_ctg_approx(
         q_x, q_u, q_xx, q_uu, q_ux, K_k, d_k
@@ -529,9 +547,12 @@ def sweep_back_pass_scan_func(
     return (ro_reg, P_kp1, p_kp1, is_pos_def_bool), (K_k, d_k, D_V_k)
 
 
-def set_back_pass_scan_output_to_null_arrays(
+def _set_back_pass_scan_output_to_null_arrays(
     dyn_lin_k: Tuple[jnp.ndarray, jnp.ndarray]
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    **helper function to break out of failed backward pass**
+    """
     K_null = jnp.zeros((len(dyn_lin_k[1][1]), len(dyn_lin_k[0][1])))
     d_null = jnp.zeros((len(dyn_lin_k[1][1]), 1))
     D_V_null = jnp.zeros((2,))
@@ -547,6 +568,14 @@ def calculate_forwards_pass(
     d_v_seq: jnp.ndarray,
     cost_float_prev: float,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, float, float, bool]:
+    """
+    **Calculate forwards pass to update optimal trajectory via backwards pass output**
+    - use optimal gains to simulate new proposed trajectory
+    - compare change in trajectory cost to expected change from backwards pass approximations
+    - iterate through reducing line search step until adequate cost reduction or forward pass iteration max
+    - if iteration max hit with no adequate cost reduction, request increase in backwards pass regularization
+    (increasing regularization has the effect of producing a more "naive gradient descent step")
+    """
     lsf = 1.0
     iter_count = 0
     reg_inc_bool = False
@@ -581,9 +610,9 @@ def calculate_forwards_pass_mj(
     d_v_seq: jnp.ndarray,
     cost_float_prev: float,
 ):
-    """lsf is the line search factor, scaling the size of the newton step"""
+    """**Mujoco compatible version of calculate_forward_pass**"""
     # initialize forward pass state vec, control_vec, cost and cost seqs, line search factor, armijo parameter bool
-    x_seq_fp, u_seq_fp, cost_float_fp, in_bounds_bool = initialize_forwards_pass(
+    x_seq_fp, u_seq_fp, cost_float_fp, in_bounds_bool = _initialize_forwards_pass(
         x_seq_prev.shape[1], u_seq_prev.shape[1], x_seq_prev[0], x_seq_prev.shape[0]
     )
     lsf = 1.0
@@ -616,7 +645,7 @@ def calculate_forwards_pass_mj(
             reg_inc_bool = True
         else:  # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
             x_seq_fp, u_seq_fp, cost_float_fp, in_bounds_bool = (
-                initialize_forwards_pass(
+                _initialize_forwards_pass(
                     x_seq_prev.shape[1],
                     u_seq_prev.shape[1],
                     x_seq_prev[0],
@@ -645,6 +674,9 @@ def simulate_forward_pass(
     d_seq: jnp.ndarray,
     lsf: float,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, float]:
+    """
+    ** Simulate the forwars pass proposed trajectory update**
+    """
     seqs = (x_seq[:-1], u_seq, K_seq, d_seq)
     carry_init = (int(0), jnp.zeros((1), dtype=float), x_seq[0], lsf)
     (_, cost_float, _, _), (x_seq_new, u_seq_new) = lax.scan(
@@ -667,6 +699,14 @@ def forward_pass_scan_func(
 ) -> Tuple[
     Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
 ]:
+    """
+    **kernel lax.scan function for forwards pass simulation for proposing trajectory update**
+    - recieve current and nominal state, nominal control, optimal gains from backwards pass for step k
+    - calculate new uk using feedforward feedback controller structure, scaled by line search factor
+    - calculate new step k cost with new control value
+    - calculate new kp1 state using new control
+    - pass cumulative cost and next state forward, and return updated state and control sequences
+    """
     x_k, u_k, K_k, d_k = seqs
     k, cost_float, x_k_new, lsf = carry
     u_k_new = calculate_u_k_new(u_k, x_k, x_k_new, K_k, d_k, lsf)
@@ -686,23 +726,27 @@ def _curry_forward_pass_scan_func(
     ],
     Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]],
 ]:
+    """
+    **prepare forward_pass_scan_func() for lax.scan by partial argument completion for dyn and cost funcs**
+    """
+
     def fp_scan_func_curried(
         carry: Tuple[int, jnp.ndarray, jnp.ndarray, float],
         seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
     ) -> Tuple[
         Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
     ]:
-        carry_out, seq_out = forward_pass_scan_func(
-            discrete_dyn_func, cost_func_float, carry, seqs
-        )
-        return carry_out, seq_out
+        return forward_pass_scan_func(discrete_dyn_func, cost_func_float, carry, seqs)
 
     return fp_scan_func_curried
 
 
-def initialize_forwards_pass(
+def _initialize_forwards_pass(
     x_len: int, u_len: int, seed_state_vec: jnp.ndarray, len_seq: int
 ):
+    """
+    **helper function for mujoco forward pass**
+    """
     control_seq_fp = jnp.zeros([(len_seq - 1), u_len])
     x_seq_fp = jnp.zeros([(len_seq), x_len])
     x_seq_fp.at[0].set(seed_state_vec)
@@ -720,14 +764,16 @@ def taylor_expand_pseudo_hamiltonian(
     p_kp1: jnp.ndarray,
     ro_reg: float,
 ):
+    """
+    **calculate taylor expansion of the single step Q function**
+    - Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
+    - V' is value function at next, Vkp1, assumed to have quadratic form V' = (1/2)x.TPx + px
+    -detailed of derivation can be found in wiki here: \n
+    https://github.com/Tojomcmo/ctrl_sandbox/wiki/ilqr-cost%E2%80%90to%E2%80%90go-derivation
+
+    """
     #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
-    #   where V' is value function at the next time step
-    #  https://alkzar.cl/blog/2022-01-13-taylor-approximation-and-jax/
-    # q_xx = l_xx + A^T P' A
-    # q_uu = l_uu + B^T P' B
-    # q_ux = l_ux + B^T P' A
-    # q_x  = l_x  + A^T p'
-    # q_u  = l_u  + B^T p'
+    #   where V' is value function at the next time step, assumed to have quadratic form V' = (1/2)x.TPx + px
     A_lin_k, B_lin_k = dyn_lin_approx_k
     l_x, l_u, l_xx, l_uu, l_ux = cost_quad_approx_k
     P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
@@ -750,9 +796,14 @@ def calculate_backstep_ctg_approx(
     K_k: jnp.ndarray,
     d_k: jnp.ndarray,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    # P_k is the kth hessian approximation of the cost-to-go
-    # p_k is the kth jacobian approximation of the cost-to-go
-    # Del_V_k is the kth expected change in the value function
+    """
+    **Calculate quadratic approximation of current step cost-to-go for recursive backstepping**
+    - q_ is respective linear or quadratic component of the Q function quadratic approximation
+    - K_k and d_k are optimal control ff and fb gains calculated from minimizing approximated Q function
+    - P_k is the kth hessian approximation of the cost-to-go (Value) function
+    - p_k is the kth jacobian approximation of the cost-to-go (Value) function
+    - Del_V_k is the kth expected change in the value function
+    """
     assert q_x.shape == (len(q_x), 1), "q_x must be column vector (n,1)"
     assert q_u.shape == (len(q_u), 1), "q_u must be column vector (n,1)"
     assert K_k.shape == (
@@ -783,6 +834,9 @@ def calculate_backstep_ctg_approx(
 def calculate_optimal_gains(
     q_uu_reg: jnp.ndarray, q_ux: jnp.ndarray, q_u: jnp.ndarray
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    **Calculate optimal feedforward and feedback gains from minimizing quad approx Q function**
+    """
     # K_k is a linear feedback term related to del_x from nominal trajectory
     # d_k is a feedforward term related to trajectory correction
     inverted_q_uu = jnp.linalg.inv(q_uu_reg)
@@ -799,26 +853,11 @@ def calculate_u_k_new(
     d_ff_k: jnp.ndarray,
     line_search_factor: float,
 ) -> jnp.ndarray:
-    # check valid dimensions
-    assert K_fb_k.shape == (
-        len(u_current_k),
-        len(x_current_k),
-    ), "K_k incorrect shape, must be (len(u_nom_k), len(x_nom_k))"
-    assert d_ff_k.shape == (
-        len(u_current_k),
-        1,
-    ), "d_k incorrect shape, must be (len(u_nom_k), )"
-    assert len(x_new_k) == len(
-        x_current_k
-    ), "x_nom_k and x_new_k must be the same length"
-    assert (x_current_k.shape) == (
-        len(x_current_k),
-    ), "x_nom_k must be column vector (n,)"
-    assert (x_new_k.shape) == (len(x_new_k),), "x_new_k must be column vector (n,)"
-    assert (u_current_k.shape) == (
-        len(u_current_k),
-    ), "u_nom_k must be column vector (m,)"
-    # return (u_nom_k.reshape(-1,1) + K_k @ (x_new_k.reshape(-1,1) - x_nom_k.reshape(-1,1)) + line_search_factor * d_k).reshape(-1)
+    """
+    **Calculate updated control value at time k**
+    - Calculate feedforward feedback control value
+    - update value with line search factor scaling of backwards pass feedforward update term d_k**
+    """
     return gen_ctrl.calculate_ff_fb_u(
         K_fb_k, u_current_k, x_current_k, x_new_k
     ) + line_search_factor * d_ff_k.reshape(-1)
@@ -841,18 +880,22 @@ def calculate_cost_decrease_ratio(
 
 
 def calculate_expected_cost_decrease(Del_V_vec_seq: jnp.ndarray, lsf: float) -> float:
+    """
+    **Calculate expected cost decrease from updated trajectory, scaled by line search factor**
+    """
     Del_V_sum = jnp.sum((lsf * Del_V_vec_seq[:, 0]) + (lsf**2 * Del_V_vec_seq[:, 1]))
-    return Del_V_sum.item()
-
-
-def calculate_expected_cost_decrease_step(Del_V_vec: jnp.ndarray, lsf: float) -> float:
-    Del_V_sum = (lsf * Del_V_vec[0]) + (lsf**2 * Del_V_vec[1])
     return Del_V_sum.item()
 
 
 def analyze_cost_decrease(
     cost_decrease_ratio: float, cost_ratio_bounds: Tuple[float, float]
 ) -> bool:
+    """
+    **check whether calculated cost decrease falls within acceptable bounds**
+    - cost decrease ratio is calculated_decrease/expected_decrease
+    - if ratio is too big or too small, return a fail condition
+    - if ratio is within range, return true condition
+    """
     if (cost_decrease_ratio > cost_ratio_bounds[0]) and (
         cost_decrease_ratio < cost_ratio_bounds[1]
     ):
@@ -862,6 +905,11 @@ def analyze_cost_decrease(
 
 
 def calculate_avg_ff_gains(d_seq: jnp.ndarray, u_seq: jnp.ndarray) -> float:
+    """
+    **calculate relative size of average updating control values d_k**
+    - relative to current control values
+    - valuable for setting termination condition due to insubstantial trajectory updates
+    """
     norm_factor: float = 1 / (len(u_seq) - 1)
     norm_gain_sum: float = jnp.sum(
         jnp.abs(d_seq.reshape(-1).max()) / (jnp.linalg.norm(u_seq, axis=1) + 1)
@@ -897,7 +945,7 @@ def simulate_ilqr_output(
     return x_sim_seq, u_sim_seq
 
 
-def determine_convergence(
+def determine_stop_condition(
     ilqr_config: ilqrConfigStruct,
     iter_int: int,
     reg_inc_bool: bool,
