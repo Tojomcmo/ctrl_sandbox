@@ -6,18 +6,16 @@
 
 import jax.numpy as jnp
 from jax import lax
-import copy
 import numpy as np
 from numpy import typing as npt
-from typing import Sequence, Callable, Tuple, Union
+from typing import Callable, Tuple, Union
 import mujoco as mujoco
-import time
 
-import ilqr_utils as util
-import gen_ctrl_funcs as gen_ctrl
-import mujoco_funcs as mj_funcs
-import cost_functions as cost
-import dyn_functions as dyn
+import ctrl_sandbox.util_funcs as util
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.cost_functions as cost
+import ctrl_sandbox.dyn_functions as dyn
 
 
 class ilqrConfigStruct:

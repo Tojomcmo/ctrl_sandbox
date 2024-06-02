@@ -17,6 +17,17 @@ In development
     - Time-varying trajectory-tracking LQR
     
 
+How to install:
+
+ - install poetry if not installed: brew install poetry
+ - add poetry to path if not found (mac .zhrc): export PATH="$HOME/.local/bin:$PATH"
+ - clone project: git clone https://github.com/Tojomcmo/ctrl_sandbox.git
+ - navigate to project
+ - create virtual environment in project: python -m venv .venv
+ - install project with poetry: poetry install
+ - run scripts!
+
+
 resources:
     - https://bjack205.github.io/papers/AL_iLQR_Tutorial.pdf    
     - https://underactuated.csail.mit.edu/index.html

@@ -1,5 +1,5 @@
 import numpy as np
-import gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 
 """
 Time-varying LQR functions

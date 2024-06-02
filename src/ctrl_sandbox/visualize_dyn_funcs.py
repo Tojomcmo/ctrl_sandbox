@@ -10,9 +10,9 @@ import numpy.typing as npt
 import os
 from typing import Optional
 
-import dyn_functions as dyn
-import analyze_ilqr_output_funcs as analyze
-import ilqr_funcs as ilqr
+import ctrl_sandbox.dyn_functions as dyn
+import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
+import ctrl_sandbox.ilqr_funcs as ilqr
 
 
 class double_pm_pend_animation:
@@ -256,7 +256,7 @@ class double_pend_animation:
         ]
         history_x = self.cartesian_vecs[3][:i]
         history_y = self.cartesian_vecs[7][:i]
-        origin.set_data(0, 0)
+        origin.set_data([0], [0])
         line.set_data(thisx, thisy)
         CoMs.set_data(thisCoMx, thisCoMy)
         trace.set_data(history_x, history_y)
