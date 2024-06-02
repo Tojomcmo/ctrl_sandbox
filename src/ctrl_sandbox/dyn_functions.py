@@ -3,8 +3,8 @@ import numpy as np
 import numpy.typing as npt
 from jax.numpy.linalg import inv
 
-import util_funcs as util
-import gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.util_funcs as util
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 
 
 class single_pm_pend_dyn:

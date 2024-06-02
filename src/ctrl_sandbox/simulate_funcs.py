@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from jax import lax
 from typing import Tuple, Callable
 
-import gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 
 
 def sim_dyn(

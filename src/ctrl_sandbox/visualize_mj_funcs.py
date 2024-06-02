@@ -2,9 +2,9 @@ import mujoco as mujoco
 import numpy as np
 import matplotlib.pyplot as plt
 
-import mujoco_funcs as mj_funcs
-import ilqr_funcs as ilqr
-import gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.ilqr_funcs as ilqr
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 
 
 def update_plt_frame(

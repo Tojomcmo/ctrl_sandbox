@@ -1,8 +1,8 @@
 import numpy as np
 from numpy import typing as npt
 
-import gen_ctrl_funcs as gen_ctrl
-import util_funcs as util
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.util_funcs as util
 
 
 class ttlqrControllerConfig:
