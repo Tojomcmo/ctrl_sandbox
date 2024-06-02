@@ -3,7 +3,7 @@ import numpy as np
 import numpy.typing as npt
 from jax.numpy.linalg import inv
 
-import ilqr_utils as util
+import util_funcs as util
 import gen_ctrl_funcs as gen_ctrl
 
 

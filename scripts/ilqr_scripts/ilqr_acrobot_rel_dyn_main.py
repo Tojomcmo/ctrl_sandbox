@@ -14,14 +14,10 @@ import visualize_dyn_funcs as vis_dyn
 import mujoco_funcs as mj_funcs
 import mjcf_models as mjcf
 import simulate_funcs as sim
-import cProfile
-import pstats
 
 
 if __name__ == "__main__":
-    # start profiling
-    profiler = cProfile.Profile()
-    profiler.enable()
+
     jax.config.update("jax_enable_x64", True)
     # ------- Define controller configuration -------#
     save_ani_bool = False
@@ -106,9 +102,6 @@ if __name__ == "__main__":
     # ----- Run iLQR algorithm -----#
     ctrl_out = ilqr.run_ilqr_controller(ilqr_config, x_init_vec, u_init_seq)
     # ------- Simulate controller output --------#
-
-    profiler.disable()
-    profiler.dump_stats("profile_out.stat")
 
     if sim_with_mj is True:
         mjcf_obj = mjcf.mjcf_dpend(shoulder_act, elbow_act)

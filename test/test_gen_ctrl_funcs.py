@@ -7,7 +7,7 @@ import numpy.typing as npt
 import numpy.testing
 from typing import Callable, Tuple
 import gen_ctrl_funcs as gen_ctrl
-import ilqr_utils as util
+import util_funcs as util
 
 
 class stateSpace_tests(unittest.TestCase):

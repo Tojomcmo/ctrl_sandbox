@@ -2,7 +2,7 @@ import numpy as np
 from numpy import typing as npt
 
 import gen_ctrl_funcs as gen_ctrl
-import ilqr_utils as util
+import util_funcs as util
 
 
 class ttlqrControllerConfig:

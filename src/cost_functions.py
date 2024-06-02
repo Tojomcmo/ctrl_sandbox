@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 from typing import Tuple, Union
 
-import ilqr_utils as util
+import util_funcs as util
 
 
 # library of cost functions and associated functions for manipulating cost functions

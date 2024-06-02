@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 from jax import numpy as jnp
 
 import ilqr_funcs as ilqr
-import ilqr_utils as util
+import util_funcs as util
 import cost_functions as cost
 import dyn_functions as dyn
 import gen_ctrl_funcs as gen_ctrl
