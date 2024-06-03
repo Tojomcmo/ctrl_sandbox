@@ -2,6 +2,8 @@ import numpy as np
 import mujoco as mujoco
 from scipy.signal import StateSpace
 
+# TODO Fix the statespace discretization statements which are commented out.
+
 
 class undamped_simple_pend_dyn:
     def __init__(self, g: float, l: float) -> None:
@@ -68,13 +70,13 @@ if __name__ == "__main__":
 
     pend_sys = undamped_simple_pend_dyn(g=1.0, l=1.0)
     ss_cont = pend_sys.cont_lti_pend_ss_down()
-    ss_disc = ss_cont.to_discrete(dt)
+    # ss_disc = ss_cont.to_discrete(dt)
 
     # --------- compare state transition and control matrices ------------#
     print("/------compare transition matrices--------/")
     # get discretized linear dynamic model of pendulum
     ss_cont = pend_sys.cont_lti_pend_ss_down()
-    ss_disc = ss_cont.to_discrete(dt)
+    # ss_disc = ss_cont.to_discrete(dt)
 
     # perform finite difference mujoco function to obtain transition and control matrices
     eps = 1e-6
@@ -89,10 +91,10 @@ if __name__ == "__main__":
         mj_model, mj_data, eps, flg_centered, A_mj, B_mj, None, None
     )
 
-    print("linear discrete model A matrix: \n", ss_disc.A)
+    # print("linear discrete model A matrix: \n", ss_disc.A)
     print("mujoco transition FD A matrix: \n", A_mj)
-    print("diff A matrices: \n", (ss_disc.A - A_mj))
-    print("linear discrete model B matrix: \n", ss_disc.B)
+    # print("diff A matrices: \n", (ss_disc.A - A_mj))
+    # print("linear discrete model B matrix: \n", ss_disc.B)
     print("mujoco transition FD B matrix: \n", B_mj)
 
     # --------- compare next states ------------#
@@ -100,9 +102,9 @@ if __name__ == "__main__":
 
     # Calculate x_kp1 = A_d@x_k + B_d@u_k state propogation for state space systems
     x_kp1_pred_mj = A_mj @ state_k.reshape(-1, 1) + B_mj @ control_k.reshape(-1, 1)
-    x_kp1_pred_lin = ss_disc.A @ state_k.reshape(-1, 1) + ss_disc.B @ control_k.reshape(
-        -1, 1
-    )
+    # x_kp1_pred_lin = ss_disc.A @ state_k.reshape(-1, 1) + ss_disc.B @ control_k.reshape(
+    # -1, 1
+    # )
 
     # perform RK4 step on non-linear dynamics to compare with linearized dynamics
     x_kp1_pred_nl = step_rk4(pend_sys.cont_dyn_func, dt, state_k, control_k)
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     mujoco.mj_step(mj_model, mj_data)
     x_kp1_mj = (np.array([mj_data.qpos, mj_data.qvel])).reshape(-1)
 
-    print("lin sys step x(kp1|k): \n", x_kp1_pred_lin.reshape(-1))
+    # print("lin sys step x(kp1|k): \n", x_kp1_pred_lin.reshape(-1))
     print("rk4 on nl dyn x(kp1|k): \n", x_kp1_pred_nl.reshape(-1))
     print("mj predicted x(kp1|k): \n", x_kp1_pred_mj.reshape(-1))
     print("mj simulated step x_kp1: \n", x_kp1_mj)

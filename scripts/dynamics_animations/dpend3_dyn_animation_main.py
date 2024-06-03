@@ -3,10 +3,10 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
 
-import dyn_functions as dyn
-import visualize_dyn_funcs as vis_dyn
-import gen_ctrl_funcs as gen_ctrl
-import analyze_ilqr_output_funcs as analyze
+import ctrl_sandbox.dyn_functions as dyn
+import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 
 
 if __name__ == "__main__":

@@ -1,15 +1,16 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-import src.gen_ctrl_funcs as gen_ctrl
-import src.ttlqr_funcs as ttlqr
-import src.dyn_functions as dyn
-import src.analyze_ilqr_output_funcs as analyze
+import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.ttlqr_funcs as ttlqr
+import ctrl_sandbox.dyn_functions as dyn
+import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 
 
 if __name__ == "__main__":
     # Define system paramaters
-    gen_lin_dyn_sys = dyn.lti_pend_ss_cont
+
+    gen_lin_dyn_sys = dyn.single_pm_pend_dyn(g=10, b=0.7, l=1)
     lti_ss_params = {"g": 10.0, "b": 0.7, "l": 1.0}
     time_step = 0.01
 
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     x_init_vec = np.array([[0.1], [0.1]])
     # Define trajectory
 
-    traj_gen_ss_cont = gen_lin_dyn_sys(lti_ss_params)
+    traj_gen_ss_cont = gen_lin_dyn_sys.cont_lti_pend_ss_down()
     traj_gen_ss_discrete = gen_ctrl.discretize_continuous_state_space(
         traj_gen_ss_cont, time_step, c2d_method="zohCombined"
     )
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     # initialize simulation parameters
 
     lti_ss_sim_params = {"g": 10.0, "b": 0.5, "l": 1.0}
-    sim_ss_cont = gen_lin_dyn_sys(lti_ss_sim_params)
+    sim_ss_cont = gen_lin_dyn_sys.cont_lti_pend_ss_down()
     sim_ss_discrete = gen_ctrl.discretize_continuous_state_space(
         sim_ss_cont, time_step, c2d_method="zohCombined"
     )

@@ -6,13 +6,13 @@ import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
 import mujoco as mujoco
 
-import ilqr_funcs as ilqr
-import dyn_functions as dyn
-import cost_functions as cost
-import mjcf_models as mj_models
-import mujoco_funcs as mj_funcs
-import visualize_mj_funcs as mj_vis
-import visualize_dyn_funcs as vis_dyn
+import ctrl_sandbox.ilqr_funcs as ilqr
+import ctrl_sandbox.dyn_functions as dyn
+import ctrl_sandbox.cost_functions as cost
+import ctrl_sandbox.mjcf_models as mj_models
+import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.visualize_mj_funcs as mj_vis
+import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
 
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)

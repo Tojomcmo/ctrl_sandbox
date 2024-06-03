@@ -3,17 +3,17 @@ import mujoco as mujoco
 import matplotlib.pyplot as plt
 import matplotlib.animation as animate
 
-import mujoco_funcs as mj_funcs
-import mjcf_models as mj_models
-import visualize_mj_funcs as mj_vis
-import visualize_dyn_funcs as vis_dyn
+import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.mjcf_models as mj_models
+import ctrl_sandbox.visualize_mj_funcs as mj_vis
+import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
 
 if __name__ == "__main__":
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
 
     # mjcf_model  = mj_models.create_MJCF_double_pend_m_d_mod(1,1,1)
-    mjcf_model = mj_models.create_MJCF_double_pend_fa_dev()
-    model = mujoco.MjModel.from_xml_string(mjcf_model)
+    mjcf_model_obj = mj_models.mjcf_dpend(shoulder_act=True, elbow_act=True)
+    model = mujoco.MjModel.from_xml_string(mjcf_model_obj.get_mjcf_model)
     data = mujoco.MjData(model)
 
     # renderer and visualization
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         plt.show()
 
     if show_custom_ani is True:
-        fig = plt.figure(figsize=[10, 8])
+        fig = plt.figure(figsize=(10, 8))
         pend_animation = vis_dyn.double_pm_pend_animation(
             1.0, 1.0, x_vec_seq, time_step, fig, th2="rel"
         )

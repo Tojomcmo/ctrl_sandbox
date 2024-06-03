@@ -322,9 +322,16 @@ def run_ilqr_controller(
         K_seq, d_seq, d_v_seq, ro_reg = calculate_backwards_pass(
             ilqr_config, x_seq, u_seq, ro_reg, reg_inc_bool
         )
-        x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_forwards_pass(
-            ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
-        )
+        if ilqr_config.mj_ctrl is True:
+            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = (
+                calculate_forwards_pass_mj(
+                    ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
+                )
+            )
+        else:
+            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_forwards_pass(
+                ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
+            )
         converge_measure, converge_reached, avg_ff_gain = (
             analyze_ilqr_pass_for_stop_condition(
                 ilqr_config,

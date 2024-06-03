@@ -238,7 +238,7 @@ def plot_ilqr_iter_sim_ctrl_cost(
     x_plot_seq_quiverwidth = []
     n = len(x_plot_seqs)
     # set color map
-    colormap = cm.get_cmap("rainbow")
+    colormap = plt.get_cmap("rainbow")
     color = iter(colormap(np.linspace(0, 1, n)))
     for idx in range(len(x_plot_seqs)):
         if idx == 0:
