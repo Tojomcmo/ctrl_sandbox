@@ -1,30 +1,18 @@
-import matplotlib.pyplot as plt
-import unittest
+import pytest
 from jax import numpy as jnp
-import numpy as np
 
-import mujoco_funcs as mj_funcs
-import mjcf_models as mjcf_models
-import visualize_mj_funcs as mj_vis
+import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.mjcf_models as mjcf_models
 
 
-class shared_analysis_funcs:
-    def __init__(self) -> None:
-        pass
-
-
-class test_create_acrobot_model(unittest.TestCase):
-    def test_creat_acrobot_model_loads(self):
-        model = mjcf_models.create_acrobot()
-        time_step = 0.01
-        x_vec = np.array([0.1, 0.1, 0.1, 0.1], dtype=float)
-        u_vec = np.array([0.1], dtype=float)
-        mjModel, mjRender, mjData = mj_funcs.create_mujoco_model(model, time_step)
-        mj_funcs.set_mj_state_vec(mjData, x_vec)
-        mj_funcs.set_mj_ctrl_vec(mjData, u_vec)
-        A, B = mj_funcs.linearize_mujoco_state_and_control(mjModel, mjData)
-        self.assertEqual(A.shape, (len(x_vec), len(x_vec)))
-
-
-if __name__ == "__main__":
-    unittest.main()
+def test_create_acrobot_model_loads():
+    model_obj = mjcf_models.mjcf_dpend(shoulder_act=False, elbow_act=True)
+    model = model_obj.get_mjcf_model()
+    time_step = 0.01
+    x_vec = jnp.array([0.1, 0.1, 0.1, 0.1], dtype=float)
+    u_vec = jnp.array([0.1], dtype=float)
+    mjModel, mjRender, mjData = mj_funcs.create_mujoco_model(model, time_step)
+    mj_funcs.set_mj_state_vec(mjData, x_vec)
+    mj_funcs.set_mj_ctrl_vec(mjData, u_vec)
+    A, B = mj_funcs.linearize_mujoco_state_and_control(mjModel, mjData)
+    assert A.shape == (len(x_vec), len(x_vec))

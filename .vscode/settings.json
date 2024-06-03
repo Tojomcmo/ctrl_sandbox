@@ -8,9 +8,7 @@
     "python.formatting.provider": "autopep8",
     "editor.formatOnSave": true,
     "python.testing.pytestArgs": [
-        "test",
-        "./test",
-        "test_*.py"
+        "test"
     ],
     // "python.analysis.extraPaths": ["${workspaceFolder}/src;${workspaceFolder}/scripts"],
     // "terminal.integrated.env.windows": {

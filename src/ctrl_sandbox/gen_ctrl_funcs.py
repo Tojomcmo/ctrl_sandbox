@@ -21,15 +21,17 @@ class stateSpace:
         if a_mat.shape[0] != a_mat.shape[1]:
             raise ValueError("A matrix must be square")
         elif a_mat.shape[0] != b_mat.shape[0]:
-            raise ValueError("A and B matrices must have same n(state) dimension")
+            raise ValueError("A matrix row number and B matrix row number must match")
         elif a_mat.shape[0] != c_mat.shape[1]:
-            raise ValueError("A and C matrices must have same m(state) dimension")
-        elif b_mat.shape[1] != d_mat.shape[1]:
-            raise ValueError("B and D matrices must have the same m(control) dimension")
-        elif c_mat.shape[0] != d_mat.shape[0]:
             raise ValueError(
-                "C and D matrices must have the same n(measurement) dimension"
+                "A matrix row number and C matrix column number must match"
             )
+        elif b_mat.shape[1] != d_mat.shape[1]:
+            raise ValueError(
+                "B matrix column number and D matrix column number must match"
+            )
+        elif c_mat.shape[0] != d_mat.shape[0]:
+            raise ValueError("C matrix row number and D matrix row number must match")
         else:
             if time_step is None:
                 self.a = a_mat
@@ -310,7 +312,12 @@ def calculate_total_cost_pre_decorated(
     (_, total_cost), (total_cost_seq, x_cost_seq, u_cost_seq) = lax.scan(
         cost_for_calc_scan_func, init_carry, xu_seq
     )
-    return total_cost.item(), total_cost_seq, x_cost_seq, u_cost_seq
+    return (
+        total_cost.item(),
+        total_cost_seq.reshape(-1),
+        x_cost_seq.reshape(-1),
+        u_cost_seq.reshape(-1),
+    )
 
 
 def calculate_total_cost(

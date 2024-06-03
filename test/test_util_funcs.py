@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jnp
 import numpy as np
-import util_funcs as util
+import ctrl_sandbox.util_funcs as util
 
 
 @pytest.mark.parametrize(

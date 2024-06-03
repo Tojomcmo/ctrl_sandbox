@@ -10,9 +10,7 @@ from typing import Tuple, Union
 
 
 class costFuncParams:
-    def __init__(
-        self, x_des_seq: npt.NDArray[np.float64], u_des_seq: npt.NDArray[np.float64]
-    ) -> None:
+    def __init__(self, x_des_seq: jnp.ndarray, u_des_seq: jnp.ndarray) -> None:
         self.x_des_seq = x_des_seq
         self.u_des_seq = u_des_seq
         self.len_seq = len(x_des_seq)
@@ -21,11 +19,11 @@ class costFuncParams:
 class costFuncQuadStateAndControlParams(costFuncParams):
     def __init__(
         self,
-        Q: npt.NDArray[np.float64],
-        R: npt.NDArray[np.float64],
-        Qf: npt.NDArray[np.float64],
-        x_des_seq: npt.NDArray[np.float64],
-        u_des_seq: npt.NDArray[np.float64],
+        Q: jnp.ndarray,
+        R: jnp.ndarray,
+        Qf: jnp.ndarray,
+        x_des_seq: jnp.ndarray,
+        u_des_seq: jnp.ndarray,
     ) -> None:
         super().__init__(x_des_seq, u_des_seq)
         self.Q = Q

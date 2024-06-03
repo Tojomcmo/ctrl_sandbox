@@ -96,7 +96,6 @@ class mjcf_dpend:
     def create_MJCF_double_pend_fa_dev(self):
         mjcf_pend_model = """<mujoco>
                             <option gravity="0 0 -9.81" integrator="RK4">
-                                <flag sensornoise="disable"/>
                             </option>
 
                             <worldbody>
@@ -141,7 +140,6 @@ class mjcf_dpend:
     def create_MJCF_double_pend_shoulder_dev(self):
         mjcf_pend_model = """<mujoco>
                             <option gravity="0 0 -9.81" integrator="RK4">
-                                <flag sensornoise="disable"/>
                             </option>
 
                             <worldbody>
@@ -187,7 +185,6 @@ class mjcf_dpend:
     def create_MJCF_double_pend_elbow_dev(self):
         mjcf_pend_model = """<mujoco>
                           <option gravity="0 0 -9.81" integrator="RK4">
-                              <flag sensornoise="disable"/>
                           </option>
 
                           <worldbody>
