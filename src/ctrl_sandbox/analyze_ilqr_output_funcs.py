@@ -65,7 +65,6 @@ def plot_2d_state_quiver(
     y_start = y_data[:-1] + (0.1) * (y_data[1:] - y_data[:-1])
     del_x = (0.8) * (x_data[1:] - x_data[:-1])
     del_y = (0.8) * (y_data[1:] - y_data[:-1])
-    # axes[axis_num].plot(x_seq_array[0], x_seq_array[1], color,linestyle='--', label=legend_name)
     plt.figure(figure)
     axes.quiver(
         x_start,
@@ -283,8 +282,28 @@ def plot_ilqr_iter_sim_ctrl_cost(
         xlabel="angPos",
         ylabel="angVel",
     )
-    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], controller_output.u_seq[:, 0], xlabel="Time", ylabel="control", datalabel="control nominal", title="control plot", color="r.")  # type: ignore
-    plot_x_y_sequences(fig, ax2, controller_output.time_seq[:-1], u_sim_seq[:, 0], xlabel="Time", ylabel="control", datalabel="control simulated", title="control plot", color="b.")  # type: ignore
+    plot_x_y_sequences(
+        fig,
+        ax2,
+        controller_output.time_seq[:-1],
+        controller_output.u_seq[:, 0],
+        xlabel="Time",
+        ylabel="control",
+        datalabel="control nominal",
+        title="control plot",
+        color="r.",
+    )  # type: ignore
+    plot_x_y_sequences(
+        fig,
+        ax2,
+        controller_output.time_seq[:-1],
+        u_sim_seq[:, 0],
+        xlabel="Time",
+        ylabel="control",
+        datalabel="control simulated",
+        title="control plot",
+        color="b.",
+    )  # type: ignore
     plot_x_y_sequences(
         fig,
         ax3,
@@ -319,17 +338,3 @@ def plot_ilqr_iter_sim_ctrl_cost(
         color="g.",
     )
     plt.tight_layout()
-
-
-# def calculate_dpend_potential_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-#     pot_energy_m1 = - pm.g * (pm.m1 + pm.m2) * pm.l1 * np.cos(x_vec[0])
-#     pot_energy_m2 = - pm.g *  pm.m2          * pm.l2 * np.cos(x_vec[1])
-#     return pot_energy_m1 + pot_energy_m2
-
-# def calculate_dpend_kinetic_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-#     return ( 0.5*(pm.m1 + pm.m2) * pm.l1**2 * (x_vec[2])**2 ) + \
-#            ( 0.5*(pm.m2)         * pm.l2**2 * (x_vec[3])**2 ) + \
-#         (pm.m2 * pm.l1 * pm.l2 * x_vec[2] * x_vec[3] * np.cos(x_vec[0] - x_vec[1]))
-
-# def calculate_dpend_total_energy(pm:dyn.nlDoublePendParams, x_vec:npt.NDArray[np.float64]) -> float:
-#     return calculate_dpend_kinetic_energy(pm,x_vec) + calculate_dpend_potential_energy(pm, x_vec)
