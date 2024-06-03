@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "ctrl_sandbox", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.10"
 jaxlib = "^0.4.28"
 jax = "^0.4.28"
 numpy = "^1.26.4"
