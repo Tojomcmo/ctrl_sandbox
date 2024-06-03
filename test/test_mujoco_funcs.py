@@ -8,7 +8,7 @@ import ctrl_sandbox.mjcf_models as mjcf
 
 def test_create_mujoco_model_recieves_valid_system():
     model_obj = mjcf.mjcf_dpend(shoulder_act=True, elbow_act=True)
-    model, _, data = mj_funcs.create_mujoco_model(
+    model, renderer, data = mj_funcs.create_mujoco_model(
         model_obj.get_mjcf_model(), time_step=0.1
     )
     model.opt.timestep = 0.1
