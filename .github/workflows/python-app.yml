@@ -24,10 +24,10 @@ jobs:
       with:
         node-version: '20'
         
-    - name: Set up Python 3.11
+    - name: Set up Python 3.12
       uses: actions/setup-python@v3
       with:
-        python-version: "3.11"
+        python-version: "3.12"
         
     - name: Install Poetry
       run: |
@@ -41,16 +41,20 @@ jobs:
         
     - name: Install dependencies
       run: |
+        source .venv/bin/activate      
         export PATH="$HOME/.local/bin:$PATH"
         poetry install
         
+
     - name: Lint with flake8
       run: |
+        source .venv/bin/activate
         export PATH="$HOME/.local/bin:$PATH"
-        poetry run flake8 . --max-line-length 88
+        poetry run flake8 . 
       continue-on-error: true  
         
     - name: Test with pytest
       run: |
+        source .venv/bin/activate      
         export PATH="$HOME/.local/bin:$PATH"
         poetry run pytest
