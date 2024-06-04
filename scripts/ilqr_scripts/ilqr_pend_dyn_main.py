@@ -1,10 +1,6 @@
 from jax import numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
-import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
-import numpy.typing as npt
 import mujoco as mujoco
 
 import ctrl_sandbox.ilqr_funcs as ilqr
@@ -12,22 +8,14 @@ import ctrl_sandbox.dyn_functions as dyn
 import ctrl_sandbox.cost_functions as cost
 import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
-import ctrl_sandbox.mjcf_models as mj_models
 import ctrl_sandbox.mujoco_funcs as mj_funcs
 
 if __name__ == "__main__":
-    # ------- Define controller configuration -------#
-
-    # ilqr_config_mj = {
-    #                  'mj_ctrl'                   : True,
-    #                  'mjcf_model'                : mj_models.create_MJCF_single_pend_m_d_mod(1,1,1),
-
     # ----- define timestep and sequence length -----#
     time_step = 0.01
     len_seq = 30
     num_states = 2
     num_controls = 1
-    mj_ctrl = False
     Q_cost = jnp.array([[10.0, 0], [0.0, 1.0]]) * 0.1
     R_cost = jnp.array([[0.1]]) * 0.1
     Qf_cost = jnp.array([[10.0, 0], [0.0, 1.0]]) * 1000.0
@@ -77,12 +65,8 @@ if __name__ == "__main__":
     cost_func = cost.cost_quad_x_and_u(
         Q_cost, R_cost, Qf_cost, x_des_seq=x_des_seq, u_des_seq=u_des_seq
     )
-    if mj_ctrl is True:
-        pass
-    else:
-        ilqr_config.config_for_dyn_func(
-            dyn_func_ctrl_obj.cont_dyn_func, gen_ctrl.step_rk4
-        )
+
+    ilqr_config.config_for_dyn_func(dyn_func_ctrl_obj.cont_dyn_func, gen_ctrl.step_rk4)
     ilqr_config.config_cost_func(
         cost_func.cost_func_quad_state_and_control_scan_compatible
     )
@@ -107,28 +91,6 @@ if __name__ == "__main__":
     x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(
         sim_dyn_disc_func, controller_output, x_sim_init_vec
     )
-
-    # ------ Create mujoco video --------#
-    if ilqr_config.mj_ctrl is True:
-        framerate = 30
-        fig1, ax1 = plt.subplots()
-        mjvid_model, mjvid_renderer, mjvid_data = mj_funcs.create_mujoco_model(
-            ilqr_config.mj_model, time_step
-        )
-        mjvid_renderer.update_scene(mjvid_data, "fixed")
-        scene_option = mujoco.MjvOption()
-        scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = False
-        img_set, frames = mj_funcs.create_mj_video_ilqr_w_ctrl(
-            mjvid_model,
-            mjvid_data,
-            mjvid_renderer,
-            scene_option,
-            framerate,
-            x_sim_init_vec,
-            controller_output,
-            ilqr_config,
-        )
-        ani = animate.ArtistAnimation(fig1, img_set, interval=int(1 / framerate * 1000))
     # ------- plot simulation and controller outputs ------#
 
     analyze.plot_ilqr_iter_sim_ctrl_cost(

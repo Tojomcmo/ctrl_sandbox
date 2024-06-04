@@ -15,7 +15,8 @@ def sim_dyn(
     seq_len: int,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
-    **simulate dynamics from initial state with controller, disturbances, noise, and measurement functions**
+    **simulate dynamics from initial state with controller,
+        disturbances, noise, and measurement functions**
 
     """
     seq = jnp.arange(0, seq_len - 1, dtype=int)

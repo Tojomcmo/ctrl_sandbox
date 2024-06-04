@@ -1,10 +1,7 @@
 from jax import numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
-import matplotlib.gridspec as gridspec
 import matplotlib.animation as animate
-import numpy.typing as npt
 import mujoco as mujoco
 
 import ctrl_sandbox.ilqr_funcs as ilqr
@@ -17,12 +14,6 @@ import ctrl_sandbox.mujoco_funcs as mj_funcs
 import ctrl_sandbox.visualize_mj_funcs as mj_vis
 
 if __name__ == "__main__":
-    # ------- Define controller configuration -------#
-
-    # ilqr_config_mj = {
-    #                  'mj_ctrl'                   : True,
-    #                  'mjcf_model'                : mj_models.create_MJCF_single_pend_m_d_mod(1,1,1),
-
     # ----- define timestep and sequence length -----#
     time_step = 0.1
     len_seq = 40

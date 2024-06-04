@@ -14,8 +14,6 @@ import mujoco as mujoco
 import ctrl_sandbox.util_funcs as util
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.mujoco_funcs as mj_funcs
-import ctrl_sandbox.cost_functions as cost
-import ctrl_sandbox.dyn_functions as dyn
 
 
 class ilqrConfigStruct:
@@ -89,10 +87,14 @@ class ilqrConfigStruct:
         ],
     ) -> None:
         """
-        This function receives python functions for dynamics and prepares the curried functions for the controller to use.\n
-        dyn_func[in] - callable that returns the continuous dynamics (state_dot) given current state, control, and a set of paramters\n
-        dyn_func_params[in] - struct of dynamics function parameters to specify dynamic function values (mass, damping, springrate etc.)\n
-        integrate_func[in] - callable that recieves the continuous dynamic function and returns the integrated value at t + timestep.
+        This function receives python functions for dynamics and
+            prepares the curried functions for the controller to use.\n
+        dyn_func[in] - callable that returns the continuous dynamics (state_dot)
+            given current state, control, and a set of paramters\n
+        dyn_func_params[in] - struct of dynamics function parameters to
+            specify dynamic function values (mass, damping, springrate etc.)\n
+        integrate_func[in] - callable that recieves the continuous dynamic function
+            and returns the integrated value at t + timestep.
         Can be viewed as a discretizer (rk4, euler etc.)
         """
         # check whether struct already configured for dynamics
@@ -103,7 +105,7 @@ class ilqrConfigStruct:
         self.integrate_func = integrate_func
         self.is_cost_configured = True
         self.mj_ctrl: bool = False
-        # TODO create update-timestep script to update currying if timestep is changed after func config
+        # TODO create update-timestep script if timestep is changed after func config
 
     def config_for_mujoco(self, mjcf_model) -> None:
         # check whether struct already configured for dynamics
@@ -150,7 +152,7 @@ class ilqrConfigStruct:
 
     def _curry_funcs_for_dyn_funcs(self) -> None:
         """
-        **Create lax.scan functions for ilqr algorithm using supplied dynamics function**
+        **Create lax.scan functions using supplied dynamics function**
         - simulate forward dynamics sequence function
         - linearize forward dynamics sequence function
         - simulate forward pass update function
@@ -173,7 +175,7 @@ class ilqrConfigStruct:
         )
         self.linearize_dyn_seq: Callable[
             [jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]
-        ] = lambda x_seq, u_seq: gen_ctrl.calculate_linearized_state_space_seq_pre_decorated(
+        ] = lambda x_seq, u_seq: gen_ctrl.calculate_lin_state_space_seq_pre_decorated(
             lin_dyn_scan_func, x_seq, u_seq
         )
 
@@ -304,10 +306,11 @@ def run_ilqr_controller(
 ) -> ilqrControllerState:
     """
     **Top-level function for running ilqr alorithm**
-    - [in] ilqr_config - fully populated object of ilqr configuration values and functions
+    - [in] ilqr_config - fully populated ilqr configuration object
     - [in] init_x_vec - initial state vector as jax array dim (n,)
     - [in] init_u_seq - initial control sequence guess as jax array dim (len_seq-1,m)
-    - [out] ctrl_state_out - fully populated ilqr controller state containing algorithm output and optional stored algorithm information
+    - [ret] ctrl_state_out - fully populated ilqr controller state containing
+        algorithm output and optional stored algorithm information
     """
     ctrl_state_out = ilqrControllerState(ilqr_config, init_x_vec, init_u_seq)
     u_seq = init_u_seq
@@ -417,7 +420,8 @@ def analyze_ilqr_pass_for_stop_condition(
     **determine whether the algorithm has demonstrated convergence** \n
     convergence conditions:
     - average feedforward values (relative to control values) are sufficiently small
-    - trajectory cost decrease relative to "size of step is sufficiently small (size of step captured by line search factor)
+    - trajectory cost decrease relative to "size of step is sufficiently small"
+        (size of step captured by line search factor)
     - algorithm has reached maximum iterations
     """
     avg_ff_gain = calculate_avg_ff_gains(d_seq, u_seq)
@@ -442,9 +446,11 @@ def calculate_backwards_pass(
     **Calculate iLQR backwards pass**
     - linearize the discrete dynamics at each point along the trajectory
     - quadratically expand the cost function at each point along the trajectory
-    - backwards calculate the Gauss-Newton minimization steps along the trajectory using the approximated time-varying LQR problem structure
-    - return the update feedforward, feedback, and expected value function reduction sequences,
-    along with the reqularization value used in the backwards pass.
+    - backwards calculate the Gauss-Newton minimization steps along the
+        trajectory using the approximated time-varying LQR problem structure
+    - return the update feedforward, feedback,
+        and expected value function reduction sequences,
+        along with the reqularization value used in the backwards pass.
     """
     dyn_lin_approx_seq = ilqr_config.linearize_dyn_seq(x_seq, u_seq)
     cost_quad_approx_seq = ilqr_config.quad_exp_cost_seq(x_seq, u_seq)
@@ -468,11 +474,13 @@ def sweep_back_pass(
 ):
     """
     **Calculate backwards pass Gauss-Newton minimization step sequence values** \n
-    This function uses the supplied linearized dynamics sequence and quadratically approximated cost function sequence to
-    solve a time-varying LQR problem. The function calculates a sequence of feedforward control values
-    and feedback state-error gains that minimize the projected cost of the approximated linear quadratic problem.
-    These values are calculated through the backwards recursive bellman's relation of the locally approximated Q-function
-    (single-step state-action function).
+    This function uses the supplied linearized dynamics sequence and
+        quadratically approximated cost function sequence to solve a
+        time-varying LQR problem. The function calculates a sequence of
+        feedforward control values and feedback state-error gains that minimize
+        the projected cost of the approximated linear quadratic problem. \n
+    These values are calculated through the backwards recursive bellman's
+        relation of the locally approximated Q-function (single-step state-action).
     """
     # Grab final cost-to-go approximation
     p_N, _, P_N, _, _ = tuple(seq[-1] for seq in cost_quad_approx_seqs)
@@ -516,14 +524,17 @@ def sweep_back_pass_scan_func(
 ]:
     """
     ** lax.scan function for backwards pass recursive LQR solution** \n
-    - Recieve the single step dynamics linearization and cost function quadratic expansion,
+    - Recieve single step dynamics linearization and cost function quadratic expansion,
     along with the quadratic-approximated value function Vkp1(x)
     - formaulate the quadratic-approximation of the Q-function
     (single step cost-to-go plus next step value function).
     - calculated optimal gain values via first order necessary condition of dQ/du = 0,
-    - quadraticly approximate the current value function Vk along with the expected cost decrease
-    - pass the Vk approximation on, and return the optimal gains and expected cost decrease \n
-    The function can be seen as the single-step calculation in the bellman optimal recursion.
+    - quadraticly approximate the current value function Vk,
+        along with the expected cost decrease
+    - pass the Vk approximation on,
+        and return the optimal gains and expected cost decrease \n
+    The function can be seen as the single-step
+        calculation in the bellman optimal recursion.
     """
     ro_reg, P_kp1, p_kp1, is_pos_def_bool = carry
     dyn_lin_k, cost_quad_approx_k = seqs
@@ -576,10 +587,14 @@ def calculate_forwards_pass(
     """
     **Calculate forwards pass to update optimal trajectory via backwards pass output**
     - use optimal gains to simulate new proposed trajectory
-    - compare change in trajectory cost to expected change from backwards pass approximations
-    - iterate through reducing line search step until adequate cost reduction or forward pass iteration max
-    - if iteration max hit with no adequate cost reduction, request increase in backwards pass regularization
-    (increasing regularization has the effect of producing a more "naive gradient descent step")
+    - compare change in trajectory cost to expected
+        change from backwards pass approximations
+    - iterate through reducing line search step
+        until adequate cost reduction or forward pass iteration max
+    - if iteration max hit with no adequate cost reduction,
+        request increase in backwards pass regularization
+    (increasing regularization has the effect of
+        producing a more "naive gradient descent step")
     """
     lsf = 1.0
     iter_count = 0
@@ -600,7 +615,7 @@ def calculate_forwards_pass(
             u_seq_fp = u_seq_prev
             cost_float_fp = cost_float_prev
             reg_inc_bool = True
-        else:  # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
+        else:  # if decrease check fails, run pass again with smaller feedforward step
             lsf *= ilqr_config.ls_scale_alpha_param
         iter_count += 1
     return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
@@ -616,7 +631,6 @@ def calculate_forwards_pass_mj(
     cost_float_prev: float,
 ):
     """**Mujoco compatible version of calculate_forward_pass**"""
-    # initialize forward pass state vec, control_vec, cost and cost seqs, line search factor, armijo parameter bool
     x_seq_fp, u_seq_fp, cost_float_fp, in_bounds_bool = _initialize_forwards_pass(
         x_seq_prev.shape[1], u_seq_prev.shape[1], x_seq_prev[0], x_seq_prev.shape[0]
     )
@@ -648,7 +662,7 @@ def calculate_forwards_pass_mj(
             u_seq_fp = u_seq_prev
             cost_float_fp = cost_float_prev
             reg_inc_bool = True
-        else:  # if decrease is outside of bounds, reinitialize and run pass again with smaller feedforward step
+        else:  # if decrease check fail, run pass again with smaller feedforward step
             x_seq_fp, u_seq_fp, cost_float_fp, in_bounds_bool = (
                 _initialize_forwards_pass(
                     x_seq_prev.shape[1],
@@ -705,12 +719,16 @@ def forward_pass_scan_func(
     Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
 ]:
     """
-    **kernel lax.scan function for forwards pass simulation for proposing trajectory update**
-    - recieve current and nominal state, nominal control, optimal gains from backwards pass for step k
-    - calculate new uk using feedforward feedback controller structure, scaled by line search factor
+    **kernel lax.scan function for forwards pass simulation for
+        proposing trajectory update**
+    - recieve current and nominal state, nominal control,
+        optimal gains from backwards pass for step k
+    - calculate new uk using feedforward feedback controller structure,
+        scaled by line search factor
     - calculate new step k cost with new control value
     - calculate new kp1 state using new control
-    - pass cumulative cost and next state forward, and return updated state and control sequences
+    - pass cumulative cost and next state forward,
+        and return updated state and control sequences
     """
     x_k, u_k, K_k, d_k = seqs
     k, cost_float, x_k_new, lsf = carry
@@ -732,7 +750,7 @@ def _curry_forward_pass_scan_func(
     Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]],
 ]:
     """
-    **prepare forward_pass_scan_func() for lax.scan by partial argument completion for dyn and cost funcs**
+    **prepare forward_pass_scan_func() for lax.scan by populating dyn and cost funcs**
     """
 
     def fp_scan_func_curried(
@@ -772,13 +790,13 @@ def taylor_expand_pseudo_hamiltonian(
     """
     **calculate taylor expansion of the single step Q function**
     - Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
-    - V' is value function at next, Vkp1, assumed to have quadratic form V' = (1/2)x.TPx + px
-    -detailed of derivation can be found in wiki here: \n
-    https://github.com/Tojomcmo/ctrl_sandbox/wiki/ilqr-cost%E2%80%90to%E2%80%90go-derivation
+    - V' is value function at next, Vkp1,
+        assumed to have quadratic form V' = (1/2)x.TPx + px
+    - detailed of derivation can be found in wiki here: \n
+    - https://github.com/Tojomcmo/ctrl_sandbox/wiki/
+        ilqr-cost%E2%80%90to%E2%80%90go-derivation
 
     """
-    #   Q(dx,du) = l(x+dx, u+du) + V'(f(x+dx,u+du))
-    #   where V' is value function at the next time step, assumed to have quadratic form V' = (1/2)x.TPx + px
     A_lin_k, B_lin_k = dyn_lin_approx_k
     l_x, l_u, l_xx, l_uu, l_ux = cost_quad_approx_k
     P_kp1_reg = util.reqularize_mat(P_kp1, ro_reg)
@@ -802,9 +820,12 @@ def calculate_backstep_ctg_approx(
     d_k: jnp.ndarray,
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
-    **Calculate quadratic approximation of current step cost-to-go for recursive backstepping**
-    - q_ is respective linear or quadratic component of the Q function quadratic approximation
-    - K_k and d_k are optimal control ff and fb gains calculated from minimizing approximated Q function
+    **Calculate quadratic approximation of current step
+        cost-to-go for recursive backstepping**
+    - q_ is respective linear or quadratic component of the
+        Q function quadratic approximation
+    - K_k and d_k are optimal control ff and fb gains
+        calculated from minimizing approximated Q function
     - P_k is the kth hessian approximation of the cost-to-go (Value) function
     - p_k is the kth jacobian approximation of the cost-to-go (Value) function
     - Del_V_k is the kth expected change in the value function
@@ -831,7 +852,6 @@ def calculate_backstep_ctg_approx(
     q_xu = q_ux.T
     P_k = (q_xx) + (K_k.T @ q_uu @ K_k) + (K_k.T @ q_ux) + (q_xu @ K_k)
     p_k = (q_x) + (K_k.T @ q_uu @ d_k) + (K_k.T @ q_u) + (q_xu @ d_k)
-    # TODO verify Del_V_vec_k calculation signs, absolute vs actual, actual gives different signs...
     Del_V_vec_k = jnp.array([(d_k.T @ q_u), ((0.5) * (d_k.T @ q_uu @ d_k))]).reshape(-1)
     return P_k, p_k, Del_V_vec_k
 
@@ -840,7 +860,8 @@ def calculate_optimal_gains(
     q_uu_reg: jnp.ndarray, q_ux: jnp.ndarray, q_u: jnp.ndarray
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
-    **Calculate optimal feedforward and feedback gains from minimizing quad approx Q function**
+    **Calculate optimal feedforward and feedback gains
+        from minimizing quad approx Q function**
     """
     # K_k is a linear feedback term related to del_x from nominal trajectory
     # d_k is a feedforward term related to trajectory correction
@@ -861,7 +882,8 @@ def calculate_u_k_new(
     """
     **Calculate updated control value at time k**
     - Calculate feedforward feedback control value
-    - update value with line search factor scaling of backwards pass feedforward update term d_k**
+    - update value with line search factor scaling of
+        backwards pass feedforward update term d_k**
     """
     return gen_ctrl.calculate_ff_fb_u(
         K_fb_k, u_current_k, x_current_k, x_new_k
@@ -875,9 +897,11 @@ def calculate_cost_decrease_ratio(
     lsf: float,
 ) -> float:
     """
-    Calculates the ratio between the expected cost decrease from approximated dynamics and cost functions, and the calculated
-    cost from the forward pass shooting method. The cost decrease is expected to be positive, as the Del_V_sum should be a negative
-    expected value, and the new cost should be smaller than the previous cost.
+    Calculates the ratio between the expected cost decrease from approximated
+    dynamics and cost functions, and the calculated cost from the forward pass
+    shooting method. The cost decrease is expected to be positive, as the Del_V_sum
+    should be a negative expected value, and the new cost should be smaller than
+    the previous cost.
     """
     Del_V_sum = calculate_expected_cost_decrease(Del_V_vec_seq, lsf)
     cost_decrease_ratio = (1 / Del_V_sum) * (new_cost_float - prev_cost_float)
@@ -886,7 +910,8 @@ def calculate_cost_decrease_ratio(
 
 def calculate_expected_cost_decrease(Del_V_vec_seq: jnp.ndarray, lsf: float) -> float:
     """
-    **Calculate expected cost decrease from updated trajectory, scaled by line search factor**
+    **Calculate expected cost decrease from updated trajectory,
+        scaled by line search factor**
     """
     Del_V_sum = jnp.sum((lsf * Del_V_vec_seq[:, 0]) + (lsf**2 * Del_V_vec_seq[:, 1]))
     return Del_V_sum.item()

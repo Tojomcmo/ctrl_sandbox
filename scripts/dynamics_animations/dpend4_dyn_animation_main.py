@@ -6,8 +6,6 @@ import os
 import ctrl_sandbox.dyn_functions as dyn
 import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
-import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
-
 
 if __name__ == "__main__":
     save_ani_bool = False
@@ -55,7 +53,7 @@ if __name__ == "__main__":
     pend_animation.create_double_pend_animation()
     pend_animation.show_plot()
 
-    if save_ani_bool == True:
+    if save_ani_bool:
         print("saving animation...")
         filename: str | os.PathLike = "/Users/thomasmoriarty/Desktop/dpend_passive"
         pend_animation.save_animation_gif(filename)

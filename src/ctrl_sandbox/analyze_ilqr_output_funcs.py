@@ -1,14 +1,8 @@
-import jax.numpy as jnp
 import numpy as np
-import numpy.typing as npt
-from typing import Tuple
-
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
 import ctrl_sandbox.ilqr_funcs as ilqr
-import ctrl_sandbox.dyn_functions as dyn
 
 
 def plot_2d_state_scatter_sequences(
@@ -249,11 +243,11 @@ def plot_ilqr_iter_sim_ctrl_cost(
             x_plot_seq_styles_quiver.append("blue")
             x_plot_seq_quiverwidth.append(0.0015)
         elif idx == n - 3:
-            x_plot_seq_names.append(f"ctrl final prediction")
+            x_plot_seq_names.append("ctrl final prediction")
             x_plot_seq_styles_quiver.append("green")
             x_plot_seq_quiverwidth.append(0.0015)
         elif idx == n - 2:
-            x_plot_seq_names.append(f"simulation_output")
+            x_plot_seq_names.append("simulation_output")
             x_plot_seq_styles_quiver.append("orange")
             x_plot_seq_quiverwidth.append(0.0025)
         elif idx == n - 1:

@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.ttlqr_funcs as ttlqr
 import ctrl_sandbox.dyn_functions as dyn
-import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 
 
 if __name__ == "__main__":

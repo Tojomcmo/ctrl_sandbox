@@ -79,18 +79,3 @@ if __name__ == "__main__":
         )
         pend_animation.create_double_pend_animation()
         pend_animation.show_plot()
-
-###################################
-
-# for idx in range(steps):
-#     print('state_predict: ', state_next_pred)
-#     mujoco.mj_step(model, data)
-#     state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
-#     print('state_actual: ', state_vec)
-#     A, B = mj_funcs.linearize_mujoco_state_and_control(model, data, eps, flg_centered)
-#     # mujoco.mjd_transitionFD(model, data, eps, flg_centered, A, B, None, None)
-#     print('A: ', A)
-#     print('B: ', B)
-#     state_vec = np.hstack((data.qpos, data.qvel)).reshape(-1,1)
-#     control_vec = np.array(data.ctrl).reshape(-1,1)
-#     state_next_pred = A @ state_vec + B @   control_vec

@@ -9,29 +9,6 @@ from typing import Tuple, Union
 #  - first value MUST be the float value of calculated query cost
 
 
-class costFuncParams:
-    def __init__(self, x_des_seq: jnp.ndarray, u_des_seq: jnp.ndarray) -> None:
-        self.x_des_seq = x_des_seq
-        self.u_des_seq = u_des_seq
-        self.len_seq = len(x_des_seq)
-
-
-class costFuncQuadStateAndControlParams(costFuncParams):
-    def __init__(
-        self,
-        Q: jnp.ndarray,
-        R: jnp.ndarray,
-        Qf: jnp.ndarray,
-        x_des_seq: jnp.ndarray,
-        u_des_seq: jnp.ndarray,
-    ) -> None:
-        super().__init__(x_des_seq, u_des_seq)
-        self.Q = Q
-        self.R = R
-        self.Qf = Qf
-        # TODO create validate inputs function
-
-
 class cost_quad_x_and_u:
     def __init__(
         self,
@@ -83,13 +60,14 @@ class cost_quad_x_and_u:
     def cost_func_quad_state_and_control_scan_compatible(
         self, x_k: jnp.ndarray, u_k: jnp.ndarray, k: int
     ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        # This function calculates a quadratic cost wrt state and control
-        # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-        # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-        # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
-        # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs
-        # x_des_seq_jax = np.array(cost_func_params.x_des_seq)
-        # u_des_seq_jax = np.array(cost_func_params.u_des_seq)
+        """
+        Calculate quadratic cost wrt state and control
+        Q[in]     - State cost matrix, square(n,n) Positive semidefinite
+        R[in]     - Control cost matrix, square(m,m) Positive definite
+        Qf[in]    - Final state cost matrix, square(n,n) Positive semidefinite
+        cost[out] - cost value Tuple [total_cost, x_cost, u_cost]
+        This function is prepped for lax.scan use, and is jax diff compatible
+        """
         # check that dimensions match [TODO]
         is_first_case = k == 0
         is_last_case = k == self.len_seq - 1
@@ -105,15 +83,13 @@ class cost_quad_x_and_u:
     def cost_func_quad_state_and_control_for_calc(
         self, x_k: jnp.ndarray, u_k: jnp.ndarray, k: int
     ):
-        # This function calculates a quadratic cost wrt state and control
-        # Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-        # R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-        # Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
-        # cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs
-
-        # x_des_seq_jax = np.array(cost_func_params.x_des_seq)
-        # u_des_seq_jax = np.array(cost_func_params.u_des_seq)
-        # check that dimensions match [TODO]
+        """
+        This function calculates a quadratic cost wrt state and control
+        Q[in]     - State cost matrix, square(n,n) Positive semidefinite
+        R[in]     - Control cost matrix, square(m,m) Positive definite
+        Qf[in]    - Final state cost matrix, square(n,n) Positive semidefinite
+        cost[out] - cost value Tuple [total_cost, x_cost, u_cost]
+        """
         if k == 0:
             u_k_corr: jnp.ndarray = u_k.reshape(-1, 1) - (self.u_des_seq[k]).reshape(
                 -1, 1
@@ -145,7 +121,30 @@ class cost_quad_x_and_u:
         return total_cost, x_cost, u_cost
 
 
-##############################################################################################
+####################################################################################
+
+
+class costFuncParams:
+    def __init__(self, x_des_seq: jnp.ndarray, u_des_seq: jnp.ndarray) -> None:
+        self.x_des_seq = x_des_seq
+        self.u_des_seq = u_des_seq
+        self.len_seq = len(x_des_seq)
+
+
+class costFuncQuadStateAndControlParams(costFuncParams):
+    def __init__(
+        self,
+        Q: jnp.ndarray,
+        R: jnp.ndarray,
+        Qf: jnp.ndarray,
+        x_des_seq: jnp.ndarray,
+        u_des_seq: jnp.ndarray,
+    ) -> None:
+        super().__init__(x_des_seq, u_des_seq)
+        self.Q = Q
+        self.R = R
+        self.Qf = Qf
+        # TODO create validate inputs function
 
 
 def cost_func_quad_state_and_control(
@@ -156,10 +155,10 @@ def cost_func_quad_state_and_control(
 ):
     """
     This function calculates a quadratic cost wrt state and control
-    Q[in]     - State cost matrix, square, dim(state, state) Positive semidefinite
-    R[in]     - Control cost matrix, square, dim(control, control) Positive definite
-    Qf[in]    - Final state cost matrix, square, dim(state, state) Positive semidefinite
-    cost[out] - cost value calculated given Q,R,S, and supplied state and control vecs
+    Q[in]     - State cost matrix, square(n,n) Positive semidefinite
+    R[in]     - Control cost matrix, square(m,m) Positive definite
+    Qf[in]    - Final state cost matrix, square(n,n) Positive semidefinite
+    cost[out] - cost value Tuple [total_cost, x_cost, u_cost]
     """
     Q = jnp.array(cost_func_params.Q)
     R = jnp.array(cost_func_params.R)

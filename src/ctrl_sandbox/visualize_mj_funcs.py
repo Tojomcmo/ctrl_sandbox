@@ -90,11 +90,11 @@ def create_mj_video_w_ctrl_with_different_time_steps(
     ts_ctrl = ilqr_config.time_step
     if int(ts_ctrl % ts_sim) != 0:
         raise ValueError(
-            "the control timestep must be an integer multiple of the simulation timestep"
+            "control timestep must be an integer multiple of the simulation timestep"
         )
     elif ts_ctrl < ts_sim:
         raise ValueError(
-            "the control timestep must be larger than or equal to the simulation timestep"
+            "control timestep must be larger than or equal to the simulation timestep"
         )
     frames = []
     img_set = []

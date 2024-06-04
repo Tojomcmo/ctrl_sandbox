@@ -90,11 +90,11 @@ def fwd_sim_mj_w_ctrl_different_time_steps(model, data, x_init, u_seq, ts_sim, t
     """
     if int(ts_ctrl % ts_sim) != 0:
         raise ValueError(
-            "the control timestep must be an integer multiple of the simulation timestep"
+            "control timestep must be an integer multiple of the sim timestep"
         )
     elif ts_ctrl < ts_sim:
         raise ValueError(
-            "the control timestep must be larger than or equal to the simulation timestep"
+            "control timestep must be larger than or equal to the sim timestep"
         )
     nx = model.nv
     t_final = len(u_seq) * ts_ctrl

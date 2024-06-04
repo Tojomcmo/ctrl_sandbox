@@ -10,6 +10,9 @@
     "python.testing.pytestArgs": [
         "test"
     ],
+    "editor.rulers": [
+        88
+    ]
     // "python.analysis.extraPaths": ["${workspaceFolder}/src;${workspaceFolder}/scripts"],
     // "terminal.integrated.env.windows": {
     //     "PYTHONPATH": "${workspaceFolder}/src;${workspaceFolder}/tests;${workspaceFolder}/scripts"

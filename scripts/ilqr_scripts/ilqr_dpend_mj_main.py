@@ -49,12 +49,6 @@ if __name__ == "__main__":
     ctrl_config.max_iter = 500
     ctrl_config.fp_max_iter = 10
     # ---------- create desired trajectory ----------#
-    # traj_gen_dyn_func_params = dyn.nlPendParams(g=9.81,b=5.0,l=1.0)
-    # x_tg_init_vec = np.array([[0.0],[0.0],[0.0],[0.0]])
-    # u_tg_seq      = np.ones([len_seq-1,1,1])
-    # traj_gen_cont_dyn_func = lambda x,u: dyn.pend_dyn_nl(traj_gen_dyn_func_params,x,u)
-    # traj_gen_disc_dyn_func = lambda x,u: gen_ctrl.step_rk4(traj_gen_cont_dyn_func, ilqr_config.time_step, x, u)
-    # x_des_seq_traj_gen         = gen_ctrl.simulate_forward_dynamics_seq(traj_gen_disc_dyn_func,x_tg_init_vec, u_tg_seq)
 
     # ---------- set system init ----------#
     x_init_vec = jnp.array([0.0, 0.0, 0.0, 0.0])

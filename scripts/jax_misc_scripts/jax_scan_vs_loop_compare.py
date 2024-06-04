@@ -2,28 +2,33 @@ import jax.numpy as jnp
 from jax import jit, lax, ops
 import time
 
+
 # Dynamics function
 def dynamics(state, t):
     A = jnp.array([[0.99, 0.01], [-0.01, 0.99]])
     return jnp.dot(A, state)
+
 
 # Scan implementation
 def propagate_scan(initial_state, timesteps):
     def step(state, t):
         state_next = dynamics(state, t)
         return state_next, state_next
+
     final_state, state_history = lax.scan(step, initial_state, timesteps)
     return state_history
 
+
 # While-loop implementation
-def propagate_loop(initial_state:jnp.ndarray, timesteps):
+def propagate_loop(initial_state: jnp.ndarray, timesteps):
     state = initial_state
-    state_history:jnp.ndarray = jnp.zeros((len(timesteps+1),len(initial_state)))
+    state_history: jnp.ndarray = jnp.zeros((len(timesteps + 1), len(initial_state)))
     state_history.at[0].set(initial_state)
     for idx, t in enumerate(timesteps):
         state = dynamics(state, t)
-        state_history.at[idx+1].set(state)
+        state_history.at[idx + 1].set(state)
     return state_history
+
 
 # JIT compile both functions
 propagate_scan_jit = jit(propagate_scan)

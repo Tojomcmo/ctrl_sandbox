@@ -3,7 +3,6 @@ from jax import numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import numpy.typing as npt
 import os
 
 import ctrl_sandbox.ilqr_funcs as ilqr
@@ -160,7 +159,7 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    if save_ani_bool == True:
+    if save_ani_bool:
         print("saving animation...")
         filename: str | os.PathLike = ani_save_location + ani_save_name
         pend_animation.save_animation_gif(filename)

@@ -1,9 +1,5 @@
 from jax import numpy as jnp
-import numpy as np
-import numpy.typing as npt
-from jax.numpy.linalg import inv
 
-import ctrl_sandbox.util_funcs as util
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 
 
@@ -17,10 +13,14 @@ class single_pm_pend_dyn:
         """
         continuous time dynamic equation for simple pendulum
         time[in]       - time component, necessary prarmeter for ode integration
-        state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-        control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-        params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-        state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        state[in]      - vector of state variables, 2 values,
+                            [0]: theta, [1]: theta dot, pend down is zero
+        control[in]    - vector of control variables, 1 value,
+                            [0]: torque, positive torque causes
+                            counter clockwise rotation (Right hand rule out of page)
+        params[in]     - g: gravity[m/s^2] (positive down),
+                            l: pend length[m], b: damping[Ns/m]
+        state_dot[out] - vector of state derivatives, [0]: theta dot, [1]: theta ddot
         """
         x_jax = jnp.array(x_vec)
         u_jax = jnp.array(u_vec)
@@ -39,11 +39,16 @@ class single_pm_pend_dyn:
     ) -> jnp.ndarray:
         """
         continuous time dynamic equation for simple pendulum
+
         time[in]       - time component, necessary prarmeter for ode integration
-        state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-        control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-        params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-        state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        state[in]      - vector of state variables, 2 values,
+                        [0]: theta, [1]: theta dot, pend down is zero
+        control[in]    - vector of control variables, 1 value,
+                        [0]: torque, positive torque causes
+                        counter clockwise rotation (Right hand rule out of page)
+        params[in]     - g: gravity[m/s^2] (positive down),
+                        l: pend length[m], b: damping[Ns/m]
+        state_dot[out] - vector of state derivatives, [0]: theta dot, [1]: theta ddot
         """
         x_jax = jnp.array(x_vec)
         u_jax = jnp.array(u_vec)
@@ -84,10 +89,14 @@ class single_pend_dyn:
         """
         continuous time dynamic equation for simple pendulum
         time[in]       - time component, necessary prarmeter for ode integration
-        state[in]      - vector of state variables, 2 values, [0]: theta, [1]: theta dot, pend down is zero
-        control[in]    - vector of control variables, 1 value, [0]: torque, positive torque causes counter clockwise rotation (Right hand rule out of page)
-        params[in]     - g: gravity[m/s^2] (positive down), l: pend length[m], b: damping[Ns/m]
-        state_dot[out] - vector of state derivatives, corresponding to the time derivatives the state vector, [0]: theta dot, [1]: theta ddot
+        state[in]      - vector of state variables, 2 values,
+                            [0]: theta, [1]: theta dot, pend down is zero
+        control[in]    - vector of control variables, 1 value,
+                            [0]: torque, positive torque causes
+                            counter clockwise rotation (Right hand rule out of page)
+        params[in]     - g: gravity[m/s^2] (positive down),
+                            l: pend length[m], b: damping[Ns/m]
+        state_dot[out] - vector of state derivatives, [0]: theta dot, [1]: theta ddot
         """
         state_dot = jnp.array(
             [
@@ -239,8 +248,10 @@ class double_pm_pend_dyn:
 
 class double_pend_abs_dyn:
     """
-    https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
-    https://github.com/Tojomcmo/ctrl_sandbox/wiki/2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    Double pendulum object with absolute angle definitions
+    - https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    - https://github.com/Tojomcmo/ctrl_sandbox/wiki/
+        2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
     """
 
     def __init__(
@@ -297,9 +308,7 @@ class double_pend_abs_dyn:
         elif self.shoulder_act is False and self.elbow_act is True:
             self.B_mat = jnp.array([[-1], [1]], dtype=float)
         else:
-            print(
-                "double pendulum dynamics function is fully passive. Control array must be len(1,)"
-            )
+            print("No control input. Control array must be len(1,)")
             self.B_mat = jnp.zeros([2, 1])
 
     def _calculate_lumped_terms(self):
@@ -329,7 +338,7 @@ class double_pend_abs_dyn:
         The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
         helpful resource https://dassencio.org/33
         Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
-        Thetas are both reference to intertial frame down position
+        Thetas are both reference to inertial frame down position
         """
         s1m2 = jnp.sin(x_vec[0] - x_vec[1])
 
@@ -382,8 +391,10 @@ class double_pend_abs_dyn:
 
 class double_pend_rel_dyn:
     """
-    https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
-    https://github.com/Tojomcmo/ctrl_sandbox/wiki/2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    Double pendulum object with relative angle definitions
+    - https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    - https://github.com/Tojomcmo/ctrl_sandbox/wiki/
+        2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
     """
 
     def __init__(
@@ -440,9 +451,7 @@ class double_pend_rel_dyn:
         elif self.shoulder_act is False and self.elbow_act is True:
             self.B_mat = jnp.array([[0], [1]], dtype=float)
         else:
-            print(
-                "double pendulum dynamics function is fully passive. Control array must be len(1,)"
-            )
+            print("No control input. Control array must be len(1,)")
             self.B_mat = jnp.zeros([2, 1])
 
     def _calculate_lumped_terms(self):
@@ -482,21 +491,10 @@ class double_pend_rel_dyn:
         The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
         helpful resource https://dassencio.org/33
         Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
-        Thetas are both reference to intertial frame down position
         """
-
-        # if util.check_inf_or_nan_array(x_vec) or util.check_inf_or_nan_array(u_vec):
-        #     print('x_vec: ', x_vec)
-        #     print('u_vec: ', u_vec)
-        #     raise ValueError('Algorithm has overflowed state or control, invalid dynamics')
-
         s2 = jnp.sin(x_vec[1])
         G2s12 = self.G_2 * jnp.sin(x_vec[0] + x_vec[1])
-
         mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
-        # mass_mat = self.calculate_mass_matrix(x_vec)
-        # mass_mat_inv = inv(mass_mat)
-
         C_mat = jnp.array(
             [
                 [
@@ -506,9 +504,7 @@ class double_pend_rel_dyn:
                 [-self.M_3 * s2 * x_vec[2] ** 2 - (self.b2) * x_vec[3]],
             ]
         )
-
         grav_mat = jnp.array([[-self.G_1 * jnp.sin(x_vec[0]) - G2s12], [-G2s12]])
-
         theta_ddots = (
             mass_mat_inv @ (C_mat + grav_mat + self.B_mat @ u_vec.reshape(-1, 1))
         ).reshape(-1)
@@ -537,6 +533,7 @@ class double_pend_rel_dyn:
 
 class ua_double_pend_rel_dyn:
     """
+    Double pendulum object from underactuated lecture notes
     https://underactuated.mit.edu/multibody.html#Jain11
     """
 
@@ -581,9 +578,7 @@ class ua_double_pend_rel_dyn:
         elif self.shoulder_act is False and self.elbow_act is True:
             self.B_mat = jnp.array([[0], [1]], dtype=float)
         else:
-            print(
-                "double pendulum dynamics function is fully passive. Control array must be len(1,)"
-            )
+            print("No control input. Control array must be len(1,)")
             self.B_mat = jnp.zeros([2, 1])
 
     def _calculate_lumped_terms(self):
@@ -615,18 +610,12 @@ class ua_double_pend_rel_dyn:
         The state vector has form x = [th1, th2, thdot1, thdot2]'
         The control vector has form u = [tq1, tq2]'
         The output vector has form xdot = [thdot1, thdot2, thddot1, thddot2]
-        helpful resource https://dassencio.org/33
-        Derivation in github wiki https://github.com/Tojomcmo/ctrl_sandbox/wiki
-        Thetas are both reference to intertial frame down position
         """
         x_jax = jnp.array(x_vec)
         u_jax = jnp.array(u_vec)
         s2 = jnp.sin(x_jax[1])
         x_vel = x_jax[2:]
         mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
-        # mass_mat = self.calculate_mass_matrix(x_vec)
-        # mass_mat_inv = inv(mass_mat)
-
         C_mat = jnp.array(
             [
                 [0, -self.M_3 * s2 * (2 * x_jax[2] + x_jax[3])],
@@ -636,7 +625,6 @@ class ua_double_pend_rel_dyn:
                 ],
             ]
         )
-
         grav_mat = jnp.array(
             [
                 [
@@ -646,7 +634,6 @@ class ua_double_pend_rel_dyn:
                 [-self.G_2 * jnp.sin(x_jax[0] + x_jax[1])],
             ]
         )
-
         theta_ddots = (
             mass_mat_inv
             @ (

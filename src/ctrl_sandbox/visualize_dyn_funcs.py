@@ -10,8 +10,7 @@ import numpy.typing as npt
 import os
 from typing import Optional
 
-import ctrl_sandbox.dyn_functions as dyn
-import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
+
 import ctrl_sandbox.ilqr_funcs as ilqr
 
 
@@ -198,7 +197,8 @@ class double_pend_animation:
     def config_for_ani_ctrl_cost(self):
         L = self.l1 + self.l2
         gs = gridspec.GridSpec(2, 2)
-        # self.ax1 = self.fig.add_subplot(gs[:, 0],autoscale_on=False, xlim=(-L, L), ylim=(-L, L)) # row 0, col 0
+        # self.ax1 = self.fig.add_subplot(gs[:, 0],autoscale_on=False,
+        #                                 xlim=(-L, L), ylim=(-L, L)) # row 0, col 0
         # self.ax2 = self.fig.add_subplot(gs[0, 1]) # row 0, col 1
         # self.ax3 = self.fig.add_subplot(gs[1, 1]) # row 1, span all columns
         # ax = self.fig.add_subplot(autoscale_on=False, xlim=(-L, L), ylim=(-L, L))

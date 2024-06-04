@@ -4,7 +4,8 @@ import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 """
 Time-varying LQR functions
 
-TVLQR is an optimization algorithm that accepts a time-varying linear dynamic system time-dependent linear quadratic controller
+TVLQR is an optimization algorithm that accepts a time-varying 
+linear dynamic system time-dependent linear quadratic controller
 
 """
 
