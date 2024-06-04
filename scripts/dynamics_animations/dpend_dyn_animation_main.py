@@ -5,8 +5,7 @@ import jax.numpy as jnp
 
 import ctrl_sandbox.dyn_functions as dyn
 import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
-import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
-
+import ctrl_sandbox.integrate_funcs as integrate
 
 if __name__ == "__main__":
     save_ani_bool = False
@@ -48,7 +47,7 @@ if __name__ == "__main__":
             x_seq[k, 1] = x_seq[k, 0]
             x_seq[k, 3] = x_seq[k, 2]
         x_seq = x_seq.at[k + 1].set(
-            gen_ctrl.step_rk4(dpend_sys.cont_dyn_func, dt, x_seq[k], u_vec)
+            integrate.step_rk4(dpend_sys.cont_dyn_func, dt, x_seq[k], u_vec)
         )
         pot_energy_seq = pot_energy_seq.at[k + 1].set(
             dpend_sys.calculate_potential_energy(x_seq[k + 1])

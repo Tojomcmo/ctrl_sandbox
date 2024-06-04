@@ -4,10 +4,9 @@ from typing import Callable, Tuple
 from jax import numpy as jnp
 
 import ctrl_sandbox.ilqr_funcs as ilqr
-import ctrl_sandbox.util_funcs as util
 import ctrl_sandbox.cost_functions as cost
 import ctrl_sandbox.dyn_functions as dyn
-import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.integrate_funcs as integrate
 
 # for each input
 #   test one known case
@@ -40,7 +39,7 @@ class shared_unit_test_data_and_funcs:
             self.cost_func_obj.cost_func_quad_state_and_control_scan_compatible
         )
         self.ilqr_config.config_for_dyn_func(
-            self.pend_dyn_obj.cont_dyn_func, gen_ctrl.step_rk4
+            self.pend_dyn_obj.cont_dyn_func, integrate.step_rk4
         )
         self.ilqr_config.create_curried_funcs()
 

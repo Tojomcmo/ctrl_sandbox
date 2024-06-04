@@ -11,115 +11,7 @@ import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.util_funcs as util
 
 
-def test_state_space_class_accepts_valid_continuous_system():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    ss = gen_ctrl.stateSpace(A, B, C, D)
-    assert ss.a.tolist() == A.tolist()
-    assert ss.b.tolist() == B.tolist()
-    assert ss.c.tolist() == C.tolist()
-    assert ss.d.tolist() == D.tolist()
-    assert ss.type == "continuous"
-    assert ss.time_step is None
-
-
-def test_state_space_class_accepts_valid_discrete_system():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    ss = gen_ctrl.stateSpace(A, B, C, D, time_step=0.1)
-    assert ss.a.tolist() == A.tolist()
-    assert ss.b.tolist() == B.tolist()
-    assert ss.c.tolist() == C.tolist()
-    assert ss.d.tolist() == D.tolist()
-    assert ss.type == "discrete"
-    assert ss.time_step == 0.1
-
-
-def test_state_space_rejects_nonsquare_A_matrix():
-    A = jnp.array([[1, 1, 1], [0, 1, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    with pytest.raises(ValueError, match=r"A matrix must be square"):
-        ss = gen_ctrl.stateSpace(A, B, C, D)
-
-
-def test_state_space_rejects_A_and_B_matrix_n_dim_mismatch():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    with pytest.raises(
-        ValueError, match=r"A matrix row number and B matrix row number must match"
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D)
-
-
-def test_state_space_rejects_A_and_C_matrix_m_dim_mismatch():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0]])
-    D = jnp.array([[0, 0]])
-    with pytest.raises(
-        ValueError, match=r"A matrix row number and C matrix column number must match"
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D)
-
-
-def test_state_space_rejects_B_and_D_matrix_m_dim_mismatch():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0, 0]])
-    with pytest.raises(
-        Exception, match=r"B matrix column number and D matrix column number must match"
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D)
-
-
-def test_state_space_rejects_C_and_D_matrix_n_dim_mismatch():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0], [0, 0]])
-    with pytest.raises(
-        Exception, match=r"C matrix row number and D matrix row number must match"
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D)
-
-
-def test_state_space_rejects_invalid_timestep_input():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    with pytest.raises(
-        Exception,
-        match="invalid time step definition -0.1. time_step must be a positive float or None",
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D, time_step=-0.1)
-    with pytest.raises(
-        Exception,
-        match="invalid time step definition lettuce. time_step must be a positive float or None",
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D, time_step="lettuce")
-    with pytest.raises(
-        Exception,
-        match="invalid time step definition 0. time_step must be a positive float or None",
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D, time_step=0)
-    with pytest.raises(
-        Exception,
-        match="invalid time step definition nan. time_step must be a positive float or None",
-    ):
-        ss = gen_ctrl.stateSpace(A, B, C, D, time_step=float("nan"))
-
-
-def test_accepts_valid_input():
+def test_simulate_forward_dynamics_seq_accepts_valid_input():
     def pend_unit_dyn_func(x_k_jax: jnp.ndarray, u_k_jax: jnp.ndarray) -> jnp.ndarray:
         g = 1.0
         l = 1.0
@@ -238,85 +130,6 @@ def test_calculate_linearized_state_space_seq_accepts_valid_system():
     np.testing.assert_allclose(B_lin_d_seq[0], B_lin_d_expected, rtol=1e-4, atol=1e-4)
 
 
-def test_discretize_state_space_accepts_valid_system():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    ss_c = gen_ctrl.stateSpace(A, B, C, D)
-    time_step = 0.1
-    c2d_methods = ["euler", "zoh", "zohCombined"]
-    for c2d_method in c2d_methods:
-        ss = gen_ctrl.discretize_continuous_state_space(ss_c, time_step, c2d_method)
-        assert ss.a.shape == A.shape
-        assert ss.b.shape == B.shape
-        assert ss.c.shape == C.shape
-        assert ss.d.shape == D.shape
-        assert ss.time_step == time_step
-        assert ss.type == "discrete"
-
-
-def test_discretize_state_space_returns_correct_euler_discretization():
-    A = jnp.array([[1.0, 1.0, 1.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]])
-    B = jnp.array([[1.0, 1.0], [0.0, 1.0], [0.0, 0.0]])
-    C = jnp.array([[1.0, 0.0, 1.0]])
-    D = jnp.array([[0.0, 0.0]])
-    ss_c = gen_ctrl.stateSpace(A, B, C, D)
-    time_step = 0.1
-    ss = gen_ctrl.discretize_continuous_state_space(ss_c, time_step, c2d_method="euler")
-    A_d_expected = jnp.eye(3) + (A * time_step)
-    B_d_expected = B * time_step
-    C_d_expected = C
-    D_d_expected = D
-    assert ss.a.shape == A.shape
-    assert ss.b.shape == B.shape
-    assert ss.c.shape == C.shape
-    assert ss.d.shape == D.shape
-    assert ss.time_step == time_step
-    assert ss.type == "discrete"
-    assert ss.a.tolist() == A_d_expected.tolist()
-    assert ss.b.tolist() == B_d_expected.tolist()
-    assert ss.c.tolist() == C_d_expected.tolist()
-    assert ss.d.tolist() == D_d_expected.tolist()
-
-
-def test_descritize_state_space_rejects_discrete_input_system():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    time_step = 0.1
-    ss_d = gen_ctrl.stateSpace(A, B, C, D, time_step)
-    with pytest.raises(Exception, match="input state space is already discrete"):
-        ss = gen_ctrl.discretize_continuous_state_space(ss_d, time_step)
-
-
-def test_descritize_state_space_rejects_invalid_c2d_method():
-    A = jnp.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    time_step = 0.1
-    ss_d = gen_ctrl.stateSpace(A, B, C, D)
-    with pytest.raises(Exception, match="invalid discretization method"):
-        ss = gen_ctrl.discretize_continuous_state_space(
-            ss_d, time_step, c2d_method="lettuce"
-        )
-
-
-def test_descritize_state_space_rejects_singular_A_matrix_for_zoh():
-    A = jnp.array([[0, 1, 1], [0, 1, 1], [0, 0, 1]])
-    B = jnp.array([[1, 1], [0, 1], [0, 0]])
-    C = jnp.array([[1, 0, 1]])
-    D = jnp.array([[0, 0]])
-    time_step = 0.1
-    ss_d = gen_ctrl.stateSpace(A, B, C, D)
-    with pytest.raises(Exception, match="determinant of A is excessively small"):
-        ss = gen_ctrl.discretize_continuous_state_space(
-            ss_d, time_step, c2d_method="zoh"
-        )
-
-
 def cost_func_quad_state_and_control_for_test_calc(
     x_k: jnp.ndarray, u_k: jnp.ndarray, k: int
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
@@ -416,7 +229,7 @@ def test_prep_cost_func_for_diff_accepts_valid_cost_func_inputs():
     x_k = jnp.array([1, 2])
     u_k = jnp.array([3, 4])
     input_int = 1
-    cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func)  # type: ignore (NDArray to Jax NDArray)
+    cost_func_for_diff = gen_ctrl.prep_cost_func_for_diff(cost_func)
     combined_cost = cost_func_for_diff(x_k, u_k, input_int)
     combined_cost_expected = jnp.array([10])
     assert combined_cost == combined_cost_expected

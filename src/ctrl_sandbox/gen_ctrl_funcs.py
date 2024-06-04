@@ -1,57 +1,12 @@
 import jax
 import jax.numpy as jnp
-from jax import lax
-import scipy
-from typing import Callable, Tuple
-
 import numpy as np
+
+from jax import lax
+from typing import Callable, Tuple
 from numpy import typing as npt
-from scipy.integrate import solve_ivp
 
-
-class stateSpace:
-    def __init__(
-        self,
-        a_mat: jnp.ndarray,
-        b_mat: jnp.ndarray,
-        c_mat: jnp.ndarray,
-        d_mat: jnp.ndarray,
-        time_step=None,
-    ):
-        if a_mat.shape[0] != a_mat.shape[1]:
-            raise ValueError("A matrix must be square")
-        elif a_mat.shape[0] != b_mat.shape[0]:
-            raise ValueError("A matrix row number and B matrix row number must match")
-        elif a_mat.shape[0] != c_mat.shape[1]:
-            raise ValueError(
-                "A matrix row number and C matrix column number must match"
-            )
-        elif b_mat.shape[1] != d_mat.shape[1]:
-            raise ValueError(
-                "B matrix column number and D matrix column number must match"
-            )
-        elif c_mat.shape[0] != d_mat.shape[0]:
-            raise ValueError("C matrix row number and D matrix row number must match")
-        else:
-            if time_step is None:
-                self.a = a_mat
-                self.b = b_mat
-                self.c = c_mat
-                self.d = d_mat
-                self.time_step = time_step
-                self.type = "continuous"
-            elif isinstance(time_step, float) and time_step > 0:
-                self.a = a_mat
-                self.b = b_mat
-                self.c = c_mat
-                self.d = d_mat
-                self.time_step = time_step
-                self.type = "discrete"
-            else:
-                raise ValueError(
-                    f"invalid time step definition {time_step}.",
-                    " time_step must be a positive float or None",
-                )
+import ctrl_sandbox.integrate_funcs as integrate
 
 
 def _dyn_for_sim_scan_func(
@@ -145,7 +100,9 @@ def linearize_dynamics(
     - [ret] B_lin - jacobian of dyn_func wrt x eval at x_k,u_k,
         continuous or discrete time\n
     """
-    dyn_func_xu = lambda xu_k: dyn_func(xu_k[:x_k_len], xu_k[x_k_len:])
+    dyn_func_xu: Callable[[jnp.ndarray], jnp.ndarray] = lambda xu_k: dyn_func(
+        xu_k[:x_k_len], xu_k[x_k_len:]
+    )
     ab_lin_cat = jax.jacfwd(dyn_func_xu)(xu_k)
     a_lin = ab_lin_cat[:x_k_len, :x_k_len]
     b_lin = ab_lin_cat[:x_k_len, x_k_len:]
@@ -239,30 +196,6 @@ def calculate_linearized_state_space_seq(
     """
     lin_scan_func = _curry_dyn_lin_scan_func(dyn_func, x_seq.shape[1])
     return calculate_lin_state_space_seq_pre_decorated(lin_scan_func, x_seq, u_seq)
-
-
-def step_euler_forward(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    h: float,
-    x_k: jnp.ndarray,
-    u_k: jnp.ndarray,
-) -> jnp.ndarray:
-    """**Perform single step euler forward integration**"""
-    return x_k + dyn_func(x_k, u_k) * h
-
-
-def step_rk4(
-    dyn_func_ad: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    h: float,
-    x_k: jnp.ndarray,
-    u_k: jnp.ndarray,
-) -> jnp.ndarray:
-    """**Perform single step Runge Kutta 4th order integration**"""
-    f1 = dyn_func_ad(x_k, u_k)
-    f2 = dyn_func_ad(x_k + 0.5 * h * f1, u_k)
-    f3 = dyn_func_ad(x_k + 0.5 * h * f2, u_k)
-    f4 = dyn_func_ad(x_k + h * f3, u_k)
-    return x_k + (h / 6.0) * (f1 + 2 * f2 + 2 * f3 + f4)
 
 
 def _combine_x_u_for_cost_scan(x_seq: jnp.ndarray, u_seq: jnp.ndarray) -> jnp.ndarray:
@@ -553,18 +486,6 @@ def apply_cov_noise_to_vec(vec: jnp.ndarray, cov_mat: jnp.ndarray) -> jnp.ndarra
 #######################################################################################
 
 
-def ss_2_dyn_func(
-    ss_cont: stateSpace,
-) -> Tuple[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], bool]:
-    if ss_cont.type == "continuous":
-        is_continous_bool = True
-    else:
-        is_continous_bool = False
-    return (
-        lambda x, u: ss_cont.a @ x.reshape(-1, 1) + ss_cont.b @ u.reshape(-1, 1)
-    ), is_continous_bool
-
-
 def calculate_s_xx_dot(
     Q_t: npt.NDArray[np.float64],
     A_t: npt.NDArray[np.float64],
@@ -592,45 +513,6 @@ def simulate_forward_dynamics_seq_simple(
     return x_seq
 
 
-def c2d_AB_zoh_combined(
-    A: jnp.ndarray, B: jnp.ndarray, time_step: float
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    n = A.shape[0]
-    m = B.shape[1]
-    a_b_c = jnp.concatenate(
-        (jnp.concatenate((A, B), axis=1), jnp.zeros((m, n + m))), axis=0
-    )
-    a_b_d = jax.scipy.linalg.expm(a_b_c * time_step)
-    Ad = a_b_d[:n, :n]
-    Bd = a_b_d[:n, n:]
-    return Ad, Bd
-
-
-def convert_d2d_A_B(
-    Ad_1: jnp.ndarray, Bd_1: jnp.ndarray, dt_1: float, dt_2: float
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    I = jnp.eye(Ad_1.shape[0])
-    A = jnp.array((1 / dt_1) * scipy.linalg.logm(Ad_1))
-    A_inv = jnp.linalg.inv(A)
-    B = (jnp.linalg.inv(A_inv @ (jnp.linalg.inv(Ad_1 - I)))) @ Bd_1
-    Ad_2 = calculate_matrix_power_similarity_transform(Ad_1, dt_2 / dt_1)
-    Bd_2 = A_inv @ (Ad_2 - I) @ B
-    return Ad_2, Bd_2
-
-
-def calculate_matrix_power_similarity_transform(
-    A: jnp.ndarray, exponent: float
-) -> jnp.ndarray:
-    evals, evecs = jnp.linalg.eig(A)
-    D = jnp.diag(evals)
-    evecs_inv = jnp.linalg.inv(evecs)
-    A_to_exponent = evecs @ D**exponent @ evecs_inv
-    return A_to_exponent
-
-
-######################################################################################
-
-
 def simulate_forward_dynamics_step(
     dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
     x_k: jnp.ndarray,
@@ -653,99 +535,11 @@ def simulate_forward_dynamics_step(
     - x_kp1[out]     - array shape[1,state_dim] of state vector at next time step
     """
     if sim_method == "rk4":
-        x_kp1 = step_rk4(dyn_func, time_step, x_k, u_k)
+        x_kp1 = integrate.step_rk4(dyn_func, time_step, x_k, u_k)
     elif sim_method == "euler":
         x_kp1 = x_k + dyn_func(x_k, u_k) * time_step
     elif sim_method == "solve_ivp_zoh":
-        time_span = (0, time_step)
-        dyn_func_zoh = lambda time_dyn, state: dyn_func(state, u_k.reshape(-1))
-        y_0 = (x_k).reshape(-1)
-        result_ivp = solve_ivp(dyn_func_zoh, time_span, y_0)
-        x_kp1 = jnp.array(result_ivp.y[:, -1])
+        x_kp1 = jnp.ndarray(integrate.step_solve_ivp(dyn_func, time_step, x_k, u_k))
     else:
         raise ValueError("invalid simulation method")
     return x_kp1.reshape(-1)
-
-
-def discretize_continuous_state_space(
-    input_state_space: stateSpace, time_step: float, c2d_method: str = "euler"
-) -> stateSpace:
-    """
-    **Function for discretizing continuous state space
-        with different discretization methods** \n
-    - A - (nxn) - continuous state transition matrix \n
-    - B - (nxm) - continuous control matrix \n
-    - C - (pxn) - continuous state measurement matrix \n
-    - D - (pxm) - continuous direct feedthrough matrix \n
-    Continuous state space: \n
-    - xdot(t) = A * x(t) + B * u(t) \n
-    - y(t)    = C * x(t) + D * u(t) \n
-    transformation for zohCombined: \n
-    - e^([[A, B],[0,0]] * time_step) = [[Ad, Bd],[0,I]] \n
-    Discrete state space: \n
-    - x[t+timestep] = Ad * x[t] + Bd * u[t] \n
-    - y[t]          = Cd * x[t] + Dd * u[t] \n
-    """
-    if input_state_space.type == "discrete":
-        raise TypeError("input state space is already discrete")
-    else:
-        a_d = jnp.zeros(input_state_space.a.shape)
-        b_d = jnp.zeros(input_state_space.b.shape)
-        c_d = jnp.zeros(input_state_space.c.shape)
-        d_d = jnp.zeros(input_state_space.d.shape)
-        n = input_state_space.a.shape[0]
-        m = input_state_space.b.shape[1]
-        p = input_state_space.c.shape[0]
-        if c2d_method == "euler":
-            a_d = jnp.eye(n) + (input_state_space.a * time_step)
-            b_d = input_state_space.b * time_step
-            c_d = input_state_space.c
-            d_d = input_state_space.d
-        elif c2d_method == "zoh":
-            if jax.scipy.linalg.det(input_state_space.a) > 10e-8:
-                a_d = jax.scipy.linalg.expm(input_state_space.a * time_step)
-                b_d = (
-                    jnp.linalg.inv(input_state_space.a)
-                    @ (a_d - jnp.eye(n))
-                    @ input_state_space.b
-                )
-                c_d = input_state_space.c
-                d_d = input_state_space.d
-            else:
-                raise ValueError(
-                    "determinant of A is excessively small (<10E-8),",
-                    "simple zoh method is potentially invalid",
-                )
-        elif c2d_method == "zohCombined":
-            #   create combined A B matrix e^([[A, B],[0,0]]
-            a_b_c: jnp.ndarray = jnp.concatenate(
-                (
-                    jnp.concatenate((input_state_space.a, input_state_space.b), axis=1),
-                    jnp.zeros((m, n + m)),
-                ),
-                axis=0,
-            )
-            a_b_d: jnp.ndarray = jax.scipy.linalg.expm(a_b_c * time_step)
-            a_d = a_b_d[:n, :n]
-            b_d = a_b_d[:n, n:]
-            c_d = input_state_space.c
-            d_d = input_state_space.d
-        else:
-            raise ValueError("invalid discretization method")
-    d_state_space = stateSpace(a_d, b_d, c_d, d_d, time_step)
-    return d_state_space
-
-
-def step_solve_ivp(
-    dyn_func: Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray],
-    h: float,
-    x_k: npt.NDArray[np.float64],
-    u_k: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
-    """**Perform single step integration using scipy initial value problem**"""
-    time_span = (0, h)
-    dyn_func_zoh = lambda time_dyn, state: dyn_func(state, u_k.reshape(-1))
-    y_0 = (x_k).reshape(-1)
-    result_ivp = solve_ivp(dyn_func_zoh, time_span, y_0)
-    x_kp1 = (np.array([result_ivp.y[:, -1]])).reshape(-1, 1)
-    return x_kp1

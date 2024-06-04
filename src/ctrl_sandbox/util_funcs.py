@@ -20,3 +20,13 @@ def check_inf_or_nan_array(arr: Union[np.ndarray, jnp.ndarray]) -> bool:
         return True
     else:
         return False
+
+
+def calculate_matrix_power_similarity_transform(
+    A: jnp.ndarray, exponent: float
+) -> jnp.ndarray:
+    evals, evecs = jnp.linalg.eig(A)
+    D = jnp.diag(evals)
+    evecs_inv = jnp.linalg.inv(evecs)
+    A_to_exponent = evecs @ D**exponent @ evecs_inv
+    return A_to_exponent

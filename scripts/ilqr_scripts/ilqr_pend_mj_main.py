@@ -12,6 +12,7 @@ import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.mjcf_models as mj_models
 import ctrl_sandbox.mujoco_funcs as mj_funcs
 import ctrl_sandbox.visualize_mj_funcs as mj_vis
+import ctrl_sandbox.integrate_funcs as integrate
 
 if __name__ == "__main__":
     # ----- define timestep and sequence length -----#
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     dyn_func_traj_gen_obj = dyn.single_pend_dyn(m=1.0, moi=0.0, g=9.81, b=5.0, l=1.0)
     x_tg_init_vec = jnp.array([0.0, 0.0])
     u_tg_seq = jnp.ones([len_seq - 1, 1])
-    traj_gen_disc_dyn_func = lambda x, u: gen_ctrl.step_rk4(
+    traj_gen_disc_dyn_func = lambda x, u: integrate.step_rk4(
         dyn_func_traj_gen_obj.cont_dyn_func, ilqr_config.time_step, x, u
     )
     x_des_seq_traj_gen = gen_ctrl.simulate_forward_dynamics_seq(
@@ -90,7 +91,7 @@ if __name__ == "__main__":
             mj_funcs.fwd_sim_mj_w_ctrl_step(mjsim_model, mjsim_data, x, u)
         )
     else:
-        sim_dyn_disc_func = lambda x, u: gen_ctrl.step_rk4(
+        sim_dyn_disc_func = lambda x, u: integrate.step_rk4(
             dyn_func_sim_obj.cont_dyn_func, ilqr_config.time_step, x, u
         )
     x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(

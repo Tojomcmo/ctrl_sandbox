@@ -1,10 +1,9 @@
 import pytest
-import numpy as np
-import jax
 import jax.numpy as jnp
 
 import ctrl_sandbox.dyn_functions as dyn
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.integrate_funcs as integrate
 
 
 def test_nl_pend_dyn_accepts_valid_inputs():
@@ -68,7 +67,7 @@ def test_double_pend_is_jax_compatible_thru_rk():
     u_vec = jnp.array([1.0, 1.0])
     xu_k = jnp.concatenate([x_vec, u_vec], axis=0)
     time_step = 0.01
-    dyn_func_discrete = lambda x, u: gen_ctrl.step_rk4(
+    dyn_func_discrete = lambda x, u: integrate.step_rk4(
         dpend_sys.cont_dyn_func, time_step, x, u
     )
     A, B = gen_ctrl.linearize_dynamics(dyn_func_discrete, xu_k, len(x_vec))

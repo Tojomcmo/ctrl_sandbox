@@ -1,6 +1,5 @@
 from jax import numpy as jnp
 import matplotlib.pyplot as plt
-import matplotlib.animation as animate
 import mujoco as mujoco
 
 import ctrl_sandbox.ilqr_funcs as ilqr
@@ -9,6 +8,7 @@ import ctrl_sandbox.cost_functions as cost
 import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.integrate_funcs as integrate
 
 if __name__ == "__main__":
     # ----- define timestep and sequence length -----#
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     dyn_func_traj_gen_obj = dyn.single_pend_dyn(m=1.0, moi=0.0, g=9.81, b=5.0, l=1.0)
     x_tg_init_vec = jnp.array([0.0, 0.0])
     u_tg_seq = jnp.ones([len_seq - 1, 1])
-    traj_gen_disc_dyn_func = lambda x, u: gen_ctrl.step_rk4(
+    traj_gen_disc_dyn_func = lambda x, u: integrate.step_rk4(
         dyn_func_traj_gen_obj.cont_dyn_func, ilqr_config.time_step, x, u
     )
     x_des_seq_traj_gen = gen_ctrl.simulate_forward_dynamics_seq(
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         Q_cost, R_cost, Qf_cost, x_des_seq=x_des_seq, u_des_seq=u_des_seq
     )
 
-    ilqr_config.config_for_dyn_func(dyn_func_ctrl_obj.cont_dyn_func, gen_ctrl.step_rk4)
+    ilqr_config.config_for_dyn_func(dyn_func_ctrl_obj.cont_dyn_func, integrate.step_rk4)
     ilqr_config.config_cost_func(
         cost_func.cost_func_quad_state_and_control_scan_compatible
     )
@@ -85,7 +85,7 @@ if __name__ == "__main__":
             mj_funcs.fwd_sim_mj_w_ctrl(mjsim_model, mjsim_data, x, u)
         )[-1]
     else:
-        sim_dyn_disc_func = lambda x, u: gen_ctrl.step_rk4(
+        sim_dyn_disc_func = lambda x, u: integrate.step_rk4(
             dyn_func_sim_obj.cont_dyn_func, ilqr_config.time_step, x, u
         )
     x_sim_seq, u_sim_seq = ilqr.simulate_ilqr_output(

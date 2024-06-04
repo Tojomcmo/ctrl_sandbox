@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.ttlqr_funcs as ttlqr
 import ctrl_sandbox.dyn_functions as dyn
+import ctrl_sandbox.statespace_funcs as ss_funcs
 
 
 if __name__ == "__main__":
@@ -29,7 +30,7 @@ if __name__ == "__main__":
     # Define trajectory
 
     traj_gen_ss_cont = gen_lin_dyn_sys.cont_lti_pend_ss_down()
-    traj_gen_ss_discrete = gen_ctrl.discretize_continuous_state_space(
+    traj_gen_ss_discrete = ss_funcs.discretize_continuous_state_space(
         traj_gen_ss_cont, time_step, c2d_method="zohCombined"
     )
     x_des_seq = np.zeros([len_seq, len(x_init_vec), 1])
@@ -55,7 +56,7 @@ if __name__ == "__main__":
 
     lti_ss_sim_params = {"g": 10.0, "b": 0.5, "l": 1.0}
     sim_ss_cont = gen_lin_dyn_sys.cont_lti_pend_ss_down()
-    sim_ss_discrete = gen_ctrl.discretize_continuous_state_space(
+    sim_ss_discrete = ss_funcs.discretize_continuous_state_space(
         sim_ss_cont, time_step, c2d_method="zohCombined"
     )
     x_sim_seq = np.zeros([len_seq, len(x_init_vec), 1])

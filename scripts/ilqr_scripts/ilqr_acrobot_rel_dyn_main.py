@@ -8,7 +8,7 @@ import os
 import ctrl_sandbox.ilqr_funcs as ilqr
 import ctrl_sandbox.dyn_functions as dyn
 import ctrl_sandbox.cost_functions as cost
-import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.integrate_funcs as integrate
 import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
 import ctrl_sandbox.mujoco_funcs as mj_funcs
 import ctrl_sandbox.mjcf_models as mjcf
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         Q_cost, R_cost, Qf_cost, x_des_seq=x_des_seq, u_des_seq=u_des_seq
     )
 
-    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, gen_ctrl.step_rk4)
+    ilqr_config.config_for_dyn_func(dyn_func_sys_ctrl.cont_dyn_func, integrate.step_rk4)
     ilqr_config.config_cost_func(
         cost_func_obj.cost_func_quad_state_and_control_scan_compatible
     )
@@ -115,7 +115,7 @@ if __name__ == "__main__":
             sim_disc_dyn_func, ctrl_out, x_sim_init_vec
         )
     else:
-        sim_disc_dyn_func = lambda k, x_k, u_k: gen_ctrl.step_rk4(
+        sim_disc_dyn_func = lambda k, x_k, u_k: integrate.step_rk4(
             dyn_func_sys_sim.cont_dyn_func, ilqr_config.time_step, x_k, u_k
         )
         control_func = sim.prep_ff_fb_u_for_sim(

@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.statespace_funcs as ss_funcs
 
 
 class single_pm_pend_dyn:
@@ -62,12 +63,12 @@ class single_pm_pend_dyn:
         )
         return state_dot
 
-    def cont_lti_pend_ss_down(self) -> gen_ctrl.stateSpace:
+    def cont_lti_pend_ss_down(self) -> ss_funcs.stateSpace:
         A = jnp.array([[0, 1], [-self.g / self.l, -self.b / self.l]])
         B = jnp.array([[0], [1]])
         C = jnp.eye(2)
         D = jnp.zeros([2, 1])
-        ss_cont = gen_ctrl.stateSpace(A, B, C, D)
+        ss_cont = ss_funcs.stateSpace(A, B, C, D)
         return ss_cont
 
 
