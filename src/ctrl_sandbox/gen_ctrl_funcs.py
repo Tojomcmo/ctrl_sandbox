@@ -263,7 +263,7 @@ def calculate_total_cost_pre_decorated(
     ],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[float, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **Calculate sequence cost using pre-decorated cost function for lax.scan**
     """
@@ -273,7 +273,7 @@ def calculate_total_cost_pre_decorated(
         cost_for_calc_scan_func, init_carry, xu_seq
     )
     return (
-        total_cost.item(),
+        total_cost.reshape(-1),
         total_cost_seq.reshape(-1),
         x_cost_seq.reshape(-1),
         u_cost_seq.reshape(-1),
@@ -286,7 +286,7 @@ def calculate_total_cost(
     ],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[float, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **Calculate sequence cost from provided undecorated cost function** \n
     - Wrapper function for calculate_total_cost_pre_decorated().

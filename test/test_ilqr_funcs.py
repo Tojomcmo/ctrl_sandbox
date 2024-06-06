@@ -103,7 +103,7 @@ def test_calculate_forwards_pass_accepts_valid_linear_dyn_inputs():
         cost_float_new,
         line_search_factor,
         ro_reg_change_bool,
-    ) = ilqr.calculate_forwards_pass(
+    ) = ilqr.calculate_fwd_pass(
         ilqr_config,
         test_obj.x_seq_example,
         test_obj.u_seq_example,
