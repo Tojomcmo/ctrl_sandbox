@@ -4,6 +4,7 @@ import jax
 from typing import Tuple, Callable
 import numpy as np
 
+import ctrl_sandbox.util_funcs as util
 import ctrl_sandbox.dir_col_funcs as dir_col
 
 
@@ -74,6 +75,105 @@ def test_breakout_opt_vec_is_diff_compatible():
     jac_vec = (jax.jacfwd(diff_func_curried)(opt_vec)).reshape(-1)
     jac_vec_expect = 2 * opt_vec
     assert jac_vec.all() == jac_vec_expect.all()
+
+
+def test_calculate_dyn_colloc_constraints_full_returns_expected_values():
+    def dyn_func(
+        A: jnp.ndarray, B: jnp.ndarray, x_k: jnp.ndarray, u_k: jnp.ndarray
+    ) -> jnp.ndarray:
+        return (A @ x_k.reshape(-1, 1) + B @ u_k.reshape(-1, 1)).reshape(-1)
+
+    # curry information
+    A = jnp.ones((4, 4), dtype=float)
+    B = jnp.ones((4, 2), dtype=float)
+    h = 0.1
+    # curry input functions
+    dyn_func_curried = lambda x, u: dyn_func(A, B, x, u)
+    lin_interp_mid_point_func = util.create_lin_interp_seq_mid_point_func()
+    knot_point_dyn_scan_func = (
+        lambda carry, seqs: dir_col.calc_knot_point_dyn_scan_func(
+            dyn_func_curried, carry, seqs
+        )
+    )
+    mid_point_dyn_scan_func = lambda carry, seqs: dir_col.calc_mid_point_dyn_scan_func(
+        dyn_func_curried, h, carry, seqs
+    )
+    colloc_calc_scan_func = lambda carry, seqs: dir_col.calc_colloc_H_S_scan_func(
+        h, carry, seqs
+    )
+    # create arguments
+    len_seq = 5
+    x_len = 4
+    u_len = 2
+    x_seq = jnp.ones((len_seq, x_len), dtype=float)
+    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    x_o = jnp.zeros((x_len,), dtype=float)
+    x_f = jnp.ones((x_len,), dtype=float) * 2
+    opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
+    ceq_seq = dir_col.calculate_dyn_colloc_constraints_full(
+        lin_interp_mid_point_func,
+        knot_point_dyn_scan_func,
+        mid_point_dyn_scan_func,
+        colloc_calc_scan_func,
+        len_seq,
+        x_len,
+        u_len,
+        x_o,
+        x_f,
+        jnp.array(opt_vec),
+    )
+    assert ceq_seq.shape == ((len_seq + 1) * (x_len),)
+
+
+def test_calculate_dyn_colloc_constraints_full_is_diff_compatible():
+    def dyn_func(
+        A: jnp.ndarray, B: jnp.ndarray, x_k: jnp.ndarray, u_k: jnp.ndarray
+    ) -> jnp.ndarray:
+        return (A @ x_k.reshape(-1, 1) + B @ u_k.reshape(-1, 1)).reshape(-1)
+
+    # curry information
+    A = jnp.ones((4, 4), dtype=float)
+    B = jnp.ones((4, 2), dtype=float)
+    h = 0.1
+    # curry input functions
+    dyn_func_curried = lambda x, u: dyn_func(A, B, x, u)
+    lin_interp_mid_point_func = util.create_lin_interp_seq_mid_point_func()
+    knot_point_dyn_scan_func = (
+        lambda carry, seqs: dir_col.calc_knot_point_dyn_scan_func(
+            dyn_func_curried, carry, seqs
+        )
+    )
+    mid_point_dyn_scan_func = lambda carry, seqs: dir_col.calc_mid_point_dyn_scan_func(
+        dyn_func_curried, h, carry, seqs
+    )
+    colloc_calc_scan_func = lambda carry, seqs: dir_col.calc_colloc_H_S_scan_func(
+        h, carry, seqs
+    )
+    # create arguments
+    len_seq = 5
+    x_len = 4
+    u_len = 2
+    x_seq = jnp.ones((len_seq, x_len), dtype=float)
+    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    x_o = jnp.zeros((x_len,), dtype=float)
+    x_f = jnp.ones((x_len,), dtype=float) * 2
+    calculate_nonlcon = lambda opt_vec: dir_col.calculate_dyn_colloc_constraints_full(
+        lin_interp_mid_point_func,
+        knot_point_dyn_scan_func,
+        mid_point_dyn_scan_func,
+        colloc_calc_scan_func,
+        len_seq,
+        x_len,
+        u_len,
+        x_o,
+        x_f,
+        jnp.array(opt_vec),
+    )
+
+    opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
+    jac_array = jax.jacfwd(calculate_nonlcon)(jnp.array(opt_vec))
+
+    assert jac_array.shape == ((len_seq + 1) * x_len, opt_vec.shape[0])
 
 
 def test_calculate_init_final_constraint_returns_expected_values():

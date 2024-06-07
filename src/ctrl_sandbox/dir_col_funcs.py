@@ -150,11 +150,10 @@ def calculate_dyn_colloc_constraints_full(
         [None, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]],
         Tuple[None, jnp.ndarray],
     ],
-    colloc_calc_func: Callable[
+    colloc_calc_scan_func: Callable[
         [None, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]],
         Tuple[None, jnp.ndarray],
     ],
-    h: float,
     len_seq: int,
     x_len: int,
     u_len: int,
@@ -175,9 +174,9 @@ def calculate_dyn_colloc_constraints_full(
     # Calculate collocation dynamics and stack dynamic sequence
     _, dyn_seq_m_p = lax.scan(mid_point_dyn_scan_func, None, (mid_point_dyn_calc_seqs))
     colloc_calc_seqs = create_colloc_calc_seqs(x_seq, dyn_seq_k_p, dyn_seq_m_p)
-    _, ceq_seq = lax.scan(colloc_calc_func, None, (colloc_calc_seqs))
+    _, ceq_seq = lax.scan(colloc_calc_scan_func, None, (colloc_calc_seqs))
 
-    return jnp.concatenate((ceq_o, ceq_seq, ceq_f), axis=0)
+    return jnp.concatenate((ceq_o, ceq_seq.reshape(-1), ceq_f), axis=0)
 
 
 def calc_knot_point_dyn_scan_func(
@@ -265,17 +264,18 @@ def calculate_init_final_constraint(
 
 
 def create_mid_point_dyn_calc_seqs(
-    x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, u_seq_m_p: jnp.ndarray
+    x_seq: jnp.ndarray, dyn_seq: jnp.ndarray, u_seq_m_p: jnp.ndarray
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **create scan compatible tuple of seqs for mid point dynamics calculation**
+    - [in] x_seq - state sequence at knot points, dim(N,n)
+    - [in] dyn_seq - state derivatives at knot points, dim(N,n)
+    - [in] u_m_p - control sequence interpolated at mitpoints, dim(N-1,m)
+    - [ret] seq - Tuple of index-corrected sequences for midpoint dynamics scan
+        - (x_k_seq(N-1,n), x_kp1_seq(N-1,n), dyn_k_seq(N-1,n),
+        dyn_kp1_seq(N-1,n), u_k_seq(N-1,m))
     """
-    x_k = (x_seq[:-1]).reshape(-1, 1)
-    x_kp1 = (x_seq[1:]).reshape(-1, 1)
-    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
-    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
-    u_k = u_seq_m_p.reshape(-1, 1)
-    return (x_k, x_kp1, dyn_k, dyn_kp1, u_k)
+    return (x_seq[:-1], x_seq[1:], dyn_seq[:-1], dyn_seq[1:], u_seq_m_p)
 
 
 def create_colloc_calc_seqs(
@@ -283,13 +283,14 @@ def create_colloc_calc_seqs(
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **create scan compatible tuple of seqs for dynamics collocation calculation**
+    - [in] x_seq - state sequence at knot points, dim(N,n)
+    - [in] dyn_seq_k_p - state derivatives at knot points, dim(N,n)
+    - [in] dyn_seq_m_p - state derivatives interpolated at mid points, dim(N-1,n)
+    - [ret] seqs - Tuple of index-corrected sequences for collocation scan:
+        - (x_k_seq, x_kp1_seq, dyn_k_seq, dyn_m_p_seq, dyn_kp1_seq)
+        - all dim(N-1,n)
     """
-    x_k = (x_seq[:-1]).reshape(-1, 1)
-    x_kp1 = (x_seq[1:]).reshape(-1, 1)
-    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
-    dyn_m_p = dyn_seq_m_p.reshape(-1, 1)
-    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
-    return (x_k, x_kp1, dyn_k, dyn_m_p, dyn_kp1)
+    return (x_seq[:-1], x_seq[1:], dyn_seq_k_p[:-1], dyn_seq_m_p, dyn_seq_k_p[1:])
 
 
 def interp_state_m_p_H_S_post_dyn_calc(
