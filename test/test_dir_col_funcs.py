@@ -2,6 +2,7 @@ import pytest
 import jax.numpy as jnp
 import jax
 from typing import Tuple, Callable
+import numpy as np
 
 import ctrl_sandbox.dir_col_funcs as dir_col
 
@@ -9,6 +10,29 @@ import ctrl_sandbox.dir_col_funcs as dir_col
 def test_calculate_dir_col_cost_returns_exp_values():
 
     assert False
+
+
+def test_create_opt_vec_from_x_u_seqs_returns_expected_values():
+    len_seq = 10
+    x_len = 4
+    u_len = 2
+    x_seq = jnp.reshape(
+        jnp.linspace(0, (len_seq * x_len) - 1, len_seq * x_len), (len_seq, x_len)
+    )
+    u_seq = jnp.reshape(
+        jnp.linspace(
+            (len_seq * x_len),
+            (len_seq * x_len) + (len_seq * u_len) - 1,
+            len_seq * u_len,
+        ),
+        (len_seq, u_len),
+    )
+    opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
+    opt_vec_expect = np.linspace(
+        0, len_seq * (x_len + u_len) - 1, len_seq * (x_len + u_len)
+    )
+    np.testing.assert_array_almost_equal(opt_vec, opt_vec_expect, decimal=5)
+    assert type(opt_vec) == type(opt_vec_expect)
 
 
 def test_breakout_opt_vec_returns_exp_values():
@@ -21,7 +45,11 @@ def test_breakout_opt_vec_returns_exp_values():
         jnp.linspace(0, (len_seq * x_len) - 1, len_seq * x_len), (len_seq, x_len)
     )
     u_expected = jnp.reshape(
-        jnp.linspace((len_seq * x_len), (len_seq * u_len) - 1, len_seq * u_len),
+        jnp.linspace(
+            (len_seq * x_len),
+            (len_seq * x_len) + (len_seq * u_len) - 1,
+            len_seq * u_len,
+        ),
         (len_seq, u_len),
     )
     assert x_seq.all() == x_expected.all()
@@ -52,7 +80,7 @@ def test_calculate_init_final_constraint_returns_expected_values():
     x_o = jnp.array([0.1, 0.1, 0.1, 0.1])
     x_f = jnp.array([1.1, 1.1, 1.1, 1.1])
     x_seq = jnp.ones((4, 4), dtype=float)
-    ceq_o, ceq_f = dir_col._calculate_init_final_constraint(x_seq, x_o, x_f)
+    ceq_o, ceq_f = dir_col.calculate_init_final_constraint(x_seq, x_o, x_f)
     ceq_o_expect = x_o - x_seq[0]
     ceq_f_expect = x_f - x_seq[-1]
     assert ceq_o.all() == ceq_o_expect.all()
@@ -163,6 +191,121 @@ def test_calc_knot_point_dyn_scan_func_is_diff_through_scan_compatible():
     # TODO create assert statement for the expected tensor values
 
 
+def test_calc_mid_point_dyn_scan_func_returns_expected_values():
+    def dyn_func(
+        A: jnp.ndarray, B: jnp.ndarray, x_k: jnp.ndarray, u_k: jnp.ndarray
+    ) -> jnp.ndarray:
+        return (A @ x_k.reshape(-1, 1) + B @ u_k.reshape(-1, 1)).reshape(-1)
+
+    # define dynamics
+    A = jnp.ones((4, 4), dtype=float)
+    B = jnp.ones((4, 2), dtype=float)
+    dyn_func_curried = lambda x, u: dyn_func(A, B, x, u)
+    h = 0.1
+    # create sequence vector instances
+    x_k = jnp.ones((4,), dtype=float)
+    x_kp1 = jnp.ones((4,), dtype=float) * 2
+    dyn_k = jnp.ones((4,), dtype=float)
+    dyn_kp1 = jnp.ones((4,), dtype=float) * 2
+    u_m_p = jnp.ones((2,), dtype=float)
+    seqs = (x_k, x_kp1, dyn_k, dyn_kp1, u_m_p)
+    # calculate func
+    carry, dyn_m_p = dir_col.calc_mid_point_dyn_scan_func(
+        dyn_func_curried, h, None, seqs
+    )
+    # calculate expected output
+    x_m_p = dir_col.interp_state_m_p_H_S_post_dyn_calc(h, x_k, x_kp1, dyn_k, dyn_kp1)
+    dyn_m_p_expect = dyn_func_curried(x_m_p, u_m_p)
+    assert carry == None
+    np.testing.assert_array_equal(dyn_m_p, dyn_m_p_expect)
+
+
+def test_calc_mid_point_dyn_scan_func_is_scan_compatible():
+    def dyn_func(
+        A: jnp.ndarray, B: jnp.ndarray, x_k: jnp.ndarray, u_k: jnp.ndarray
+    ) -> jnp.ndarray:
+        return (A @ x_k.reshape(-1, 1) + B @ u_k.reshape(-1, 1)).reshape(-1)
+
+    # define dynamics
+    A = jnp.ones((4, 4), dtype=float)
+    B = jnp.ones((4, 2), dtype=float)
+    dyn_func_curried = lambda x, u: dyn_func(A, B, x, u)
+    h = 0.1
+    scan_func_curried = lambda carry, seqs: dir_col.calc_mid_point_dyn_scan_func(
+        dyn_func_curried, h, carry, seqs
+    )
+    # create sequence vector instances
+    len_seq = 4
+    x_k_seq = jnp.ones((len_seq, 4), dtype=float)
+    x_kp1_seq = jnp.ones((len_seq, 4), dtype=float) * 2
+    dyn_k_seq = jnp.ones((len_seq, 4), dtype=float)
+    dyn_kp1_seq = jnp.ones((len_seq, 4), dtype=float) * 2
+    u_m_p_seq = jnp.ones((len_seq, 2), dtype=float)
+    seqs = (x_k_seq, x_kp1_seq, dyn_k_seq, dyn_kp1_seq, u_m_p_seq)
+    # calculate func
+    carry, dyn_m_p_seq = jax.lax.scan(scan_func_curried, None, seqs)
+    # calculate expected output
+    x_m_p = dir_col.interp_state_m_p_H_S_post_dyn_calc(
+        h, x_k_seq[0], x_kp1_seq[0], dyn_k_seq[0], dyn_kp1_seq[0]
+    )
+    dyn_m_p_expect = dyn_func_curried(x_m_p, u_m_p_seq[0])
+    dyn_m_p_seq_expect = jnp.vstack([dyn_m_p_expect] * len_seq)
+    assert carry == None
+    np.testing.assert_array_equal(dyn_m_p_seq, dyn_m_p_seq_expect)
+
+
+def test_calc_mid_point_dyn_scan_func_is_diff_compatible():
+
+    assert False
+
+
+def test_calc_mid_point_dyn_scan_func_is_diff_through_scan_compatible():
+
+    assert False
+
+
+def test_calc_colloc_H_S_scan_func_returns_expected_values():
+    h = 0.1
+    carry = None
+    x_k = jnp.ones((4,), dtype=float)
+    x_kp1 = jnp.ones((4,), dtype=float) * 2
+    dyn_k = jnp.ones((4,), dtype=float)
+    dyn_m_p = jnp.ones((4,), dtype=float) * 2
+    dyn_kp1 = jnp.ones((4,), dtype=float) * 3
+    seqs = (x_k, x_kp1, dyn_k, dyn_m_p, dyn_kp1)
+    carry, ceq_m_p = dir_col.calc_colloc_H_S_scan_func(h, carry, seqs)
+    state_integrate_expect = dir_col.calc_H_S_integ_post_dyn_calc(
+        h, dyn_k, dyn_m_p, dyn_kp1
+    )
+    ceq_m_p_expect = state_integrate_expect - (x_kp1 - x_k)
+    np.testing.assert_array_equal(ceq_m_p, ceq_m_p_expect)
+
+
+def test_calc_colloc_H_S_scan_func_is_scan_compatible():
+
+    assert False
+
+
+def test_calc_colloc_H_S_scan_func_is_diff_compatible():
+
+    assert False
+
+
+def test_calc_colloc_H_S_scan_func_is_diff_through_scan_compatible():
+
+    assert False
+
+
+def test_create_mid_point_dyn_calc_seqs_returns_expected_values():
+
+    assert False
+
+
+def test_create_colloc_calc_seqs_returns_expected_values():
+
+    assert False
+
+
 def test_interp_state_m_p_H_S_post_dyn_calc_returns_expected_values():
     h = 0.001
     x_k = jnp.ones((2,), dtype=float)
@@ -176,6 +319,13 @@ def test_interp_state_m_p_H_S_post_dyn_calc_returns_expected_values():
     assert x_m_p.all() == x_m_p_expected.all()
 
 
-def test_create_mid_point_dyn_calc_seqs_returns_expected_values():
-
-    assert False
+def test_calc_H_S_integ_post_dyn_calc_returns_expected_values():
+    h = 0.001
+    dyn_k = jnp.ones((2,), dtype=float)
+    dyn_m_p = jnp.ones((2,), dtype=float) * 2
+    dyn_kp1 = jnp.ones((2,), dtype=float) * 3
+    dyn_m_p = dir_col.calc_H_S_integ_post_dyn_calc(h, dyn_k, dyn_m_p, dyn_kp1)
+    val_exp = (h / 6) * (1 + 4 * 2 + 3)
+    dyn_m_p_expect = jnp.array([val_exp, val_exp])
+    assert dyn_m_p.shape == dyn_k.shape
+    assert dyn_m_p.all() == dyn_m_p_expect.all()
