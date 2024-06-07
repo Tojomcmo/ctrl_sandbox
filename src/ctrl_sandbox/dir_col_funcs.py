@@ -95,7 +95,7 @@ def breakout_opt_vec(
     return x_seq, u_seq
 
 
-def calculate_dyn_seq_full(
+def calculate_dyn_colloc_constraints_full(
     lin_interp_mid_point_func: Callable[[jnp.ndarray], jnp.ndarray],
     knot_point_dyn_scan_func: Callable[
         [None, Tuple[jnp.ndarray, jnp.ndarray]], Tuple[None, jnp.ndarray]
@@ -118,50 +118,20 @@ def calculate_dyn_seq_full(
 ) -> jnp.ndarray:
     # lin_interp_u_mid_points
     x_seq, u_seq = breakout_opt_vec(len_seq, x_len, u_len, opt_vec)
-    ceq_o, ceq_f = calculate_init_final_constraint(x_seq, x_o, x_f)
+    ceq_o, ceq_f = _calculate_init_final_constraint(x_seq, x_o, x_f)
     u_seq_m_p = lin_interp_mid_point_func(u_seq)
     # calc_knot_point_dyn_seq
     _, dyn_seq_k_p = lax.scan(knot_point_dyn_scan_func, None, (x_seq, u_seq))
     # formulate scan sequences for midpoint dynamics calculation
-    mid_point_dyn_calc_seqs = create_mid_point_dyn_calc_seqs(
+    mid_point_dyn_calc_seqs = _create_mid_point_dyn_calc_seqs(
         x_seq, dyn_seq_k_p, u_seq_m_p
     )
     # Calculate collocation dynamics and stack dynamic sequence
     _, dyn_seq_m_p = lax.scan(mid_point_dyn_scan_func, None, (mid_point_dyn_calc_seqs))
-    colloc_calc_seqs = create_colloc_calc_seqs(x_seq, dyn_seq_k_p, dyn_seq_m_p)
+    colloc_calc_seqs = _create_colloc_calc_seqs(x_seq, dyn_seq_k_p, dyn_seq_m_p)
     _, ceq_seq = lax.scan(colloc_calc_func, None, (colloc_calc_seqs))
 
     return jnp.concatenate((ceq_o, ceq_seq, ceq_f), axis=0)
-
-
-def calculate_init_final_constraint(
-    x_seq: jnp.ndarray, x_o: jnp.ndarray, x_f: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    ceq_o = x_o - x_seq[0]
-    ceq_f = x_f - x_seq[-1]
-    return ceq_o, ceq_f
-
-
-def create_mid_point_dyn_calc_seqs(
-    x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, u_seq_m_p: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    x_k = (x_seq[:-1]).reshape(-1, 1)
-    x_kp1 = (x_seq[1:]).reshape(-1, 1)
-    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
-    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
-    u_k = u_seq_m_p.reshape(-1, 1)
-    return (x_k, x_kp1, dyn_k, dyn_kp1, u_k)
-
-
-def create_colloc_calc_seqs(
-    x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, dyn_seq_m_p: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    x_k = (x_seq[:-1]).reshape(-1, 1)
-    x_kp1 = (x_seq[1:]).reshape(-1, 1)
-    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
-    dyn_m_p = dyn_seq_m_p.reshape(-1, 1)
-    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
-    return (x_k, x_kp1, dyn_k, dyn_m_p, dyn_kp1)
 
 
 def calc_mid_point_dyn_scan_func(
@@ -171,7 +141,7 @@ def calc_mid_point_dyn_scan_func(
     seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
 ) -> Tuple[None, jnp.ndarray]:
     x_k, x_kp1, dyn_k, dyn_kp1, u_m_p = seqs
-    x_m_p = interp_state_traj_H_S_post_dyn_calc(h, x_k, x_kp1, dyn_k, dyn_kp1)
+    x_m_p = interp_state_m_p_H_S_post_dyn_calc(h, x_k, x_kp1, dyn_k, dyn_kp1)
     dyn_m_p = cont_dyn_func(x_m_p, u_m_p)
     return carry, dyn_m_p
 
@@ -186,16 +156,6 @@ def calc_knot_point_dyn_scan_func(
     return carry, x_dot_k
 
 
-def interp_state_traj_H_S_post_dyn_calc(
-    h: float,
-    x_k: jnp.ndarray,
-    x_kp1: jnp.ndarray,
-    dyn_k: jnp.ndarray,
-    dyn_kp1: jnp.ndarray,
-) -> jnp.ndarray:
-    return (0.5) * (x_k + x_kp1) + (h / 8) * (dyn_k - dyn_kp1)
-
-
 def calc_colloc_H_S_scan_func(
     h: float,
     carry: None,
@@ -205,6 +165,63 @@ def calc_colloc_H_S_scan_func(
     state_integrate = calc_H_S_integ_post_dyn_calc(h, dyn_k, dyn_m_p, dyn_kp1)
     ceq_m_p = state_integrate - (x_kp1 - x_k)
     return carry, ceq_m_p
+
+
+def _calculate_init_final_constraint(
+    x_seq: jnp.ndarray, x_o: jnp.ndarray, x_f: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    ceq_o = x_o - x_seq[0]
+    ceq_f = x_f - x_seq[-1]
+    return ceq_o, ceq_f
+
+
+def _create_mid_point_dyn_calc_seqs(
+    x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, u_seq_m_p: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    **create scan compatible tuple of seqs for mid point dynamics calculation**
+    """
+    x_k = (x_seq[:-1]).reshape(-1, 1)
+    x_kp1 = (x_seq[1:]).reshape(-1, 1)
+    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
+    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
+    u_k = u_seq_m_p.reshape(-1, 1)
+    return (x_k, x_kp1, dyn_k, dyn_kp1, u_k)
+
+
+def _create_colloc_calc_seqs(
+    x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, dyn_seq_m_p: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """
+    **create scan compatible tuple of seqs for dynamics collocation calculation**
+    """
+    x_k = (x_seq[:-1]).reshape(-1, 1)
+    x_kp1 = (x_seq[1:]).reshape(-1, 1)
+    dyn_k = (dyn_seq_k_p[:-1]).reshape(-1, 1)
+    dyn_m_p = dyn_seq_m_p.reshape(-1, 1)
+    dyn_kp1 = (dyn_seq_k_p[1:]).reshape(-1, 1)
+    return (x_k, x_kp1, dyn_k, dyn_m_p, dyn_kp1)
+
+
+def interp_state_m_p_H_S_post_dyn_calc(
+    h: float,
+    x_k: jnp.ndarray,
+    x_kp1: jnp.ndarray,
+    dyn_k: jnp.ndarray,
+    dyn_kp1: jnp.ndarray,
+) -> jnp.ndarray:
+    """
+    **Calculate state mid point x_k+1/2 using Hermite Simpson interpolation** \n
+    Calculated using knot point states and dynamics. This function does not calculate
+    the dynamics.
+    - [in] h - time step between knot points, required positive float
+    - [in] x_k - state vector at knot point k, jax array dim (n,)
+    - [in] x_kp1 - state vector at knot point kp1, jax array dim (n,)
+    - [in] dyn_k - continuous dynamics vector x_dot at knot point k, jax array dim (n,)
+    - [in] dyn_kp1 - continuous dynamics vector at knot point kp1, jax array dim (n,)
+    - [ret] x_m_p - interpolated state vector at mid point, jax array dim (n,)
+    """
+    return (0.5) * (x_k + x_kp1) + (h / 8) * (dyn_k - dyn_kp1)
 
 
 def calc_H_S_integ_post_dyn_calc(
