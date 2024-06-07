@@ -90,8 +90,8 @@ def calculate_dir_col_cost_pre_decorated(
 def breakout_opt_vec(
     len_seq: int, x_len: int, u_len: int, opt_vec: jnp.ndarray
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    x_seq = jnp.reshape(opt_vec[: (len_seq - 1) * x_len], (len_seq, x_len))
-    u_seq = jnp.reshape(opt_vec[(len_seq - 1) * x_len :], (len_seq - 1, u_len))
+    x_seq = jnp.reshape(opt_vec[: len_seq * x_len], (len_seq, x_len))
+    u_seq = jnp.reshape(opt_vec[len_seq * x_len :], (len_seq, u_len))
     return x_seq, u_seq
 
 
@@ -128,11 +128,10 @@ def calculate_dyn_seq_full(
     )
     # Calculate collocation dynamics and stack dynamic sequence
     _, dyn_seq_m_p = lax.scan(mid_point_dyn_scan_func, None, (mid_point_dyn_calc_seqs))
-    dyn_seq_kp_mp = util.interleave_jax_arrays(dyn_seq_k_p, dyn_seq_m_p)
     colloc_calc_seqs = create_colloc_calc_seqs(x_seq, dyn_seq_k_p, dyn_seq_m_p)
     _, ceq_seq = lax.scan(colloc_calc_func, None, (colloc_calc_seqs))
 
-    return ceq_seq
+    return jnp.concatenate((ceq_o, ceq_seq, ceq_f), axis=0)
 
 
 def calculate_init_final_constraint(
