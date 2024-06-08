@@ -122,7 +122,7 @@ def breakout_opt_vec(
 
     """
     x_seq = jnp.reshape(opt_vec[: len_seq * x_len], (len_seq, x_len))
-    u_seq = jnp.reshape(opt_vec[len_seq * x_len :], (len_seq, u_len))
+    u_seq = jnp.reshape(opt_vec[len_seq * x_len :], (len_seq - 1, u_len))
     return x_seq, u_seq
 
 
@@ -230,6 +230,8 @@ def calc_dyn_colloc_ceqs_full(
 ) -> jnp.ndarray:
     # lin_interp_u_mid_points
     x_seq, u_seq = breakout_opt_vec(len_seq, x_len, u_len, opt_vec)
+    # append u_seq with zero vec for collocation
+    u_seq = jnp.append(u_seq, (jnp.zeros((u_len,), dtype=float)).reshape(-1, 1), axis=0)
     ceq_o, ceq_f = calculate_init_final_constraint(x_seq, x_o, x_f)
     u_seq_m_p = lin_interp_mid_point_func(u_seq)
     # calc_knot_point_dyn_seq

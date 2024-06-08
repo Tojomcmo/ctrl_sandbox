@@ -15,23 +15,28 @@ import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
     m = 1.0
-    moi = 0.0
     g = 9.81
     b = 0.1
     l = 1.0
-    dyn_func_obj = dyn.single_pend_dyn(m=m, moi=moi, g=g, b=b, l=l)
-    Q = jnp.array([[1, 0], [0, 1]], dtype=float) * 0.001
+    dyn_func_obj = dyn.double_pm_pend_dyn(
+        g=g, m1=m, m2=m, l1=l, l2=l, b1=b, b2=b, shoulder_act=False, elbow_act=True
+    )
+    Q = (
+        jnp.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float)
+        * 0
+    )
     R = jnp.array([1.0], dtype=float)
     Qf = Q
 
-    len_seq = 200
-    x_len = 2
+    len_seq = 110
+    x_len = 4
     u_len = 1
     time_step = 0.05
     x_des_seq = np.zeros((len_seq, x_len), dtype=float)
     x_des_seq[:, 0] = np.pi
+    x_des_seq[:, 1] = np.pi
     u_des_seq = np.zeros((len_seq - 1,), dtype=float)
-    x_init = np.zeros((2,), dtype=float)
+    x_init = np.zeros((x_len,), dtype=float)
     cost_func_obj = cost.cost_quad_x_and_u(Q, R, Qf, x_des_seq, u_des_seq)
     dir_col_config = dir_col.dirColConfig(
         cost_func_obj.cost_func_quad_state_and_control_scan_compatible,
@@ -45,6 +50,8 @@ if __name__ == "__main__":
     )
 
     x_seq = np.zeros((len_seq, x_len), dtype=float)
+    # x_seq[:, 0] = np.linspace(0, x_des_seq[-1, 0], len_seq)
+    # x_seq[:, 1] = np.linspace(0, x_des_seq[-1, 1], len_seq)
     u_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     constraints = {
@@ -58,7 +65,7 @@ if __name__ == "__main__":
         opt_vec,
         jac=dir_col_config.dir_col_cost_diff,
         constraints=constraints,
-        options={"disp": True, "iprint": 3, "maxiter": 200},
+        options={"disp": True, "iprint": 3, "maxiter": 1100, "ftol": 1e-6},
     )
 
     x_seq_out, u_seq_out = dir_col.breakout_opt_vec(len_seq, x_len, u_len, opt_out.x)
@@ -68,8 +75,8 @@ if __name__ == "__main__":
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
     # Plot vectors 1 and 2 on the first subplot
-    ax1.plot(time_vec, x_seq_out[:, 0], label="th", marker="o")
-    ax1.plot(time_vec, x_seq_out[:, 1], label="thdot", marker="o")
+    ax1.plot(time_vec, x_seq_out[:, 0], label="th1", marker="o")
+    ax1.plot(time_vec, x_seq_out[:, 1], label="th2", marker="o")
     ax1.set_title("states")
     ax1.set_xlabel("Time")
     ax1.set_ylabel("Values")
@@ -88,7 +95,13 @@ if __name__ == "__main__":
 
     fig2 = plt.figure(figsize=(10, 8))
 
-    pend_vis_obj = vis_dyn.pm_pend_animation(l, np.array(x_seq_out), time_step, fig2)
+    pend_vis_obj = vis_dyn.double_pm_pend_animation(
+        l,
+        l,
+        np.array(x_seq_out),
+        time_step,
+        fig2,
+    )
     pend_vis_obj.create_animation()
     # Show the plot
     plt.show()
