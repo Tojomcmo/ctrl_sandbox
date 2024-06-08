@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import scipy.optimize as spopt
 from typing import Callable, Tuple, Union
+import jax
 import jax.lax as lax
 import numpy as np
 import numpy.typing as npt
@@ -18,6 +19,8 @@ class dirColConfig:
         x_len: int,
         u_len: int,
         len_seq: int,
+        x_o: Union[npt.NDArray[np.float64], jnp.ndarray],
+        x_f: Union[npt.NDArray[np.float64], jnp.ndarray],
     ) -> None:
         self.cost_func = cost_func
         self.cont_dyn_func = cont_dyn_func
@@ -25,16 +28,38 @@ class dirColConfig:
         self.len_seq = len_seq
         self.x_len = x_len
         self.u_len = u_len
+        self.x_o = jnp.array(x_o)
+        self.x_f = jnp.array(x_f)
         pass
 
     def create_dyn_constraint_func(
         self,
         cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-        integrate_scheme,
     ) -> None:
-
-        self.lin_interp_seq = util.create_lin_interp_seq_func()
-        self.lin_interp_seq_mid_point = util.create_lin_interp_seq_mid_point_func()
+        lin_interp_mid_point_func = util.create_lin_interp_seq_mid_point_func()
+        knot_point_dyn_scan_func = lambda carry, seqs: calc_knot_point_dyn_scan_func(
+            cont_dyn_func, carry, seqs
+        )
+        mid_point_dyn_scan_func = lambda carry, seqs: calc_mid_point_dyn_scan_func(
+            cont_dyn_func, self.time_step, carry, seqs
+        )
+        colloc_calc_scan_func = lambda carry, seqs: calc_colloc_H_S_scan_func(
+            self.time_step, carry, seqs
+        )
+        dyn_colloc_func = lambda opt_vec: calc_dyn_colloc_ceqs_full(
+            lin_interp_mid_point_func,
+            knot_point_dyn_scan_func,
+            mid_point_dyn_scan_func,
+            colloc_calc_scan_func,
+            self.len_seq,
+            self.x_len,
+            self.u_len,
+            self.x_o,
+            self.x_f,
+            opt_vec,
+        )
+        self.dyn_colloc_calc = prep_dyn_colloc_curried_for_calc(dyn_colloc_func)
+        self.dyn_colloc_diff = prep_dyn_colloc_curried_for_diff(dyn_colloc_func)
 
     def create_dir_col_cost_funcs(
         self,
@@ -47,29 +72,12 @@ class dirColConfig:
         cost_for_calc_scan_func = gen_ctrl._curry_cost_for_calc_scan_func(
             cost_func, self.x_len
         )
+        dir_col_cost: Callable = lambda opt_vec: calc_dir_col_cost_pre_decorated(
+            cost_for_calc_scan_func, self.len_seq, self.x_len, self.u_len, opt_vec
+        )
 
-        def create_dir_col_cost_diff(opt_vec: jnp.ndarray) -> jnp.ndarray:
-            return calculate_dir_col_cost_pre_decorated(
-                cost_for_calc_scan_func,
-                self.len_seq,
-                self.x_len,
-                self.u_len,
-                opt_vec,
-            )
-
-        def create_dir_col_cost_calc(opt_vec: jnp.ndarray) -> float:
-            return (
-                calculate_dir_col_cost_pre_decorated(
-                    cost_for_calc_scan_func,
-                    self.len_seq,
-                    self.x_len,
-                    self.u_len,
-                    opt_vec,
-                )
-            ).item()
-
-        self.dir_col_cost_diff = create_dir_col_cost_diff
-        self.dir_col_cost_calc = create_dir_col_cost_calc
+        self.dir_col_cost_calc = prep_dir_col_cost_curried_for_calc(dir_col_cost)
+        self.dir_col_cost_diff = prep_dir_col_cost_curried_for_diff(dir_col_cost)
 
 
 def create_opt_vec_from_x_u_seqs(
@@ -113,7 +121,7 @@ def breakout_opt_vec(
     return x_seq, u_seq
 
 
-def calculate_dir_col_cost_pre_decorated(
+def calc_dir_col_cost_pre_decorated(
     cost_for_calc_scan_func: Callable[
         [Tuple[int, jnp.ndarray], jnp.ndarray],
         Tuple[Tuple[int, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]],
@@ -141,7 +149,61 @@ def calculate_dir_col_cost_pre_decorated(
     return cost_float
 
 
-def calculate_dyn_colloc_constraints_full(
+def prep_dir_col_cost_curried_for_calc(
+    dir_col_cost_curried: Callable[[jnp.ndarray], jnp.ndarray]
+) -> Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]]:
+    """
+    **Wrap curried dir col cost function for cost calculation**
+    """
+
+    def dir_col_cost_calc(opt_vec: npt.NDArray[np.float64]):
+        return (np.array(dir_col_cost_curried(jnp.array(opt_vec)))).item()
+
+    return dir_col_cost_calc
+
+
+def prep_dir_col_cost_curried_for_diff(
+    dir_col_cost_curried: Callable[[jnp.ndarray], jnp.ndarray]
+) -> Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]]:
+    """
+    **Wrap curried dir col cost function for cost diff wrt opt vec**
+    """
+
+    def dir_col_cost_diff(opt_vec: npt.NDArray[np.float64]):
+        return (np.array(jax.jacfwd(dir_col_cost_curried)(jnp.array(opt_vec)))).reshape(
+            -1
+        )
+
+    return dir_col_cost_diff
+
+
+def prep_dyn_colloc_curried_for_calc(
+    dyn_colloc_curried: Callable[[jnp.ndarray], jnp.ndarray]
+) -> Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]]:
+    """
+    **Wrap curried dir col cost function for cost calculation**
+    """
+
+    def dyn_colloc_calc(opt_vec: npt.NDArray[np.float64]):
+        return np.array(dyn_colloc_curried(jnp.array(opt_vec)))
+
+    return dyn_colloc_calc
+
+
+def prep_dyn_colloc_curried_for_diff(
+    dyn_colloc_curried: Callable[[jnp.ndarray], jnp.ndarray]
+) -> Callable[[npt.NDArray[np.float64]], npt.NDArray[np.float64]]:
+    """
+    **Wrap curried dir col cost function for cost diff wrt opt vec**
+    """
+
+    def dyn_colloc_diff(opt_vec: npt.NDArray[np.float64]):
+        return np.array(jax.jacfwd(dyn_colloc_curried)(jnp.array(opt_vec)))
+
+    return dyn_colloc_diff
+
+
+def calc_dyn_colloc_ceqs_full(
     lin_interp_mid_point_func: Callable[[jnp.ndarray], jnp.ndarray],
     knot_point_dyn_scan_func: Callable[
         [None, Tuple[jnp.ndarray, jnp.ndarray]], Tuple[None, jnp.ndarray]
