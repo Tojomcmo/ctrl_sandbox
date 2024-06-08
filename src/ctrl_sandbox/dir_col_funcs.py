@@ -13,7 +13,10 @@ import ctrl_sandbox.util_funcs as util
 class dirColConfig:
     def __init__(
         self,
-        cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
+        cost_func: Callable[
+            [jnp.ndarray, jnp.ndarray, int],
+            Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
+        ],
         cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
         time_step: float,
         x_len: int,
@@ -30,9 +33,11 @@ class dirColConfig:
         self.u_len = u_len
         self.x_o = jnp.array(x_o)
         self.x_f = jnp.array(x_f)
+        self.create_dir_col_cost_funcs(cost_func)
+        self.create_dyn_colloc_funcs(cont_dyn_func)
         pass
 
-    def create_dyn_constraint_func(
+    def create_dyn_colloc_funcs(
         self,
         cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
     ) -> None:
