@@ -161,8 +161,10 @@ def prep_dir_col_cost_curried_for_calc(
     **Wrap curried dir col cost function for cost calculation**
     """
 
+    cost_calc_jit = jax.jit(dir_col_cost_curried)
+
     def dir_col_cost_calc(opt_vec: npt.NDArray[np.float64]):
-        return (np.array(dir_col_cost_curried(jnp.array(opt_vec)))).item()
+        return (np.array(cost_calc_jit(jnp.array(opt_vec)))).item()
 
     return dir_col_cost_calc
 
@@ -174,10 +176,10 @@ def prep_dir_col_cost_curried_for_diff(
     **Wrap curried dir col cost function for cost diff wrt opt vec**
     """
 
+    cost_diff_jit = jax.jit(dir_col_cost_curried)
+
     def dir_col_cost_diff(opt_vec: npt.NDArray[np.float64]):
-        return (np.array(jax.jacfwd(dir_col_cost_curried)(jnp.array(opt_vec)))).reshape(
-            -1
-        )
+        return (np.array(jax.jacfwd(cost_diff_jit)(jnp.array(opt_vec)))).reshape(-1)
 
     return dir_col_cost_diff
 
@@ -188,9 +190,10 @@ def prep_dyn_colloc_curried_for_calc(
     """
     **Wrap curried dir col cost function for cost calculation**
     """
+    dyn_colloc_jit = jax.jit(dyn_colloc_curried)
 
     def dyn_colloc_calc(opt_vec: npt.NDArray[np.float64]):
-        return np.array(dyn_colloc_curried(jnp.array(opt_vec)))
+        return np.array(dyn_colloc_jit(jnp.array(opt_vec)))
 
     return dyn_colloc_calc
 
@@ -202,8 +205,10 @@ def prep_dyn_colloc_curried_for_diff(
     **Wrap curried dir col cost function for cost diff wrt opt vec**
     """
 
+    dyn_colloc_jit = jax.jit(dyn_colloc_curried)
+
     def dyn_colloc_diff(opt_vec: npt.NDArray[np.float64]):
-        return np.array(jax.jacfwd(dyn_colloc_curried)(jnp.array(opt_vec)))
+        return np.array(jax.jacfwd(dyn_colloc_jit)(jnp.array(opt_vec)))
 
     return dyn_colloc_diff
 
@@ -231,7 +236,7 @@ def calc_dyn_colloc_ceqs_full(
     # lin_interp_u_mid_points
     x_seq, u_seq = breakout_opt_vec(len_seq, x_len, u_len, opt_vec)
     # append u_seq with zero vec for collocation
-    u_seq = jnp.append(u_seq, (jnp.zeros((u_len,), dtype=float)).reshape(-1, 1), axis=0)
+    u_seq = jnp.append(u_seq, (jnp.zeros((u_len,), dtype=float)).reshape(1, -1), axis=0)
     ceq_o, ceq_f = calculate_init_final_constraint(x_seq, x_o, x_f)
     u_seq_m_p = lin_interp_mid_point_func(u_seq)
     # calc_knot_point_dyn_seq

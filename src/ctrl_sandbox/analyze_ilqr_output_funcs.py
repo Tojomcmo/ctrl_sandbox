@@ -214,7 +214,6 @@ def plot_x_y_sequences(
 
 
 def plot_ilqr_iter_sim_ctrl_cost(
-    ilqr_config: ilqr.ilqrConfigStruct,
     controller_output: ilqr.ilqrControllerState,
     x_des_seq,
     x_sim_seq,
