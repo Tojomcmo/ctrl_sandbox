@@ -457,3 +457,38 @@ def plot_ilqr_dpend_act_and_cost_axes(
     ax3.plot(ctrl_out.time_seq, ctrl_out.x_cost_seq, label="state cost")
     ax3.plot(ctrl_out.time_seq, ctrl_out.u_cost_seq, label="control cost")
     ax3.legend()
+
+
+def plot_dpend_state_control_to_fig(
+    fig, x_seq, u_seq, time_vec, shoulder_ctrl_bool, elbow_ctrl_bool
+):
+    ax1 = fig.add_subplot(2, 1, 1)
+    ax1.plot(time_vec, x_seq[:, 0], label="th1", marker="o")
+    ax1.plot(time_vec, x_seq[:, 1], label="th2", marker="s")
+    ax1.set_title("states")
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Values")
+    ax1.grid(True)
+    ax1.legend()
+
+    # Plot vector 3 on the second subplot
+    ax2 = fig.add_subplot(2, 1, 2)
+    if shoulder_ctrl_bool is True and elbow_ctrl_bool is True:
+        ax2.plot(
+            time_vec[:-1], u_seq[:, 0], label="shoulder ctrl", color="r", marker="o"
+        )
+        ax2.plot(
+            time_vec[:-1], u_seq[:, 1], label="elbow control", color="b", marker="s"
+        )
+    else:
+        if shoulder_ctrl_bool is True:
+            ax2.plot(
+                time_vec[:-1], u_seq, label="shoulder control", color="r", marker="o"
+            )
+        else:
+            ax2.plot(time_vec[:-1], u_seq, label="elbow control", color="r", marker="o")
+    ax2.set_title("control")
+    ax2.set_xlabel("Time")
+    ax2.set_ylabel("Values")
+    ax2.grid(True)
+    ax2.legend()

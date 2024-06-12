@@ -14,28 +14,47 @@ import ctrl_sandbox.analyze_ilqr_output_funcs as analyze
 
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
+
+    x_len = 4
+    time_step = 0.05
+    len_seq = 150
+    shoulder_act = True
+    elbow_act = False
+    ctrl_bound = 10
     m = 1.0
     g = 9.81
     b = 0.1
     l = 1.0
+
     dyn_func_obj = dyn.double_pm_pend_dyn(
-        g=g, m1=m, m2=m, l1=l, l2=l, b1=b, b2=b, shoulder_act=False, elbow_act=True
+        g=g,
+        m1=m,
+        m2=m,
+        l1=l,
+        l2=l,
+        b1=b,
+        b2=b,
+        shoulder_act=shoulder_act,
+        elbow_act=elbow_act,
     )
-    Q = (
-        jnp.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float)
-        * 0
-    )
-    R = jnp.array([1.0], dtype=float)
+
+    Q = jnp.diag(jnp.array([1, 1, 1, 1], dtype=float)) * 0.0001
     Qf = Q
 
-    len_seq = 80
-    x_len = 4
-    u_len = 1
-    time_step = 0.05
+    if shoulder_act is True and elbow_act is True:
+        u_len = 2
+        R = jnp.diag(jnp.array([1, 1], dtype=float))
+        u_des_seq = np.zeros((len_seq - 1, 2), dtype=float)
+        u_seed_seq = np.ones((len_seq - 1, 2), dtype=float) * 0.001
+    else:
+        u_len = 1
+        R = jnp.array([1.0], dtype=float)
+        u_des_seq = np.zeros((len_seq - 1,), dtype=float)
+        u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
+
     x_des_seq = np.zeros((len_seq, x_len), dtype=float)
     x_des_seq[:, 0] = np.pi
     x_des_seq[:, 1] = np.pi
-    u_des_seq = np.zeros((len_seq - 1,), dtype=float)
     x_init = np.zeros((x_len,), dtype=float)
     cost_func_obj = cost.cost_quad_x_and_u(Q, R, Qf, x_des_seq, u_des_seq)
     dir_col_config = dir_col.dirColConfig(
@@ -49,11 +68,16 @@ if __name__ == "__main__":
         x_des_seq[-1],
     )
 
-    x_seq = np.zeros((len_seq, x_len), dtype=float)
-    x_seq[:, 0] = np.linspace(0, x_des_seq[-1, 0], len_seq)
-    x_seq[:, 1] = np.linspace(0, x_des_seq[-1, 1], len_seq)
-    u_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
-    opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
+    seed_x_seq = np.zeros((len_seq, x_len), dtype=float)
+    seed_x_seq[:, 0] = np.linspace(0, x_des_seq[-1, 0], len_seq)
+    seed_x_seq[:, 1] = np.linspace(0, x_des_seq[-1, 1], len_seq)
+    seed_u_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
+    opt_vec = dir_col.create_opt_vec_from_x_u_seqs(seed_x_seq, seed_u_seq)
+
+    # define constraints and boundari
+    x_bnds = [(-np.inf, np.inf)] * (len_seq * x_len)
+    u_bnds = [(-ctrl_bound, ctrl_bound)] * ((len_seq - 1) * u_len)
+    bnds = x_bnds + u_bnds
     constraints = {
         "type": "eq",
         "fun": dir_col_config.dyn_colloc_calc,
@@ -64,42 +88,27 @@ if __name__ == "__main__":
         dir_col_config.dir_col_cost_calc,
         opt_vec,
         jac=dir_col_config.dir_col_cost_diff,
+        bounds=bnds,
         constraints=constraints,
         method="slsqp",
         options={"disp": True, "iprint": 3, "maxiter": 1500, "ftol": 1e-6},
     )
 
-    x_seq_out, u_seq_out = dir_col.breakout_opt_vec(len_seq, x_len, u_len, opt_out.x)
+    x_seq, u_seq = dir_col.breakout_opt_vec(len_seq, x_len, u_len, opt_out.x)
 
     time_vec = np.linspace(0, (len_seq - 1) * time_step, len_seq)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-
-    # Plot vectors 1 and 2 on the first subplot
-    ax1.plot(time_vec, x_seq_out[:, 0], label="th1", marker="o")
-    ax1.plot(time_vec, x_seq_out[:, 1], label="th2", marker="o")
-    ax1.set_title("states")
-    ax1.set_xlabel("Time")
-    ax1.set_ylabel("Values")
-    ax1.grid(True)
-    ax1.legend()
-
-    # Plot vector 3 on the second subplot
-    ax2.plot(time_vec[:-1], u_seq_out, label="control", color="r", marker="o")
-    ax2.set_title("control")
-    ax2.set_xlabel("Time")
-    ax2.set_ylabel("Values")
-    ax2.grid(True)
-    ax2.legend()
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
+    fig1 = plt.figure(figsize=(10, 8))
+    vis_dyn.plot_dpend_state_control_to_fig(
+        fig1, x_seq, u_seq, time_vec, dyn_func_obj.shoulder_act, dyn_func_obj.elbow_act
+    )
 
     fig2 = plt.figure(figsize=(10, 8))
 
     pend_vis_obj = vis_dyn.double_pm_pend_animation(
         l,
         l,
-        np.array(x_seq_out),
+        np.array(x_seq),
         time_step,
         fig2,
     )

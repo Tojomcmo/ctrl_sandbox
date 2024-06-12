@@ -17,10 +17,11 @@ if __name__ == "__main__":
 
     x_len = 4
     time_step = 0.05
-    len_seq = 190
+    len_seq = 200
     shoulder_act = False
     elbow_act = True
-    ctrl_bound = 4
+    ctrl_upper_bound = 0
+    ctrl_lower_bound = -15
     m = 1.0
     g = 9.81
     b = 0.1
@@ -38,15 +39,12 @@ if __name__ == "__main__":
         elbow_act=elbow_act,
     )
 
-    Q = (
-        jnp.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float)
-        * 0
-    )
+    Q = jnp.diag(jnp.array([1, 1, 1, 1], dtype=float)) * 0.0001
     Qf = Q
 
     if shoulder_act is True and elbow_act is True:
         u_len = 2
-        R = jnp.eye(2, dtype=float)
+        R = jnp.diag(jnp.array([1, 1], dtype=float))
         u_des_seq = np.zeros((len_seq - 1, 2), dtype=float)
         u_seed_seq = np.ones((len_seq - 1, 2), dtype=float) * 0.001
     else:
@@ -82,7 +80,7 @@ if __name__ == "__main__":
     }
 
     x_bnds = [(-np.inf, np.inf)] * (len_seq * x_len)
-    u_bnds = [(-ctrl_bound, ctrl_bound)] * ((len_seq - 1) * u_len)
+    u_bnds = [(ctrl_lower_bound, ctrl_upper_bound)] * ((len_seq - 1) * u_len)
     bnds = x_bnds + u_bnds
 
     opt_out = minimize_ipopt(
@@ -98,42 +96,13 @@ if __name__ == "__main__":
 
     time_vec = np.linspace(0, (len_seq - 1) * time_step, len_seq)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-
-    # Plot vectors 1 and 2 on the first subplot
-    ax1.plot(time_vec, x_seq[:, 0], label="th1", marker="o")
-    ax1.plot(time_vec, x_seq[:, 1], label="th2", marker="s")
-    ax1.set_title("states")
-    ax1.set_xlabel("Time")
-    ax1.set_ylabel("Values")
-    ax1.grid(True)
-    ax1.legend()
-
-    # Plot vector 3 on the second subplot
-    if dyn_func_obj.shoulder_act is True and dyn_func_obj.elbow_act is True:
-        ax2.plot(
-            time_vec[:-1], u_seq[:, 0], label="shoulder ctrl", color="r", marker="o"
-        )
-        ax2.plot(
-            time_vec[:-1], u_seq[:, 1], label="elbow control", color="b", marker="s"
-        )
-    else:
-        if dyn_func_obj.shoulder_act is True and dyn_func_obj.elbow_act is False:
-            ax2.plot(
-                time_vec[:-1], u_seq, label="shoulder control", color="r", marker="o"
-            )
-        else:
-            ax2.plot(time_vec[:-1], u_seq, label="elbow control", color="r", marker="o")
-    ax2.set_title("control")
-    ax2.set_xlabel("Time")
-    ax2.set_ylabel("Values")
-    ax2.grid(True)
-    ax2.legend()
-    # Adjust layout to prevent overlap
+    fig1 = plt.figure(figsize=(10, 8))
+    vis_dyn.plot_dpend_state_control_to_fig(
+        fig1, x_seq, u_seq, time_vec, shoulder_act, elbow_act
+    )
     plt.tight_layout()
 
     fig2 = plt.figure(figsize=(10, 8))
-
     pend_vis_obj = vis_dyn.double_pm_pend_animation(
         l,
         l,
