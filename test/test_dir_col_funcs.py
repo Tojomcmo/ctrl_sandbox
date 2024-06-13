@@ -24,13 +24,13 @@ def test_calculate_dir_col_cost_returns_exp_values():
     x_len = 4
     u_len = 2
     x_seq = jnp.ones((len_seq, x_len), dtype=float)
-    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, u_len), dtype=float)
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     cost_for_calc_scan_func = gen_ctrl._curry_cost_for_calc_scan_func(cost_func, x_len)
     cost_float = dir_col.calc_dir_col_cost_pre_decorated(
         cost_for_calc_scan_func, len_seq, x_len, u_len, jnp.array(opt_vec)
     )
-    cost_float_expect = jnp.array([(4 + 2) * 5], dtype=float)
+    cost_float_expect = jnp.array([4.0 * 5 + 2.0 * 4], dtype=float)
     np.testing.assert_array_equal(cost_float, cost_float_expect)
 
 
@@ -48,6 +48,7 @@ def test_prep_dir_col_cost_curried_for_calc_output_func_returns_expected_values(
     len_seq = 5
     x_len = 4
     u_len = 2
+
     cost_for_calc_scan_func = gen_ctrl._curry_cost_for_calc_scan_func(cost_func, x_len)
     dir_col_cost_func_curried = lambda opt_vec: dir_col.calc_dir_col_cost_pre_decorated(
         cost_for_calc_scan_func, len_seq, x_len, u_len, jnp.array(opt_vec)
@@ -56,10 +57,10 @@ def test_prep_dir_col_cost_curried_for_calc_output_func_returns_expected_values(
         dir_col_cost_func_curried
     )
     x_seq = np.ones((len_seq, x_len), dtype=float)
-    u_seq = np.ones((len_seq, u_len), dtype=float)
+    u_seq = np.ones((len_seq - 1, u_len), dtype=float)
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     cost_float = dir_col_cost_calc(opt_vec)
-    cost_float_expect = (4.0 + 2.0) * 5.0
+    cost_float_expect = 4.0 * 5 + 2.0 * 4
     assert type(cost_float) == type(cost_float_expect)
     assert cost_float == cost_float_expect
 
@@ -78,6 +79,7 @@ def test_prep_dir_col_cost_curried_for_diff_output_func_returns_expected_values(
     len_seq = 5
     x_len = 4
     u_len = 2
+    opt_vec_len = len_seq * x_len + (len_seq - 1) * u_len
     cost_for_calc_scan_func = gen_ctrl._curry_cost_for_calc_scan_func(cost_func, x_len)
     dir_col_cost_func_curried = lambda opt_vec: dir_col.calc_dir_col_cost_pre_decorated(
         cost_for_calc_scan_func, len_seq, x_len, u_len, jnp.array(opt_vec)
@@ -86,10 +88,10 @@ def test_prep_dir_col_cost_curried_for_diff_output_func_returns_expected_values(
         dir_col_cost_func_curried
     )
     x_seq = np.ones((len_seq, x_len), dtype=float)
-    u_seq = np.ones((len_seq, u_len), dtype=float)
+    u_seq = np.ones((len_seq - 1, u_len), dtype=float)
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     jac_vec = dir_col_cost_diff(opt_vec)
-    cost_float_expect = np.ones((len_seq * (x_len + u_len),), dtype=float) * 2
+    cost_float_expect = np.ones((opt_vec_len,), dtype=float) * 2
     np.testing.assert_array_equal(jac_vec, cost_float_expect)
 
 
@@ -97,21 +99,20 @@ def test_create_opt_vec_from_x_u_seqs_returns_expected_values():
     len_seq = 10
     x_len = 4
     u_len = 2
+    opt_vec_len = len_seq * x_len + (len_seq - 1) * u_len
     x_seq = jnp.reshape(
         jnp.linspace(0, (len_seq * x_len) - 1, len_seq * x_len), (len_seq, x_len)
     )
     u_seq = jnp.reshape(
         jnp.linspace(
             (len_seq * x_len),
-            (len_seq * x_len) + (len_seq * u_len) - 1,
-            len_seq * u_len,
+            opt_vec_len - 1,
+            (len_seq - 1) * u_len,
         ),
-        (len_seq, u_len),
+        (len_seq - 1, u_len),
     )
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
-    opt_vec_expect = np.linspace(
-        0, len_seq * (x_len + u_len) - 1, len_seq * (x_len + u_len)
-    )
+    opt_vec_expect = np.linspace(0, opt_vec_len - 1, opt_vec_len)
     np.testing.assert_array_almost_equal(opt_vec, opt_vec_expect, decimal=5)
     assert type(opt_vec) == type(opt_vec_expect)
 
@@ -120,18 +121,20 @@ def test_breakout_opt_vec_returns_exp_values():
     len_seq = 10
     x_len = 4
     u_len = 2
-    opt_vec = jnp.linspace(0, len_seq * (x_len + u_len) - 1, len_seq * (x_len + u_len))
+    opt_vec_len = len_seq * x_len + (len_seq - 1) * u_len
+    opt_vec = jnp.linspace(0, opt_vec_len - 1, opt_vec_len)
     x_seq, u_seq = dir_col.breakout_opt_vec(len_seq, x_len, u_len, opt_vec)
     x_expected = jnp.reshape(
         jnp.linspace(0, (len_seq * x_len) - 1, len_seq * x_len), (len_seq, x_len)
     )
+    opt_vec_len_expect = len_seq * x_len + (len_seq - 1) * u_len
     u_expected = jnp.reshape(
         jnp.linspace(
             (len_seq * x_len),
-            (len_seq * (x_len + u_len)) - 1,
-            len_seq * u_len,
+            opt_vec_len_expect - 1,
+            (len_seq - 1) * u_len,
         ),
-        (len_seq, u_len),
+        (len_seq - 1, u_len),
     )
     np.testing.assert_array_equal(x_seq, x_expected)
     np.testing.assert_array_almost_equal(u_seq, u_expected, decimal=5)
@@ -151,7 +154,12 @@ def test_breakout_opt_vec_is_diff_compatible():
     x_len = 4
     u_len = 2
     diff_func_curried = lambda opt_vec: diff_func(len_seq, x_len, u_len, opt_vec)
-    opt_vec = jnp.linspace(0, len_seq * (x_len + u_len) - 1, len_seq * (x_len + u_len))
+    opt_vec_len = len_seq * x_len + (len_seq - 1) * u_len
+    opt_vec = jnp.linspace(
+        0,
+        opt_vec_len - 1,
+        opt_vec_len,
+    )
     jac_vec = (jax.jacfwd(diff_func_curried)(opt_vec)).reshape(-1)
     jac_vec_expect = 2 * opt_vec
     assert jac_vec.all() == jac_vec_expect.all()
@@ -186,7 +194,7 @@ def test_calc_dyn_colloc_ceqs_full_returns_expected_values():
     x_len = 4
     u_len = 2
     x_seq = jnp.ones((len_seq, x_len), dtype=float)
-    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, u_len), dtype=float)
     x_o = jnp.zeros((x_len,), dtype=float)
     x_f = jnp.ones((x_len,), dtype=float) * 2
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
@@ -235,7 +243,7 @@ def test_calc_dyn_colloc_ceqs_full_is_diff_compatible():
     x_len = 4
     u_len = 2
     x_seq = jnp.ones((len_seq, x_len), dtype=float)
-    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, u_len), dtype=float)
     x_o = jnp.zeros((x_len,), dtype=float)
     x_f = jnp.ones((x_len,), dtype=float) * 2
     # curry func
@@ -305,7 +313,7 @@ def test_prep_dyn_colloc_curried_for_calc_output_returns_expected_values():
     )
     dyn_colloc_calc = dir_col.prep_dyn_colloc_curried_for_calc(calculate_nonlcon)
     x_seq = jnp.ones((len_seq, x_len), dtype=float)
-    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, u_len), dtype=float)
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     ceq_seq = dyn_colloc_calc(opt_vec)
     assert ceq_seq.shape == ((len_seq + 1) * x_len,)
@@ -357,7 +365,7 @@ def test_prep_dyn_colloc_curried_for_diff_output_returns_expected_values():
     )
     dyn_colloc_calc = dir_col.prep_dyn_colloc_curried_for_diff(calculate_nonlcon)
     x_seq = jnp.ones((len_seq, x_len), dtype=float)
-    u_seq = jnp.ones((len_seq, u_len), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, u_len), dtype=float)
     opt_vec = dir_col.create_opt_vec_from_x_u_seqs(x_seq, u_seq)
     jac_array = dyn_colloc_calc(opt_vec)
     assert jac_array.shape == ((len_seq + 1) * x_len, len(opt_vec))
@@ -455,6 +463,9 @@ def test_calc_knot_point_dyn_scan_func_is_diff_through_scan_compatible():
 
     def scan_seq_func(scan_func, len_seq, x_len, u_len, xu_seq: jnp.ndarray):
         x_seq, u_seq = dir_col.breakout_opt_vec(len_seq, x_len, u_len, xu_seq)
+        u_seq = jnp.append(
+            u_seq, (jnp.zeros((u_len,), dtype=float)).reshape(1, -1), axis=0
+        )
         _, x_dot_seq = jax.lax.scan(scan_func, None, (x_seq, u_seq))
         return x_dot_seq
 
@@ -465,7 +476,7 @@ def test_calc_knot_point_dyn_scan_func_is_diff_through_scan_compatible():
 
     len_seq = 3
     x_seq = jnp.ones((len_seq, 4), dtype=float)
-    u_seq = jnp.ones((len_seq, 2), dtype=float)
+    u_seq = jnp.ones((len_seq - 1, 2), dtype=float)
     xu_seq = jnp.append(x_seq.reshape(-1), u_seq.reshape(-1), axis=0)
     scan_func_curried = lambda carry, seqs: dir_col.calc_knot_point_dyn_scan_func(
         dyn_func_curried, None, seqs
