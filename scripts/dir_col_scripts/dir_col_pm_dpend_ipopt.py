@@ -23,12 +23,12 @@ if __name__ == "__main__":
     os.makedirs(ani_save_location, exist_ok=True)
 
     x_len = 4
-    time_step = 0.03
+    time_step = 0.04
     len_seq = 200
-    shoulder_act = False
+    shoulder_act = True
     elbow_act = True
-    ctrl_upper_bound = 20
-    ctrl_lower_bound = -20
+    ctrl_upper_bound = 3
+    ctrl_lower_bound = -3
     m = 1.0
     g = 9.81
     b = 0.1
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         u_len = 1
         R = jnp.array([1.0], dtype=float)
         u_des_seq = np.zeros((len_seq - 1,), dtype=float)
-        u_seed_seq = np.ones((len_seq - 1,), dtype=float) * -0.001
+        u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
 
     x_des_seq = np.zeros((len_seq, x_len), dtype=float)
     x_des_seq[:, 0] = np.pi

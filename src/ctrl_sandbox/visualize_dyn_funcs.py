@@ -424,18 +424,40 @@ def plot_dpend_control_to_ax(
 ):
     if shoulder_ctrl_bool is True and elbow_ctrl_bool is True:
         ax.plot(
-            time_vec[:-1], u_seq[:, 0], label="shoulder ctrl", color="r", marker="o"
+            time_vec[:-1],
+            u_seq[:, 0],
+            label="shoulder ctrl",
+            color="r",
+            marker="o",
+            markersize=4,
         )
         ax.plot(
-            time_vec[:-1], u_seq[:, 1], label="elbow control", color="b", marker="s"
+            time_vec[:-1],
+            u_seq[:, 1],
+            label="elbow control",
+            color="b",
+            marker="s",
+            markersize=4,
         )
     else:
         if shoulder_ctrl_bool is True:
             ax.plot(
-                time_vec[:-1], u_seq, label="shoulder control", color="r", marker="o"
+                time_vec[:-1],
+                u_seq,
+                label="shoulder control",
+                color="r",
+                marker="o",
+                markersize=4,
             )
         else:
-            ax.plot(time_vec[:-1], u_seq, label="elbow control", color="r", marker="o")
+            ax.plot(
+                time_vec[:-1],
+                u_seq,
+                label="elbow control",
+                color="r",
+                marker="o",
+                markersize=4,
+            )
     ax.set_title("control input")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Torque [Nm]")
@@ -448,8 +470,8 @@ def plot_dpend_pos_to_ax(
     x_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
     time_vec: Union[jnp.ndarray, npt.NDArray[np.float64]],
 ):
-    ax.plot(time_vec, x_seq[:, 0], label="th1", marker="o")
-    ax.plot(time_vec, x_seq[:, 1], label="th2", marker="s")
+    ax.plot(time_vec, x_seq[:, 0], label="th1", marker="o", markersize=4)
+    ax.plot(time_vec, x_seq[:, 1], label="th2", marker="s", markersize=4)
     ax.set_title("position states")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Positions [rad]")
