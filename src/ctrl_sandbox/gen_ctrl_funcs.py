@@ -204,12 +204,15 @@ def _combine_x_u_for_cost_scan(x_seq: jnp.ndarray, u_seq: jnp.ndarray) -> jnp.nd
     appended with a vector of zeros to match axis 0 dimension of the two input arrays.
     This allows for proper concatenation of the arrays. \n
     - [in] x_seq - state vector sequence, dim(len_seq,n) \n
-    - [in] u_seq - control vector sequence, dim(len_seq-1, m) \n
+    - [in] u_seq - control vector sequence, dim(len_seq-1, m) or dim(len_seq,m) \n
     - [ret] x_u_seq - combined array sequence \n
     """
-    u_seq_end = jnp.zeros((1, u_seq.shape[1]), dtype=float)
-    u_seq_mod = jnp.append(u_seq, u_seq_end, axis=0)
-    return jnp.concatenate([x_seq, u_seq_mod], axis=1)
+    if u_seq.shape[0] == (x_seq.shape[0] - 1):
+        u_seq_end = jnp.zeros((1, u_seq.shape[1]), dtype=float)
+        u_seq_app = jnp.append(u_seq, u_seq_end, axis=0)
+    else:
+        u_seq_app = u_seq
+    return jnp.concatenate([x_seq, u_seq_app], axis=1)
 
 
 def _cost_for_calc_scan_func(
@@ -263,7 +266,7 @@ def calculate_total_cost_pre_decorated(
     ],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[float, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **Calculate sequence cost using pre-decorated cost function for lax.scan**
     """
@@ -273,7 +276,7 @@ def calculate_total_cost_pre_decorated(
         cost_for_calc_scan_func, init_carry, xu_seq
     )
     return (
-        total_cost.item(),
+        total_cost.reshape(-1),
         total_cost_seq.reshape(-1),
         x_cost_seq.reshape(-1),
         u_cost_seq.reshape(-1),
@@ -286,7 +289,7 @@ def calculate_total_cost(
     ],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[float, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     **Calculate sequence cost from provided undecorated cost function** \n
     - Wrapper function for calculate_total_cost_pre_decorated().

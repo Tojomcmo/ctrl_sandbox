@@ -315,7 +315,8 @@ def run_ilqr_controller(
     ctrl_state_out = ilqrControllerState(ilqr_config, init_x_vec, init_u_seq)
     u_seq = init_u_seq
     x_seq = ctrl_state_out.init_x_seq
-    cost_float, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq)
+    cost_float_jax, _, _, _ = ilqr_config.calculate_total_cost(x_seq, u_seq)
+    cost_float: float = cost_float_jax.item()
     converge_reached = False
     ro_reg = ilqr_config.ro_reg_start
     reg_inc_bool = False
@@ -326,13 +327,11 @@ def run_ilqr_controller(
             ilqr_config, x_seq, u_seq, ro_reg, reg_inc_bool
         )
         if ilqr_config.mj_ctrl is True:
-            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = (
-                calculate_forwards_pass_mj(
-                    ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
-                )
+            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_fwd_pass_mj(
+                ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
             )
         else:
-            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_forwards_pass(
+            x_seq, u_seq, cost_float, lsf_float, reg_inc_bool = calculate_fwd_pass(
                 ilqr_config, x_seq, u_seq, K_seq, d_seq, d_v_seq, cost_float
             )
         converge_measure, converge_reached, avg_ff_gain = (
@@ -575,7 +574,7 @@ def _set_back_pass_scan_output_to_null_arrays(
     return K_null, d_null, D_V_null
 
 
-def calculate_forwards_pass(
+def calculate_fwd_pass(
     ilqr_config: ilqrConfigStruct,
     x_seq_prev: jnp.ndarray,
     u_seq_prev: jnp.ndarray,
@@ -621,7 +620,7 @@ def calculate_forwards_pass(
     return x_seq_fp, u_seq_fp, cost_float_fp, lsf, reg_inc_bool
 
 
-def calculate_forwards_pass_mj(
+def calculate_fwd_pass_mj(
     ilqr_config: ilqrConfigStruct,
     x_seq_prev: jnp.ndarray,
     u_seq_prev: jnp.ndarray,
@@ -647,9 +646,10 @@ def calculate_forwards_pass_mj(
             x_seq_fp = x_seq_fp.at[k + 1].set(
                 ilqr_config.discrete_dyn_mj_func(x_seq_fp[k], u_seq_fp[k])
             )
-            cost_float_fp, _, _, _ = gen_ctrl.calculate_total_cost(
-                ilqr_config.cost_func_verbose, jnp.array(x_seq_fp), jnp.array(u_seq_fp)
-            )
+        cost_float_fp_jax, _, _, _ = gen_ctrl.calculate_total_cost(
+            ilqr_config.cost_func_verbose, jnp.array(x_seq_fp), jnp.array(u_seq_fp)
+        )
+        cost_float_fp: float = cost_float_fp_jax.item()
         cost_decrease_ratio = calculate_cost_decrease_ratio(
             cost_float_prev, cost_float_fp, d_v_seq, lsf
         )

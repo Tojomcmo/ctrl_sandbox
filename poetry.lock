@@ -565,6 +565,19 @@ docs = ["ipython", "matplotlib", "numpydoc", "sphinx"]
 tests = ["pytest", "pytest-cov", "pytest-xdist"]
 
 [[package]]
+name = "cyipopt"
+version = "1.4.1"
+description = "A Cython wrapper to the IPOPT optimization package"
+optional = false
+python-versions = "*"
+files = [
+    {file = "cyipopt-1.4.1.tar.gz", hash = "sha256:79d613cc114a4fb2eb9fc503b6fe746af2e78e2b81ebbd74d26f83426acb3135"},
+]
+
+[package.dependencies]
+numpy = ">=1.21.5"
+
+[[package]]
 name = "debugpy"
 version = "1.8.1"
 description = "An implementation of the Debug Adapter Protocol for Python"
@@ -3212,4 +3225,4 @@ test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-it
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "7985e61efa44734fa6e5184ddd5c42e59fe5464044e28eaae65adc7a6e0debe9"
+content-hash = "ad64807126ea82b14bbec6e4f517b55be79acc62a32447fad7347b522baeb0e2"

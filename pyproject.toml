@@ -17,6 +17,7 @@ mujoco = "^3.1.5"
 scipy = "^1.13.1"
 jupyter = "^1.0.0"
 pytest = "^8.2.1"
+cyipopt = "^1.4.1"
 
 
 [tool.poetry.group.dev.dependencies]
