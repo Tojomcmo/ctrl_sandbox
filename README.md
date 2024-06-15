@@ -40,10 +40,10 @@ Need to retest to verify
 
 ########## installing pipx and poetry on ubuntu ###########
 
-sudo apt upgrade \ 
+sudo apt upgrade \
 sudo apt install pipx \
 pipx ensurepath \
-pipx install poetry \
+pipx install poetry
 
 
 ########### installing ipopt on ubuntu ############
@@ -52,34 +52,34 @@ sudo apt-get install gcc g++ gfortran git patch wget pkg-config liblapack-dev li
 
 cd \
 mkdir ipopt_install_loc \
-cd $HOME/ipopt_install_loc \
+cd $HOME/ipopt_install_loc
 
 git clone https://github.com/coin-or-tools/ThirdParty-ASL.git \
 cd ThirdParty-ASL \
 ./get.ASL \
 ./configure \
 make \
-sudo make install \
+sudo make install
 
-cd $HOME/ipopt_install_loc \
+cd $HOME/ipopt_install_loc
 
 git clone https://github.com/coin-or-tools/ThirdParty-Mumps.git \
 cd ThirdParty-Mumps \
 ./get.Mumps \
 ./configure \
 make \
-sudo make install \
+sudo make install
 
-cd $HOME/ipopt_install_loc \
+cd $HOME/ipopt_install_loc
 
 git clone https://github.com/coin-or/Ipopt.git \
 cd Ipopt \
 mkdir build \
-$HOME/ipopt_install/Ipopt/configure --with-mumps-cflags="-I$HOME/ipopt_install_loc/ThirdParty_Mumps/MUMPS/include" \
+$HOME/ipopt_install/Ipopt/configure --with-mumps-cflags="-I$HOME/ipopt_install_loc/ThirdParty_Mumps/MUMPS/include"
 
 make \
 make test \
-sudo make install \
+sudo make install
 
 
 ######### install and activate ctrl_sandbox ###########
@@ -87,4 +87,4 @@ cd desired/project/location/ \
 git clone https://github.com/Tojomcmo/ctrl_sandbox.git \
 cd ctrl_sandbox/ \
 poetry install \
-poetry shell \
+poetry shell
