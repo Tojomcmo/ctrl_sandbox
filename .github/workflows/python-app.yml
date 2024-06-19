@@ -76,9 +76,13 @@ jobs:
       with:
         path: ./workspace
 
+    # - name: Start Docker container
+    #   run: |
+    #     docker run -d --name ctrl-sandbox-env --volume ${{ github.workspace }}/workspace:/workspace tojomcmo/ctrl-sandbox-env:latest tail -f /dev/null
+
     - name: Start Docker container
       run: |
-        docker run -d --name ctrl-sandbox-env --volume ${{ github.workspace }}/workspace:/workspace tojomcmo/ctrl-sandbox-env:latest tail -f /dev/null
+          docker run --name ctrl-sandbox-env -it -volume ${{ github.workspace }}/workspace:/workspace tojomcmo/ctrl-sandbox-env:latest
 
     - name: Verify container is running
       run: |
