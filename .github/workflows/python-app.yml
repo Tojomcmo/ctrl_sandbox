@@ -21,14 +21,16 @@ jobs:
       options: --volume ${{ github.workspace }}:/workspace
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        path: /workspace
-    
+
     - name: Verify container is running
       run: |
           echo "Current directory: $(pwd)"
           ls -la /workspace
+
+    - uses: actions/checkout@v3
+      with:
+        path: /workspace
+    
 
     - name: Set up ipopt packages
       run: |
