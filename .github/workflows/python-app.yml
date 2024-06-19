@@ -1,3 +1,57 @@
+# # This workflow will install Python dependencies, run tests and lint with a single version of Python
+# # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+# name: Python application
+
+# on:
+#   push:
+#     branches: ["main"]
+#   pull_request:
+#     branches: ["main"]
+
+# permissions:
+#   contents: read
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+
+#     container:
+#       image: tojomcmo/ctrl-sandbox-env:latest
+#       options: --volume ${{ github.workspace }}:/workspace
+
+#     steps:
+
+#     - uses: actions/checkout@v3
+#       with:
+#         path: /workspace
+    
+
+#     - name: Set up ipopt packages
+#       run: |
+#         cd workspace/
+#         python3 -m venv .venv
+#         source .venv/bin/activate
+      
+#     - name: Install dependencies
+#       run: |  
+#         poetry install
+        
+
+#     - name: Check flake8 version
+#       run: |
+#         poetry run flake8 --version        
+
+#     - name: Lint with flake8
+#       run: |
+#         poetry run flake8 . --max-line-length=88 --exclude .venv
+#       continue-on-error: true  
+        
+#     - name: Test with pytest
+#       run: |
+#         poetry run pytest
+
+
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
@@ -16,42 +70,44 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: tojomcmo/ctrl-sandbox-env:latest
-      options: --volume ${{ github.workspace }}:/workspace
-
     steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+      with:
+        path: ./workspace
+
+    - name: Start Docker container
+      run: |
+        docker run -d --name ctrl-sandbox-env --volume ${{ github.workspace }}/workspace:/workspace tojomcmo/ctrl-sandbox-env:latest tail -f /dev/null
 
     - name: Verify container is running
       run: |
-          echo "Current directory: $(pwd)"
-          ls -la /workspace
-
-    - uses: actions/checkout@v3
-      with:
-        path: /workspace
-    
+        docker ps
+        docker exec ctrl-sandbox-env sh -c "echo 'Current directory: $(pwd)' && ls -la /workspace"
 
     - name: Set up ipopt packages
       run: |
-        cd workspace/
-        python3 -m venv .venv
-        source .venv/bin/activate
-      
+        docker exec ctrl-sandbox-env sh -c "cd /workspace && python3 -m venv .venv && source .venv/bin/activate"
+
     - name: Install dependencies
-      run: |  
-        poetry install
-        
+      run: |
+        docker exec ctrl-sandbox-env sh -c "cd /workspace && source .venv/bin/activate && poetry install"
 
     - name: Check flake8 version
       run: |
-        poetry run flake8 --version        
+        docker exec ctrl-sandbox-env sh -c "cd /workspace && source .venv/bin/activate && poetry run flake8 --version"
 
     - name: Lint with flake8
       run: |
-        poetry run flake8 . --max-line-length=88 --exclude .venv
-      continue-on-error: true  
-        
+        docker exec ctrl-sandbox-env sh -c "cd /workspace && source .venv/bin/activate && poetry run flake8 . --max-line-length=88 --exclude .venv"
+      continue-on-error: true
+
     - name: Test with pytest
       run: |
-        poetry run pytest
+        docker exec ctrl-sandbox-env sh -c "cd /workspace && source .venv/bin/activate && poetry run pytest"
+
+    - name: Stop and remove Docker container
+      if: always()
+      run: |
+        docker stop ctrl-sandbox-env
+        docker rm ctrl-sandbox-env
