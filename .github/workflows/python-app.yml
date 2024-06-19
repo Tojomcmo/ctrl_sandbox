@@ -16,28 +16,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: tojomcmo/ctrl-sandbox-env:latest
+      options: --volume ${{ github.workspace }}:/workspace
+
     steps:
     - uses: actions/checkout@v3
+      with:
+        path: /workspace
     
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
-        
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.12"
 
     - name: Set up ipopt packages
       run: |
-        sudo apt-get install python3-numpy coinor-ipopt
+        python3 -m venv .venv
+        source .venv/bin/activate
       
-
-    - name: Install Poetry
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-         
     - name: Install dependencies
       run: |  
         poetry install
@@ -46,7 +39,7 @@ jobs:
     - name: Check flake8 version
       run: |
         poetry run flake8 --version        
-  
+
     - name: Lint with flake8
       run: |
         poetry run flake8 . --max-line-length=88 --exclude .venv
