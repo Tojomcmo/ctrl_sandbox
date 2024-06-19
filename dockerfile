@@ -3,6 +3,7 @@ FROM ubuntu:latest
 
 # Set environment variables
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+ENV PATH=$PATH:/root/.local/bin 
 
 # Install necessary packages
 RUN apt-get update && \
@@ -22,13 +23,12 @@ RUN apt-get update && \
     make \
     python3-dev
 
-# Add library path
-# RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib" >> ~/.bashrc
 
 # Install poetry using pipx
 RUN pipx ensurepath
-RUN source ~/.bashrc
 RUN pipx install poetry
+RUN pipx ensurepath
+
 # Clone and install ThirdParty-ASL
 RUN git clone https://github.com/coin-or-tools/ThirdParty-ASL.git && \
     cd ThirdParty-ASL && \
