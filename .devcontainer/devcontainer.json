@@ -1,9 +1,10 @@
 {
   "name": "Python Container",
-  "context": "..",
-  "dockerFile": "../Dockerfile",
-  "dockerComposeFile": "../docker-compose.yml",
-  "service": "ctrl-sandbox-env",
+  // "context": "..",
+  // "dockerFile": "../Dockerfile",
+  // "dockerComposeFile": "../docker-compose.yml",
+  // "service": "ctrl-sandbox-env",
+  "image": "tojomcmo/ctrl-sandbox-env:latest",
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind"
   ],
