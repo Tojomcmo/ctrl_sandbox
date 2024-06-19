@@ -14,12 +14,10 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_TARGET_PLATFORM: linux/arm64/v8  
+    runs-on: ubuntu-latest 
 
     container:
-      image: tojomcmo/ctrl-sandbox-env:latest
+      image: tojomcmo/ctrl-sandbox-env:amd64_latest
       volumes: 
         - ${{ github.workspace }}:/workspace
 
