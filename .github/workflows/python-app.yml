@@ -25,9 +25,14 @@ jobs:
       with:
         path: /workspace
     
+    - name: Verify container is running
+      run: |
+          echo "Current directory: $(pwd)"
+          ls -la /workspace
 
     - name: Set up ipopt packages
       run: |
+        cd workspace/
         python3 -m venv .venv
         source .venv/bin/activate
       
