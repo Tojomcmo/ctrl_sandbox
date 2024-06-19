@@ -4,6 +4,7 @@ FROM ubuntu:latest
 # Set environment variables
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 ENV PATH=$PATH:/root/.local/bin 
+WORKDIR /workspace
 
 # Install necessary packages
 RUN apt-get update && \

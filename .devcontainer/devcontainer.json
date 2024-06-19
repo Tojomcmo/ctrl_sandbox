@@ -2,8 +2,23 @@
   "name": "Python Container",
   "context": "..",
   "dockerFile": "../Dockerfile",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "ctrl-sandbox-env",
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind"
   ],
-  "workspaceFolder": "/workspace"
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "github.vscode-github-actions",
+        "ms-azuretools.vscode-docker",
+        "ms-python.black-formatter",
+        "ms-vscode-remote.remote-containers",
+        "ms-toolsai.jupyter",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  }
 }

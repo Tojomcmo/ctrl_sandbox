@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  ctrl-sandbox-env:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tojomcmo/ctrl-sandbox-env:latest
+    volumes:
+      - .:/workspace
+    command: /bin/bash
+    tty: true
