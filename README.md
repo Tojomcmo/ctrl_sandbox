@@ -41,9 +41,14 @@ resources:
 
 
 
-
-
-
+**PyQt issues**
+- Docker is currently not plotting properly (headless mode issue with MPL)
+- Linux installation of pyqt is finicky (metadata hang, no wheel, etc.)
+- Try:
+    - sudo apt install -y qtcreator qtbase5-dev qt5-qmake cmake
+    - (maybe have to set qtcreator manually in app)
+    - pip3 install pyqt5 —-config-settings —-confirm-license= —-verbose
+    - matplotlib.use("QtAgg")
 
 
 

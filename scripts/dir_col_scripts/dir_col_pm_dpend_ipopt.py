@@ -3,6 +3,7 @@ import jax
 import numpy as np
 import scipy.optimize as sciopt
 from cyipopt import minimize_ipopt
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import os
@@ -15,11 +16,13 @@ import ctrl_sandbox.visualize_dyn_funcs as vis_dyn
 
 
 if __name__ == "__main__":
+    matplotlib.use("Agg")
     jax.config.update("jax_enable_x64", True)
 
     save_ani_bool = True
     ani_save_location = "media_output/"
     ani_save_name = "acrobot_dir_col"
+    fig_title = "Direct Collocation: Acrobot"
     os.makedirs(ani_save_location, exist_ok=True)
 
     x_len = 4
@@ -27,8 +30,8 @@ if __name__ == "__main__":
     len_seq = 100
     shoulder_act = True
     elbow_act = True
-    ctrl_upper_bound = 10
-    ctrl_lower_bound = -10
+    ctrl_upper_bound = 5
+    ctrl_lower_bound = -5
     m = 1.0
     g = 9.81
     b = 0.1
@@ -104,6 +107,7 @@ if __name__ == "__main__":
     time_vec = np.linspace(0, (len_seq - 1) * time_step, len_seq)
 
     fig = plt.figure(figsize=(16, 8))
+    fig.suptitle(fig_title)
     gs = gridspec.GridSpec(2, 2)
     ax1 = fig.add_subplot(gs[:, 0])  # row 0, col 0
     ax2 = fig.add_subplot(gs[0, 1])  # row 0, col 1
@@ -123,9 +127,10 @@ if __name__ == "__main__":
         ax1,
     )
     pend_vis_obj.create_animation()
+
     plt.tight_layout()
     # Show the plot
-    plt.show()
+    # plt.show()
 
     if save_ani_bool:
         print("saving animation...")

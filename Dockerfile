@@ -58,6 +58,8 @@ RUN git clone https://github.com/coin-or/Ipopt.git && \
     make test && \
     make install
 
+RUN apt install -y qtcreator qtbase5-dev qt5-qmake cmake && \
+    apt install python3-pyqt5 -y
 # Clean up
 RUN rm -rf ThirdParty-ASL ThirdParty-Mumps Ipopt
 

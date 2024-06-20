@@ -1,4 +1,3 @@
-# version: '3.8'
 
 services:
   ctrl-sandbox-env:
@@ -9,5 +8,4 @@ services:
     volumes:
       - .:/workspace
     command: /bin/bash
-    # stdin_open: true # Keep stdin open even if not attached
     tty: true

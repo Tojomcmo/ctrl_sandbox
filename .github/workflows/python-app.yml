@@ -22,11 +22,9 @@ jobs:
         - ${{ github.workspace }}:/workspace
 
     steps:
-
     - name: Check out repository
       uses: actions/checkout@v3
     
-
     - name: create and source venv
       run: |
         python3 -m venv .venv
