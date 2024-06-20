@@ -14,6 +14,7 @@ import mujoco as mujoco
 import ctrl_sandbox.util_funcs as util
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.mujoco_funcs as mj_funcs
+import ctrl_sandbox.gen_typing as gt
 
 
 class ilqrConfigStruct:
@@ -35,13 +36,7 @@ class ilqrConfigStruct:
         self.is_cost_configured: bool = False
         self.is_curried: bool = False
 
-    def config_cost_func(
-        self,
-        cost_func: Callable[
-            [jnp.ndarray, jnp.ndarray, int],
-            Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        ],
-    ) -> None:
+    def config_cost_func(self, cost_func: gt.CostFuncType) -> None:
         """
         **Configure the cost function** \n
         - prep the cost function for cost calculation and differentiation \n
@@ -75,15 +70,9 @@ class ilqrConfigStruct:
 
     def config_for_dyn_func(
         self,
-        cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+        cont_dyn_func: gt.DynFuncType,
         integrate_func: Callable[
-            [
-                Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-                float,
-                jnp.ndarray,
-                jnp.ndarray,
-            ],
-            jnp.ndarray,
+            [gt.DynFuncType, float, jnp.ndarray, jnp.ndarray], jnp.ndarray
         ],
     ) -> None:
         """
@@ -132,20 +121,20 @@ class ilqrConfigStruct:
         """
         **Create simulate and linearize functions for mujoco-based dynamics**"
         """
-        self.discrete_dyn_mj_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
+        self.discrete_dyn_mj_func: gt.DynFuncType = (
             lambda x, u: mj_funcs.fwd_sim_mj_w_ctrl_step(
                 self.mj_model, self.mj_data, x, u
             )
         )
 
-        self.simulate_fwd_dyn_seq: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
+        self.simulate_fwd_dyn_seq: gt.DynFuncType = (
             lambda x_init, u_seq: mj_funcs.fwd_sim_mj_w_ctrl(
                 self.mj_model, self.mj_data, x_init, u_seq
             )
         )
 
         self.linearize_dyn_seq: Callable[
-            [jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]
+            [jnp.ndarray, jnp.ndarray], gt.JaxArrayTuple2
         ] = lambda x_seq, u_seq: mj_funcs.linearize_mj_seq(
             self.mj_model, self.mj_data, x_seq, u_seq
         )
@@ -157,14 +146,14 @@ class ilqrConfigStruct:
         - linearize forward dynamics sequence function
         - simulate forward pass update function
         """
-        self.discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
-            lambda x, u: self.integrate_func(self.cont_dyn_func, self.time_step, x, u)
+        self.discrete_dyn_func: gt.DynFuncType = lambda x, u: self.integrate_func(
+            self.cont_dyn_func, self.time_step, x, u
         )
 
         sim_dyn_scan_func = gen_ctrl._curry_dyn_for_sim_scan_func(
             self.discrete_dyn_func
         )
-        self.simulate_fwd_dyn_seq: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] = (
+        self.simulate_fwd_dyn_seq: gt.DynFuncType = (
             lambda x_init, u_seq: gen_ctrl.simulate_forward_dynamics_seq_pre_decorated(
                 sim_dyn_scan_func, x_init, u_seq
             )
@@ -174,7 +163,7 @@ class ilqrConfigStruct:
             self.discrete_dyn_func, self.x_len
         )
         self.linearize_dyn_seq: Callable[
-            [jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]
+            [jnp.ndarray, jnp.ndarray], gt.JaxArrayTuple2
         ] = lambda x_seq, u_seq: gen_ctrl.calculate_lin_state_space_seq_pre_decorated(
             lin_dyn_scan_func, x_seq, u_seq
         )
@@ -201,8 +190,8 @@ class ilqrControllerState:
     def __init__(
         self,
         ilqr_config: ilqrConfigStruct,
-        init_x_vec: Union[jnp.ndarray, npt.NDArray[np.float64]],
-        init_u_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+        init_x_vec: gt.npORjnpArr,
+        init_u_seq: gt.npORjnpArr,
     ):
         # direct parameter population
         self.init_x_vec = jnp.array(init_x_vec)
@@ -252,9 +241,7 @@ class ilqrControllerState:
     def get_num_controls(self):
         return len(self.init_u_seq[0])
 
-    def get_init_x_seq(
-        self, dyn_seq_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
+    def get_init_x_seq(self, dyn_seq_func: gt.DynFuncType) -> jnp.ndarray:
         return dyn_seq_func(self.init_x_vec, self.init_u_seq)
 
     def initialize_ctrl_state_zeros(self):
@@ -464,10 +451,8 @@ def calculate_backwards_pass(
 
 
 def sweep_back_pass(
-    dyn_lin_approx_seqs: Tuple[jnp.ndarray, jnp.ndarray],
-    cost_quad_approx_seqs: Tuple[
-        jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
-    ],
+    dyn_lin_approx_seqs: gt.JaxArrayTuple2,
+    cost_quad_approx_seqs: gt.JaxArrayTuple5,
     ro_reg: float,
     ro_reg_inc_val_float: float,
 ):
@@ -513,14 +498,8 @@ def sweep_back_pass(
 
 def sweep_back_pass_scan_func(
     carry: Tuple[float, jnp.ndarray, jnp.ndarray, bool],
-    seqs: Tuple[
-        Tuple[jnp.ndarray, jnp.ndarray],
-        Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    ],
-) -> Tuple[
-    Tuple[float, jnp.ndarray, jnp.ndarray, bool],
-    Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
-]:
+    seqs: Tuple[gt.JaxArrayTuple2, gt.JaxArrayTuple5],
+) -> Tuple[Tuple[float, jnp.ndarray, jnp.ndarray, bool], gt.JaxArrayTuple3]:
     """
     ** lax.scan function for backwards pass recursive LQR solution** \n
     - Recieve single step dynamics linearization and cost function quadratic expansion,
@@ -678,15 +657,10 @@ def calculate_fwd_pass_mj(
 
 def simulate_forward_pass(
     fp_scan_func: Callable[
-        [
-            Tuple[int, jnp.ndarray, jnp.ndarray, float],
-            Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        ],
-        Tuple[
-            Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
-        ],
+        [Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple4],
+        Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple2],
     ],
-    cost_func_for_calc: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
+    cost_func_for_calc: gt.CostFuncDiffType,
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
     K_seq: jnp.ndarray,
@@ -714,10 +688,8 @@ def forward_pass_scan_func(
     discrete_dyn_func,
     cost_func_float,
     carry: Tuple[int, jnp.ndarray, jnp.ndarray, float],
-    seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-) -> Tuple[
-    Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
-]:
+    seqs: gt.JaxArrayTuple4,
+) -> Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple2]:
     """
     **kernel lax.scan function for forwards pass simulation for
         proposing trajectory update**
@@ -740,14 +712,10 @@ def forward_pass_scan_func(
 
 
 def _curry_forward_pass_scan_func(
-    discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    cost_func_float: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
+    discrete_dyn_func: gt.DynFuncType, cost_func_float: gt.CostFuncDiffType
 ) -> Callable[
-    [
-        Tuple[int, jnp.ndarray, jnp.ndarray, float],
-        Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    ],
-    Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]],
+    [Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple4],
+    Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple2],
 ]:
     """
     **prepare forward_pass_scan_func() for lax.scan by populating dyn and cost funcs**
@@ -755,10 +723,8 @@ def _curry_forward_pass_scan_func(
 
     def fp_scan_func_curried(
         carry: Tuple[int, jnp.ndarray, jnp.ndarray, float],
-        seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    ) -> Tuple[
-        Tuple[int, jnp.ndarray, jnp.ndarray, float], Tuple[jnp.ndarray, jnp.ndarray]
-    ]:
+        seqs: gt.JaxArrayTuple4,
+    ) -> Tuple[Tuple[int, jnp.ndarray, jnp.ndarray, float], gt.JaxArrayTuple2]:
         return forward_pass_scan_func(discrete_dyn_func, cost_func_float, carry, seqs)
 
     return fp_scan_func_curried
@@ -779,10 +745,8 @@ def _initialize_forwards_pass(
 
 
 def taylor_expand_pseudo_hamiltonian(
-    dyn_lin_approx_k: Tuple[jnp.ndarray, jnp.ndarray],
-    cost_quad_approx_k: Tuple[
-        jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
-    ],
+    dyn_lin_approx_k: gt.JaxArrayTuple2,
+    cost_quad_approx_k: gt.JaxArrayTuple5,
     P_kp1: jnp.ndarray,
     p_kp1: jnp.ndarray,
     ro_reg: float,
@@ -818,7 +782,7 @@ def calculate_backstep_ctg_approx(
     q_ux: jnp.ndarray,
     K_k: jnp.ndarray,
     d_k: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple3:
     """
     **Calculate quadratic approximation of current step
         cost-to-go for recursive backstepping**
@@ -858,7 +822,7 @@ def calculate_backstep_ctg_approx(
 
 def calculate_optimal_gains(
     q_uu_reg: jnp.ndarray, q_ux: jnp.ndarray, q_u: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple2:
     """
     **Calculate optimal feedforward and feedback gains
         from minimizing quad approx Q function**
@@ -956,10 +920,10 @@ def calculate_u_star(
 
 
 def simulate_ilqr_output(
-    sim_dyn_func_step: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    sim_dyn_func_step: gt.DynFuncType,
     ctrl_obj: ilqrControllerState,
     x_sim_init: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple2:
     x_sim_seq = jnp.zeros([ctrl_obj.len_seq, ctrl_obj.x_len])
     u_sim_seq = jnp.zeros([ctrl_obj.len_seq - 1, ctrl_obj.u_len])
     x_sim_seq = x_sim_seq.at[0].set(x_sim_init)

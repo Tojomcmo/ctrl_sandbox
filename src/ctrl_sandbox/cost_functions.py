@@ -2,11 +2,13 @@ from jax import numpy as jnp
 from jax import lax
 import numpy as np
 import numpy.typing as npt
-from typing import Tuple, Union
+from typing import Tuple, Union, Callable
 
 # library of cost functions and associated functions for manipulating cost functions
 # Cost functions may return multiple values:
 #  - first value MUST be the float value of calculated query cost
+
+CostFuncType = Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray]
 
 
 class cost_quad_x_and_u:

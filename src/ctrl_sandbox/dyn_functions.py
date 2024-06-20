@@ -1,7 +1,10 @@
 from jax import numpy as jnp
+from typing import Callable, Tuple
 
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.statespace_funcs as ss_funcs
+
+DynFuncType = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
 
 class single_pm_pend_dyn:

@@ -7,42 +7,39 @@ from typing import Callable, Tuple
 from numpy import typing as npt
 
 import ctrl_sandbox.integrate_funcs as integrate
+import ctrl_sandbox.gen_typing as gt
 
 
 def _dyn_for_sim_scan_func(
-    discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    discrete_dyn_func: gt.DynFuncType,
     carry_x_k: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple2:
     """
     **Kernel scan function for forward dynamics simulation**
      - This function decorates the discrete_dyn_func for
         jax.lax.scan by propagating carry and seq values as returns
     """
     x_kp1 = discrete_dyn_func(carry_x_k, u_seq)
-    return x_kp1, x_kp1
+    return (x_kp1, x_kp1)
 
 
 def _curry_dyn_for_sim_scan_func(
-    discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
-) -> Callable[[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
+    discrete_dyn_func: gt.DynFuncType,
+) -> Callable[[jnp.ndarray, jnp.ndarray], gt.JaxArrayTuple2]:
     """
     **Create lax.scan compatible function for forward
         dynamic simulation through partial argument reduction**
     """
 
-    def scan_func(
-        carry_x_k: jnp.ndarray, u_seq: jnp.ndarray
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def scan_func(carry_x_k: jnp.ndarray, u_seq: jnp.ndarray) -> gt.JaxArrayTuple2:
         return _dyn_for_sim_scan_func(discrete_dyn_func, carry_x_k, u_seq)
 
     return scan_func
 
 
 def simulate_forward_dynamics_seq_pre_decorated(
-    sim_dyn_scan_func: Callable[
-        [jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]
-    ],
+    sim_dyn_scan_func: Callable[[jnp.ndarray, jnp.ndarray], gt.JaxArrayTuple2],
     x_init: jnp.ndarray,
     u_seq: jnp.ndarray,
 ) -> jnp.ndarray:
@@ -63,9 +60,7 @@ def simulate_forward_dynamics_seq_pre_decorated(
 
 
 def simulate_forward_dynamics_seq(
-    discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    x_init: jnp.ndarray,
-    u_seq: jnp.ndarray,
+    discrete_dyn_func: gt.DynFuncType, x_init: jnp.ndarray, u_seq: jnp.ndarray
 ) -> jnp.ndarray:
     """
     **Simulate forward dynamics from initial state through
@@ -83,10 +78,8 @@ def simulate_forward_dynamics_seq(
 
 
 def linearize_dynamics(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    xu_k: jnp.ndarray,
-    x_k_len,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    dyn_func: gt.DynFuncType, xu_k: jnp.ndarray, x_k_len
+) -> gt.JaxArrayTuple2:
     """
     **Linearizes the dynamics function about the primals x and u** \n
     - [in] dyn_func - dynamics function,
@@ -110,11 +103,8 @@ def linearize_dynamics(
 
 
 def _dyn_lin_scan_func(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    x_len: int,
-    carry: None,
-    x_and_u_k: jnp.ndarray,
-) -> Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]:
+    dyn_func: gt.DynFuncType, x_len: int, carry: None, x_and_u_k: jnp.ndarray
+) -> Tuple[None, gt.JaxArrayTuple2]:
     """
     **Partially format linearize dynamics function for lax.scan**
     - [in] dyn_func - callable dynamics function,
@@ -132,8 +122,8 @@ def _dyn_lin_scan_func(
 
 
 def _curry_dyn_lin_scan_func(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], x_len: int
-) -> Callable[[None, jnp.ndarray], Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]]:
+    dyn_func: gt.DynFuncType, x_len: int
+) -> Callable[[None, jnp.ndarray], Tuple[None, gt.JaxArrayTuple2]]:
     """
     **Create curried scan function for lax.scan for
     linearizing a dynamic sequence of x and u states
@@ -155,12 +145,10 @@ def _curry_dyn_lin_scan_func(
 
 
 def calculate_lin_state_space_seq_pre_decorated(
-    dyn_lin_scan_func: Callable[
-        [None, jnp.ndarray], Tuple[None, Tuple[jnp.ndarray, jnp.ndarray]]
-    ],
+    dyn_lin_scan_func: Callable[[None, jnp.ndarray], Tuple[None, gt.JaxArrayTuple2]],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple2:
     """
     **Calculate jacobian matrices of paired state and control sequences**
     - [in] lin_scan_func - lax.scan compatible dynamics linearization func
@@ -181,10 +169,8 @@ def calculate_lin_state_space_seq_pre_decorated(
 
 
 def calculate_linearized_state_space_seq(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    x_seq: jnp.ndarray,
-    u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    dyn_func: gt.DynFuncType, x_seq: jnp.ndarray, u_seq: jnp.ndarray
+) -> gt.JaxArrayTuple2:
     """
     **Calculate the A and B matrix linearizations for
     x and u through undecorated dynamics function** \n
@@ -216,13 +202,11 @@ def _combine_x_u_for_cost_scan(x_seq: jnp.ndarray, u_seq: jnp.ndarray) -> jnp.nd
 
 
 def _cost_for_calc_scan_func(
-    cost_func: Callable[
-        [jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    ],
+    cost_func: gt.CostFuncType,
     x_len: int,
     carry: Tuple[int, jnp.ndarray],
-    xu_k,
-) -> Tuple[Tuple[int, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+    xu_k: jnp.ndarray,
+) -> Tuple[Tuple[int, jnp.ndarray], gt.JaxArrayTuple3]:
     """
     ** Kernel function for lax.scan calculation of
         sequence cost and individual cost sequences**
@@ -241,13 +225,11 @@ def _cost_for_calc_scan_func(
 
 
 def _curry_cost_for_calc_scan_func(
-    cost_func: Callable[
-        [jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    ],
+    cost_func: gt.CostFuncType,
     x_len: int,
 ) -> Callable[
     [Tuple[int, jnp.ndarray], jnp.ndarray],
-    Tuple[Tuple[int, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]],
+    Tuple[Tuple[int, jnp.ndarray], gt.JaxArrayTuple3],
 ]:
     """
     **Create lax.scan compatible function for cost calculation**
@@ -262,11 +244,11 @@ def _curry_cost_for_calc_scan_func(
 def calculate_total_cost_pre_decorated(
     cost_for_calc_scan_func: Callable[
         [Tuple[int, jnp.ndarray], jnp.ndarray],
-        Tuple[Tuple[int, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]],
+        Tuple[Tuple[int, jnp.ndarray], gt.JaxArrayTuple3],
     ],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple4:
     """
     **Calculate sequence cost using pre-decorated cost function for lax.scan**
     """
@@ -284,12 +266,8 @@ def calculate_total_cost_pre_decorated(
 
 
 def calculate_total_cost(
-    cost_func: Callable[
-        [jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    ],
-    x_seq: jnp.ndarray,
-    u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    cost_func: gt.CostFuncType, x_seq: jnp.ndarray, u_seq: jnp.ndarray
+) -> gt.JaxArrayTuple4:
     """
     **Calculate sequence cost from provided undecorated cost function** \n
     - Wrapper function for calculate_total_cost_pre_decorated().
@@ -301,11 +279,8 @@ def calculate_total_cost(
 
 
 def taylor_expand_cost(
-    cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
-    xu_k: jnp.ndarray,
-    x_k_len: int,
-    k: int,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    cost_func: gt.CostFuncDiffType, xu_k: jnp.ndarray, x_k_len: int, k: int
+) -> gt.JaxArrayTuple5:
     """
     **Create cost function quadratic approximation using taylor expansion.** \n
     Expansion is approximated about the rolled out trajectory
@@ -327,11 +302,8 @@ def taylor_expand_cost(
 
 
 def _cost_for_exp_scan_func(
-    cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
-    x_len: int,
-    k: int,
-    xu_k: jnp.ndarray,
-) -> Tuple[int, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+    cost_func: gt.CostFuncDiffType, x_len: int, k: int, xu_k: jnp.ndarray
+) -> Tuple[int, gt.JaxArrayTuple5]:
     """
     ** kernel lax.scan function for cost function second order taylor expansion**
     - [in] cost_func - callable that accepts (x_k, u_k, k) and
@@ -350,11 +322,8 @@ def _cost_for_exp_scan_func(
 
 
 def _curry_cost_for_exp_scan_func(
-    cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray], x_len: int
-) -> Callable[
-    [int, jnp.ndarray],
-    Tuple[int, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]],
-]:
+    cost_func: gt.CostFuncDiffType, x_len: int
+) -> Callable[[int, jnp.ndarray], Tuple[int, gt.JaxArrayTuple5]]:
     """
     **Create lax.scan compatible function for cost function taylor expansion**
     """
@@ -370,15 +339,10 @@ def _curry_cost_for_exp_scan_func(
 
 
 def taylor_expand_cost_seq_pre_decorated(
-    cost_for_exp_scan_func: Callable[
-        [int, jnp.ndarray],
-        Tuple[
-            int, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
-        ],
-    ],
+    cost_for_exp_scan_func: Callable[[int, jnp.ndarray], Tuple[int, gt.JaxArrayTuple5]],
     x_seq: jnp.ndarray,
     u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple5:
     """
     **Calculate the second order taylor expansion of provided
         undecorated cost function at x and u sequence primal points** \n
@@ -392,10 +356,8 @@ def taylor_expand_cost_seq_pre_decorated(
 
 
 def taylor_expand_cost_seq(
-    cost_func: Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray],
-    x_seq: jnp.ndarray,
-    u_seq: jnp.ndarray,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    cost_func: gt.CostFuncDiffType, x_seq: jnp.ndarray, u_seq: jnp.ndarray
+) -> gt.JaxArrayTuple5:
     """
     **Calculate the second order taylor expansion of provided
         undecorated cost function at x and u sequence primal points** \n
@@ -414,11 +376,7 @@ def taylor_expand_cost_seq(
     return expanded_mats
 
 
-def prep_cost_func_for_diff(
-    cost_func: Callable[
-        [jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    ]
-) -> Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray]:
+def prep_cost_func_for_diff(cost_func: gt.CostFuncType) -> gt.CostFuncDiffType:
     """
     Function for reducing generic cost function output to single queried value.\n
     Useful for preparing functions for jax differentiation
@@ -433,19 +391,13 @@ def prep_cost_func_for_diff(
     return cost_func_for_diff
 
 
-def prep_cost_func_for_calc(
-    cost_func: Callable[
-        [jnp.ndarray, jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    ]
-) -> Callable[
-    [npt.NDArray[np.float64], npt.NDArray[np.float64], int], Tuple[float, float, float]
-]:
+def prep_cost_func_for_calc(cost_func: gt.CostFuncType) -> gt.CostFuncFloatType:
     """
     **function wrapper on cost function for simple cost calculation, returning floats**
     """
 
     def cost_func_for_calc(
-        x_k: npt.NDArray[np.float64], u_k: npt.NDArray[np.float64], k: int
+        x_k: gt.npORjnpArr, u_k: gt.npORjnpArr, k: int
     ) -> Tuple[float, float, float]:
         total_cost, x_cost, u_cost = cost_func(jnp.array(x_k), jnp.array(u_k), k)
         return total_cost.item(), x_cost.item(), u_cost.item()
@@ -500,7 +452,7 @@ def calculate_s_xx_dot(
 
 
 def simulate_forward_dynamics_seq_simple(
-    discrete_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    discrete_dyn_func: gt.DynFuncType,
     x_init: jnp.ndarray,
     u_seq: jnp.ndarray,
 ) -> jnp.ndarray:
@@ -517,7 +469,7 @@ def simulate_forward_dynamics_seq_simple(
 
 
 def simulate_forward_dynamics_step(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    dyn_func: gt.DynFuncType,
     x_k: jnp.ndarray,
     u_k: jnp.ndarray,
     time_step: float,
