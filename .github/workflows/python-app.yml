@@ -23,14 +23,12 @@ jobs:
 
     steps:
 
-    - uses: actions/checkout@v3
-      with:
-        path: /workspace
+    - name: Check out repository
+      uses: actions/checkout@v3
     
 
-    - name: Set up ipopt packages
+    - name: create and source venv
       run: |
-        cd workspace/
         python3 -m venv .venv
         source .venv/bin/activate
       
@@ -38,7 +36,6 @@ jobs:
       run: |  
         poetry install
         
-
     - name: Check flake8 version
       run: |
         poetry run flake8 --version        
