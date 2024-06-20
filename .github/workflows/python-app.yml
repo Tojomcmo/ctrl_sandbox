@@ -30,7 +30,7 @@ jobs:
     - name: create and source venv
       run: |
         python3 -m venv .venv
-        source .venv/bin/activate
+        . .venv/bin/activate
       
     - name: Install dependencies
       run: |  
