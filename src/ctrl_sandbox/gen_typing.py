@@ -14,3 +14,5 @@ DynFuncType = Callable[[ndarray, ndarray], ndarray]
 CostFuncType = Callable[[ndarray, ndarray, int], JaxArrayTuple3]
 CostFuncDiffType = Callable[[ndarray, ndarray, int], ndarray]
 CostFuncFloatType = Callable[[ndarray, ndarray, int], Tuple[float, float, float]]
+
+IndexJax2JaxFuncType = Callable[[int, ndarray], ndarray]

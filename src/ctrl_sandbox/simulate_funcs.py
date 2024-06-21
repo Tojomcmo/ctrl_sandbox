@@ -3,17 +3,18 @@ from jax import lax
 from typing import Tuple, Callable
 
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
+import ctrl_sandbox.gen_typing as gt
 
 
 def sim_dyn(
     discrete_dyn_func: Callable[[int, jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    control_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    measure_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    disturb_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    noise_func: Callable[[int, jnp.ndarray], jnp.ndarray],
+    control_func: gt.IndexJax2JaxFuncType,
+    measure_func: gt.IndexJax2JaxFuncType,
+    disturb_func: gt.IndexJax2JaxFuncType,
+    noise_func: gt.IndexJax2JaxFuncType,
     x_init: jnp.ndarray,
     seq_len: int,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple3:
     """
     **simulate dynamics from initial state with controller,
         disturbances, noise, and measurement functions**
@@ -31,15 +32,13 @@ def sim_dyn(
 
 def sim_dyn_scan_func(
     discrete_dyn_func: Callable[[int, jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    control_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    measure_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    disturb_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    noise_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    carry: Tuple[jnp.ndarray, jnp.ndarray],
+    control_func: gt.IndexJax2JaxFuncType,
+    measure_func: gt.IndexJax2JaxFuncType,
+    disturb_func: gt.IndexJax2JaxFuncType,
+    noise_func: gt.IndexJax2JaxFuncType,
+    carry: gt.JaxArrayTuple2,
     seq: jnp.ndarray,
-) -> Tuple[
-    Tuple[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-]:
+) -> Tuple[gt.JaxArrayTuple2, gt.JaxArrayTuple3]:
     # TODO fix typecheck error for k int as a ndarray of ints
     x_k, x_est_k = carry
     k = seq
@@ -53,10 +52,10 @@ def sim_dyn_scan_func(
 
 def curry_sim_dyn_scan_func(
     discrete_dyn_func: Callable[[int, jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    control_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    measure_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    disturb_func: Callable[[int, jnp.ndarray], jnp.ndarray],
-    noise_func: Callable[[int, jnp.ndarray], jnp.ndarray],
+    control_func: gt.IndexJax2JaxFuncType,
+    measure_func: gt.IndexJax2JaxFuncType,
+    disturb_func: gt.IndexJax2JaxFuncType,
+    noise_func: gt.IndexJax2JaxFuncType,
 ):
     def sim_dyn_scan_func_curried(carry, seq):
         return sim_dyn_scan_func(
@@ -78,9 +77,7 @@ def direct_pass(int, vec: jnp.ndarray) -> jnp.ndarray:
 
 def prep_disturb_noise_WGN_for_sim(
     process_cov_mat: jnp.ndarray, noise_cov_mat: jnp.ndarray
-) -> Tuple[
-    Callable[[int, jnp.ndarray], jnp.ndarray], Callable[[int, jnp.ndarray], jnp.ndarray]
-]:
+) -> Tuple[gt.IndexJax2JaxFuncType, gt.IndexJax2JaxFuncType]:
     def disturb_func(k: int, x_k: jnp.ndarray) -> jnp.ndarray:
         return gen_ctrl.apply_cov_noise_to_vec(x_k, process_cov_mat)
 
@@ -92,7 +89,7 @@ def prep_disturb_noise_WGN_for_sim(
 
 def prep_ff_fb_u_for_sim(
     u_ff_seq: jnp.ndarray, x_des_seq: jnp.ndarray, k_fb_seq: jnp.ndarray
-) -> Callable[[int, jnp.ndarray], jnp.ndarray]:
+) -> gt.IndexJax2JaxFuncType:
     def control_func(k: int, x_k: jnp.ndarray) -> jnp.ndarray:
         return gen_ctrl.calculate_ff_fb_u(k_fb_seq[k], u_ff_seq[k], x_des_seq[k], x_k)
 

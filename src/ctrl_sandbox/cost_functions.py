@@ -1,24 +1,27 @@
+"""
+
+**library of cost functions and associated functions for manipulating cost functions**\n
+
+Implemented cost function classes:
+ - quadratic cost in state and control
+    - class cost_quad_x_and_u
+"""
+
 from jax import numpy as jnp
 from jax import lax
-import numpy as np
-import numpy.typing as npt
-from typing import Tuple, Union, Callable
+from typing import Tuple
 
-# library of cost functions and associated functions for manipulating cost functions
-# Cost functions may return multiple values:
-#  - first value MUST be the float value of calculated query cost
-
-CostFuncType = Callable[[jnp.ndarray, jnp.ndarray, int], jnp.ndarray]
+import ctrl_sandbox.gen_typing as gt
 
 
 class cost_quad_x_and_u:
     def __init__(
         self,
-        Q: Union[jnp.ndarray, npt.NDArray[np.float64]],
-        R: Union[jnp.ndarray, npt.NDArray[np.float64]],
-        Qf: Union[jnp.ndarray, npt.NDArray[np.float64]],
-        x_des_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
-        u_des_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+        Q: gt.npORjnpArr,
+        R: gt.npORjnpArr,
+        Qf: gt.npORjnpArr,
+        x_des_seq: gt.npORjnpArr,
+        u_des_seq: gt.npORjnpArr,
     ) -> None:
         self.Q = jnp.array(Q)
         self.R = jnp.array(R)

@@ -1,10 +1,6 @@
 from jax import numpy as jnp
-from typing import Callable, Tuple
 
-import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.statespace_funcs as ss_funcs
-
-DynFuncType = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
 
 class single_pm_pend_dyn:
@@ -663,3 +659,73 @@ class ua_double_pend_rel_dyn:
         return self.calculate_kinetic_energy(x_vec) + self.calculate_potential_energy(
             x_vec
         )
+
+
+class cart_pole_pm_dyn:
+    """
+    Double pendulum object with relative angle definitions
+    - https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    - https://github.com/Tojomcmo/ctrl_sandbox/wiki/
+        2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    """
+
+    def __init__(self, g: float, l: float, mc: float, mp: float):
+        # populate gravity parameter
+        self.g = g
+        # populate inertial parameters
+        self.mc = mc
+        self.mp = mp
+        # populate length parameters
+        self.l = l
+        self.B_mat = jnp.array([[1], [0]], dtype=float)
+
+    def validate_inputs(self):
+        # TODO fill in validation criteria
+        pass
+
+    def _calc_state_dep_mass_term(self, x_vec: jnp.ndarray) -> jnp.ndarray:
+        return self.mp * self.l * jnp.cos(x_vec[1])
+
+    def calculate_mass_matrix(self, x_vec: jnp.ndarray) -> jnp.ndarray:
+        Mplc2 = self._calc_state_dep_mass_term(x_vec)
+        return jnp.array([[self.mc + self.mp, Mplc2], [Mplc2, self.mp * self.l**2]])
+
+    def calculate_mass_matrix_inv(self, x_vec: jnp.ndarray) -> jnp.ndarray:
+        Mplc2 = self._calc_state_dep_mass_term(x_vec)
+        return (
+            1 / (((self.mc + self.mp) * (self.mp * self.l**2)) - (Mplc2**2))
+        ) * jnp.array(
+            [[self.mp * self.l**2, -(Mplc2)], [-(Mplc2), self.mc + self.mp]]
+        )
+
+    def cont_dyn_func(self, x_vec: jnp.ndarray, u_vec: jnp.ndarray) -> jnp.ndarray:
+        """
+        The state vector has form x = [x, th, xdot, thdot]'
+        The control vector has form u = [fx]'
+        The output vector has form xdot = [xdot, thdot, xddot, thddot]
+        modelled from https://underactuated.mit.edu/acrobot.html - cartpole
+        """
+        stheta = jnp.sin(x_vec[1])
+        mass_mat_inv = self.calculate_mass_matrix_inv(x_vec)
+        C_mat = jnp.array([[-self.mp + self.l * (x_vec[3] ** 2) * stheta], [0]])
+        grav_mat = jnp.array([[0], [-self.mp * self.g * self.l * stheta]])
+        theta_ddots = (
+            mass_mat_inv @ (C_mat + grav_mat + self.B_mat @ u_vec.reshape(-1, 1))
+        ).reshape(-1)
+        state_dot = jnp.array([x_vec[2], x_vec[3], theta_ddots[0], theta_ddots[1]])
+        return state_dot
+
+    def calc_kinetic_energy(self, x_vec: jnp.ndarray) -> float:
+        mass_mat = self.calculate_mass_matrix(jnp.array(x_vec))
+        x_vec_col = x_vec[2:].reshape(-1, 1)
+        return ((0.5) * x_vec_col.T @ mass_mat @ x_vec_col).item()
+
+    def calc_potential_energy(self, x_vec: jnp.ndarray) -> float:
+        return (-self.mp * self.g - self.l * jnp.cos(x_vec[1])).item()
+
+    def calculate_total_energy(self, x_vec: jnp.ndarray) -> float:
+        return self.calc_kinetic_energy(x_vec) + self.calc_potential_energy(x_vec)
+
+    def get_animate_value_dict(self) -> dict:
+        animate_vals = {"l": self.l}
+        return animate_vals

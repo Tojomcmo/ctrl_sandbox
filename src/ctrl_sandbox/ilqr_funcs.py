@@ -6,9 +6,7 @@
 
 import jax.numpy as jnp
 from jax import lax
-import numpy as np
-from numpy import typing as npt
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple
 import mujoco as mujoco
 
 import ctrl_sandbox.util_funcs as util
