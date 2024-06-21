@@ -3,14 +3,14 @@ import numpy.typing as npt
 import jax.numpy as jnp
 from functools import partial
 import matplotlib.animation as animation
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib.gridspec as gridspec
 import numpy.typing as npt
 import os
-from typing import Optional, Union, Tuple
-
+from typing import Optional, Union
 
 import ctrl_sandbox.ilqr_funcs as ilqr
 
@@ -377,6 +377,124 @@ class double_pend_animation:
         self.ani.save(full_filename, writer=writer)
 
 
+class cart_pole_animation:
+    def __init__(
+        self,
+        animate_vals: dict,
+        x_seq: npt.NDArray[np.float64],
+        dt: float,
+        fig: Figure,
+        ax: Axes,
+        min_fps: int = 30,
+    ) -> None:
+        self.l: float = animate_vals["l"]
+        self.dt = dt
+        self.x_seq = x_seq
+        self.fig = fig
+        self.ax = ax
+        self.min_fps: int = min_fps
+        self.set_fps_for_animation()
+        self.create_cartesian_sequence()
+        self.config_for_ani()
+
+    def config_for_ani(self):
+        L = self.l * 1.1
+        x_lim_min = min(self.x_seq[:, 0]) - self.l / 2
+        x_lim_max = max(self.x_seq[:, 0]) + self.l / 2
+        self.ax.set_aspect("equal")
+        self.ax.set_xlim(x_lim_min, x_lim_max)
+        self.ax.set_ylim(-L, L)
+        self.ax.set_autoscale_on(False)
+        self.box = patches.Rectangle(
+            (-self.l / 4, self.l / 4),
+            self.l / 2,
+            self.l / 2,
+            facecolor="red",
+            edgecolor="red",
+        )
+        self.ax.add_patch(self.box)
+        (self.origin,) = self.ax.plot([], [], marker="s", ms=8, color="black")
+        (self.pend,) = self.ax.plot([], [], "o-", lw=2, ms=3)
+        (self.trace,) = self.ax.plot([], [], ".-", lw=1, ms=2)
+        self.time_template = "time = %.2fs"
+        self.time_text = self.ax.text(0.05, 0.9, "", transform=self.ax.transAxes)
+
+    def create_cartesian_sequence(self) -> None:
+        xc = self.x_seq_ani[:, 0] - self.l / 4
+        yc = np.zeros(self.x_seq_ani.shape[0]) - self.l / 4
+        xp1 = self.x_seq_ani[:, 0]
+        yp1 = np.zeros(self.x_seq_ani.shape[0])
+        xp2 = xp1 + self.l * np.sin(self.x_seq_ani[:, 1])
+        yp2 = -self.l * np.cos(self.x_seq_ani[:, 1])
+        self.cartesian_vecs = (xc, xp1, xp2, yc, yp1, yp2)
+
+    def animate_sequence(self, i, origin, box, pend, trace, time_text):
+        this_pend_x = [
+            (self.cartesian_vecs[1][i]).item(),
+            (self.cartesian_vecs[2][i]).item(),
+        ]
+        this_pend_y = [
+            (self.cartesian_vecs[4][i]).item(),
+            (self.cartesian_vecs[5][i]).item(),
+        ]
+        this_box = [
+            (self.cartesian_vecs[0][i]).item(),
+            (self.cartesian_vecs[3][i]).item(),
+        ]
+        history_x = self.cartesian_vecs[2][:i]
+        history_y = self.cartesian_vecs[5][:i]
+        origin.set_data([0], [0])
+        pend.set_data(this_pend_x, this_pend_y)
+        box.set_xy((this_box[0], this_box[1]))
+        trace.set_data(history_x, history_y)
+        time_text.set_text(self.time_template % (i / self.fps))
+        return pend, origin, box, trace, time_text
+
+    def set_fps_for_animation(self):
+        skipMod: int = 1
+        if 1 / (self.dt) / self.min_fps <= 1:
+            pass
+        else:
+            skipMod = int(np.floor(1 / (self.dt) / self.min_fps))
+        self.x_seq_ani = self.x_seq[0::skipMod]
+        self.fps: int = int(1 / (self.dt * skipMod))
+
+    def update_fps_for_animation(self, new_min_fps):
+        self.min_fps = new_min_fps
+        self.set_fps_for_animation()
+        self.create_cartesian_sequence()
+
+    def create_animation(self):
+        self.ani = animation.FuncAnimation(
+            self.fig,
+            partial(
+                self.animate_sequence,
+                origin=self.origin,
+                box=self.box,
+                pend=self.pend,
+                trace=self.trace,
+                time_text=self.time_text,
+            ),
+            self.x_seq_ani.shape[0],
+            interval=self.fps,
+            blit=True,
+        )
+
+    def show_plot(self):
+        # self.fig.show()
+        plt.show()
+
+    def save_animation_gif(self, filename: str | os.PathLike):
+        writer = animation.PillowWriter(fps=self.fps, metadata=dict(artist="Me"))
+        full_filename = f"{filename}{'.gif'}"
+        self.ani.save(full_filename, writer=writer)
+
+    def save_animation_mp4(self, filename: str | os.PathLike):
+        writer = animation.FFMpegWriter(fps=self.fps, metadata=dict(artist="Me"))
+        full_filename = f"{filename}{'.mp4'}"
+        self.ani.save(full_filename, writer=writer)
+
+
 def plot_ilqr_dpend_act_and_cost_axes(
     shoulder_act: bool,
     elbow_act: bool,
@@ -493,4 +611,53 @@ def plot_dpend_state_control_to_fig(
     plot_dpend_control_to_ax(
         ax2, x_seq, u_seq, time_vec, shoulder_ctrl_bool, elbow_ctrl_bool
     )
+    plt.tight_layout()
+
+
+def plot_cart_pole_pos_to_ax(
+    ax: Axes,
+    x_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+    time_vec: Union[jnp.ndarray, npt.NDArray[np.float64]],
+):
+    ax.plot(time_vec, x_seq[:, 0], label="x cart", marker="o", markersize=4)
+    ax.plot(time_vec, x_seq[:, 1], label="th pend", marker="s", markersize=4)
+    ax.set_title("position states")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Positions [rad]")
+    ax.grid(True)
+    ax.legend()
+
+
+def plot_cart_pole_control_to_ax(
+    ax: Axes,
+    x_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+    u_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+    time_vec: Union[jnp.ndarray, npt.NDArray[np.float64]],
+):
+
+    ax.plot(
+        time_vec[:-1],
+        u_seq,
+        label="force on cart",
+        color="r",
+        marker="o",
+        markersize=4,
+    )
+    ax.set_title("control input")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Force [N]")
+    ax.grid(True)
+    ax.legend()
+
+
+def plot_cart_pole_state_control_to_fig(
+    fig: Figure,
+    x_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+    u_seq: Union[jnp.ndarray, npt.NDArray[np.float64]],
+    time_vec: Union[jnp.ndarray, npt.NDArray[np.float64]],
+):
+    ax1 = fig.add_subplot(2, 1, 1)
+    plot_cart_pole_pos_to_ax(ax1, x_seq, time_vec)
+    ax2 = fig.add_subplot(2, 1, 2)
+    plot_cart_pole_control_to_ax(ax2, x_seq, u_seq, time_vec)
     plt.tight_layout()

@@ -19,50 +19,32 @@ if __name__ == "__main__":
 
     save_ani_bool = True
     ani_save_location = "media_output/"
-    ani_save_name = "acrobot_dir_col"
-    fig_title = "Direct Collocation: Acrobot"
+    ani_save_name = "cartpole_dir_col"
+    fig_title = "Direct Collocation: cartpole"
     os.makedirs(ani_save_location, exist_ok=True)
 
     x_len = 4
-    time_step = 0.04
+    time_step = 0.05
     len_seq = 100
-    shoulder_act = True
-    elbow_act = True
-    ctrl_upper_bound = 5
-    ctrl_lower_bound = -5
-    m = 1.0
+    ctrl_upper_bound = 20
+    ctrl_lower_bound = -20
+    mc = 1.0
+    mp = 1.0
     g = 9.81
-    b = 0.1
     l = 1.0
 
-    dyn_func_obj = dyn.double_pm_pend_dyn(
-        g=g,
-        m1=m,
-        m2=m,
-        l1=l,
-        l2=l,
-        b1=b,
-        b2=b,
-        shoulder_act=shoulder_act,
-        elbow_act=elbow_act,
-    )
+    dyn_func_obj = dyn.cart_pole_pm_dyn(g=g, l=l, mc=mc, mp=mp)
 
     Q = jnp.diag(jnp.array([1, 1, 1, 1], dtype=float)) * 0.0001
     Qf = Q
 
-    if shoulder_act is True and elbow_act is True:
-        u_len = 2
-        R = jnp.diag(jnp.array([1, 1], dtype=float))
-        u_des_seq = np.zeros((len_seq - 1, 2), dtype=float)
-        u_seed_seq = np.ones((len_seq - 1, 2), dtype=float) * 0.001
-    else:
-        u_len = 1
-        R = jnp.array([1.0], dtype=float)
-        u_des_seq = np.zeros((len_seq - 1,), dtype=float)
-        u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
+    u_len = 1
+    R = jnp.array([1.0], dtype=float)
+    u_des_seq = np.zeros((len_seq - 1,), dtype=float)
+    u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
 
     x_des_seq = np.zeros((len_seq, x_len), dtype=float)
-    x_des_seq[:, 0] = np.pi
+    x_des_seq[:, 0] = 0.0
     x_des_seq[:, 1] = np.pi
     x_init = np.zeros((x_len,), dtype=float)
     cost_func_obj = cost.cost_quad_x_and_u(Q, R, Qf, x_des_seq, u_des_seq)
@@ -111,14 +93,11 @@ if __name__ == "__main__":
     ax2 = fig.add_subplot(gs[0, 1])  # row 0, col 1
     ax3 = fig.add_subplot(gs[1, 1])  # row 1, span all columns
 
-    vis_dyn.plot_dpend_pos_to_ax(ax2, x_seq, time_vec)
-    vis_dyn.plot_dpend_control_to_ax(
-        ax3, x_seq, u_seq, time_vec, shoulder_act, elbow_act
-    )
+    vis_dyn.plot_cart_pole_pos_to_ax(ax2, x_seq, time_vec)
+    vis_dyn.plot_cart_pole_control_to_ax(ax3, x_seq, u_seq, time_vec)
 
-    pend_vis_obj = vis_dyn.double_pm_pend_animation(
-        l,
-        l,
+    pend_vis_obj = vis_dyn.cart_pole_animation(
+        dyn_func_obj.get_animate_value_dict(),
         np.array(x_seq),
         time_step,
         fig,

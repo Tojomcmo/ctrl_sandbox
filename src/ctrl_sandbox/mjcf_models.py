@@ -120,7 +120,7 @@ class mjcf_dpend:
                                         <inertial pos="0 0 -0.5" mass="1" diaginertia="0.084 0.084 0.00125"/>/>
                                         </body>
                                     </body>
-                                </body>    
+                                </body>
                             </worldbody>
 
                             <contact>
@@ -128,7 +128,7 @@ class mjcf_dpend:
                             </contact>
 
                             <actuator>
-                                <motor joint="joint1" name="torque1" gear="1" ctrllimited="true" ctrlrange="-1000 1000"/>     
+                                <motor joint="joint1" name="torque1" gear="1" ctrllimited="true" ctrlrange="-1000 1000"/>
                                 <motor joint="joint2" name="torque2" gear="1" ctrllimited="true" ctrlrange="-1000 1000"/>                   
                             </actuator>
 
@@ -164,7 +164,7 @@ class mjcf_dpend:
                                         <inertial pos="0 0 -0.5" mass="1" diaginertia="0.084 0.084 0.00125"/>/>
                                         </body>
                                     </body>
-                                </body>    
+                                </body>
                             </worldbody>
 
                             <contact>

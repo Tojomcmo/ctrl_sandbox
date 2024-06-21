@@ -9,9 +9,11 @@ from scipy.integrate import solve_ivp
 import numpy.typing as npt
 from typing import Callable
 
+import ctrl_sandbox.gen_typing as gt
+
 
 def step_euler_forward(
-    dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    dyn_func: gt.DynFuncType,
     h: float,
     x_k: jnp.ndarray,
     u_k: jnp.ndarray,
@@ -21,7 +23,7 @@ def step_euler_forward(
 
 
 def step_rk4(
-    dyn_func_ad: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    dyn_func_ad: gt.DynFuncType,
     h: float,
     x_k: jnp.ndarray,
     u_k: jnp.ndarray,

@@ -8,22 +8,20 @@ import numpy.typing as npt
 
 import ctrl_sandbox.gen_ctrl_funcs as gen_ctrl
 import ctrl_sandbox.util_funcs as util
+import ctrl_sandbox.gen_typing as gt
 
 
 class dirColConfig:
     def __init__(
         self,
-        cost_func: Callable[
-            [jnp.ndarray, jnp.ndarray, int],
-            Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        ],
-        cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+        cost_func: gt.CostFuncType,
+        cont_dyn_func: gt.DynFuncType,
         time_step: float,
         x_len: int,
         u_len: int,
         len_seq: int,
-        x_o: Union[npt.NDArray[np.float64], jnp.ndarray],
-        x_f: Union[npt.NDArray[np.float64], jnp.ndarray],
+        x_o: gt.npORjnpArr,
+        x_f: gt.npORjnpArr,
     ) -> None:
         self.cost_func = cost_func
         self.cont_dyn_func = cont_dyn_func
@@ -39,7 +37,7 @@ class dirColConfig:
 
     def create_dyn_colloc_funcs(
         self,
-        cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+        cont_dyn_func: gt.DynFuncType,
     ) -> None:
         lin_interp_mid_point_func = util.create_lin_interp_seq_mid_point_func()
         knot_point_dyn_scan_func = lambda carry, seqs: calc_knot_point_dyn_scan_func(
@@ -66,14 +64,7 @@ class dirColConfig:
         self.dyn_colloc_calc = prep_dyn_colloc_curried_for_calc(dyn_colloc_func)
         self.dyn_colloc_diff = prep_dyn_colloc_curried_for_diff(dyn_colloc_func)
 
-    def create_dir_col_cost_funcs(
-        self,
-        cost_func: Callable[
-            [jnp.ndarray, jnp.ndarray, int],
-            Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        ],
-    ) -> None:
-
+    def create_dir_col_cost_funcs(self, cost_func: gt.CostFuncType) -> None:
         cost_for_calc_scan_func = gen_ctrl._curry_cost_for_calc_scan_func(
             cost_func, self.x_len
         )
@@ -86,8 +77,7 @@ class dirColConfig:
 
 
 def create_opt_vec_from_x_u_seqs(
-    x_seq: Union[npt.NDArray[np.float64], jnp.ndarray],
-    u_seq: Union[npt.NDArray[np.float64], jnp.ndarray],
+    x_seq: gt.npORjnpArr, u_seq: gt.npORjnpArr
 ) -> npt.NDArray[np.float64]:
     """
     **Get x and u seqs from optimization vector**
@@ -106,8 +96,8 @@ def breakout_opt_vec(
     len_seq: int,
     x_len: int,
     u_len: int,
-    opt_vec: Union[npt.NDArray[np.float64], jnp.ndarray],
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    opt_vec: gt.npORjnpArr,
+) -> gt.JaxArrayTuple2:
     """
     **Get x and u seqs from optimization vector**
     - [in] len_seq - length of sequence (not length of vector),N, int
@@ -129,7 +119,7 @@ def breakout_opt_vec(
 def calc_dir_col_cost_pre_decorated(
     cost_for_calc_scan_func: Callable[
         [Tuple[int, jnp.ndarray], jnp.ndarray],
-        Tuple[Tuple[int, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]],
+        Tuple[Tuple[int, jnp.ndarray], gt.JaxArrayTuple3],
     ],
     len_seq: int,
     x_len: int,
@@ -216,14 +206,14 @@ def prep_dyn_colloc_curried_for_diff(
 def calc_dyn_colloc_ceqs_full(
     lin_interp_mid_point_func: Callable[[jnp.ndarray], jnp.ndarray],
     knot_point_dyn_scan_func: Callable[
-        [None, Tuple[jnp.ndarray, jnp.ndarray]], Tuple[None, jnp.ndarray]
+        [None, gt.JaxArrayTuple2], Tuple[None, jnp.ndarray]
     ],
     mid_point_dyn_scan_func: Callable[
-        [None, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]],
+        [None, gt.JaxArrayTuple5],
         Tuple[None, jnp.ndarray],
     ],
     colloc_calc_scan_func: Callable[
-        [None, Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]],
+        [None, gt.JaxArrayTuple5],
         Tuple[None, jnp.ndarray],
     ],
     len_seq: int,
@@ -233,6 +223,9 @@ def calc_dyn_colloc_ceqs_full(
     x_f: jnp.ndarray,
     opt_vec: jnp.ndarray,
 ) -> jnp.ndarray:
+    """
+    **Calculate collocation point equality errors of optimization vector opt_vec** \n
+    """
     # lin_interp_u_mid_points
     x_seq, u_seq = breakout_opt_vec(len_seq, x_len, u_len, opt_vec)
     # append u_seq with zero vec for collocation
@@ -254,9 +247,7 @@ def calc_dyn_colloc_ceqs_full(
 
 
 def calc_knot_point_dyn_scan_func(
-    cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    carry: None,
-    seqs: Tuple[jnp.ndarray, jnp.ndarray],
+    cont_dyn_func: gt.DynFuncType, carry: None, seqs: gt.JaxArrayTuple2
 ) -> Tuple[None, jnp.ndarray]:
     """
     **Scan proto-function for calculating sequence of dynamics at knot points**\n
@@ -275,10 +266,7 @@ def calc_knot_point_dyn_scan_func(
 
 
 def calc_mid_point_dyn_scan_func(
-    cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
-    h: float,
-    carry: None,
-    seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    cont_dyn_func: gt.DynFuncType, h: float, carry: None, seqs: gt.JaxArrayTuple5
 ) -> Tuple[None, jnp.ndarray]:
     """
     **Scan proto-function for calculating sequence of midpoint dynamics**\n
@@ -302,9 +290,7 @@ def calc_mid_point_dyn_scan_func(
 
 
 def calc_colloc_H_S_scan_func(
-    h: float,
-    carry: None,
-    seqs: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+    h: float, carry: None, seqs: gt.JaxArrayTuple5
 ) -> Tuple[None, jnp.ndarray]:
     """
     **Scan proto-function for calculating sequence of collocation constraint values**
@@ -328,7 +314,7 @@ def calc_colloc_H_S_scan_func(
 
 def calculate_init_final_constraint(
     x_seq: jnp.ndarray, x_o: jnp.ndarray, x_f: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple2:
     """
     **Calculate equality constraint values for sequence initial and final**
     """
@@ -339,7 +325,7 @@ def calculate_init_final_constraint(
 
 def create_mid_point_dyn_calc_seqs(
     x_seq: jnp.ndarray, dyn_seq: jnp.ndarray, u_seq_m_p: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple5:
     """
     **create scan compatible tuple of seqs for mid point dynamics calculation**
     - [in] x_seq - state sequence at knot points, dim(N,n)
@@ -354,7 +340,7 @@ def create_mid_point_dyn_calc_seqs(
 
 def create_colloc_calc_seqs(
     x_seq: jnp.ndarray, dyn_seq_k_p: jnp.ndarray, dyn_seq_m_p: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> gt.JaxArrayTuple5:
     """
     **create scan compatible tuple of seqs for dynamics collocation calculation**
     - [in] x_seq - state sequence at knot points, dim(N,n)
@@ -406,7 +392,7 @@ def calc_H_S_integ_post_dyn_calc(
 
 
 def calculate_hermite_simpson_col_point(
-    cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    cont_dyn_func: gt.DynFuncType,
     h: float,
     x_k: jnp.ndarray,
     u_k: jnp.ndarray,
@@ -427,7 +413,7 @@ def calculate_hermite_simpson_col_point(
 
 
 def interp_state_traj_hermite_simpson(
-    cont_dyn_func: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    cont_dyn_func: gt.DynFuncType,
     h: float,
     x_k: jnp.ndarray,
     u_k: jnp.ndarray,
