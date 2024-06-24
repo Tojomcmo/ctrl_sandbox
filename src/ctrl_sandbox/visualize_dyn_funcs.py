@@ -414,7 +414,7 @@ class cart_pole_animation:
         )
         self.ax.add_patch(self.box)
         (self.origin,) = self.ax.plot([], [], marker="s", ms=8, color="black")
-        (self.pend,) = self.ax.plot([], [], "o-", lw=2, ms=3)
+        (self.pend,) = self.ax.plot([], [], "o-", lw=2, ms=8)
         (self.trace,) = self.ax.plot([], [], ".-", lw=1, ms=2)
         self.time_template = "time = %.2fs"
         self.time_text = self.ax.text(0.05, 0.9, "", transform=self.ax.transAxes)

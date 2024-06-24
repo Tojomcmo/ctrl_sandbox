@@ -26,8 +26,10 @@ if __name__ == "__main__":
     x_len = 4
     time_step = 0.05
     len_seq = 100
-    ctrl_upper_bound = 20
-    ctrl_lower_bound = -20
+    ctrl_upper_bound = 10
+    ctrl_lower_bound = -10
+    rail_upper_bound = 2
+    rail_lower_bound = -2
     mc = 1.0
     mp = 1.0
     g = 9.81
@@ -35,16 +37,16 @@ if __name__ == "__main__":
 
     dyn_func_obj = dyn.cart_pole_pm_dyn(g=g, l=l, mc=mc, mp=mp)
 
-    Q = jnp.diag(jnp.array([1, 1, 1, 1], dtype=float)) * 0.0001
+    Q = jnp.diag(jnp.array([1, 1, 1, 1], dtype=float)) * 0.00001
     Qf = Q
 
     u_len = 1
     R = jnp.array([1.0], dtype=float)
     u_des_seq = np.zeros((len_seq - 1,), dtype=float)
-    u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.001
+    u_seed_seq = np.ones((len_seq - 1,), dtype=float) * 0.01
 
     x_des_seq = np.zeros((len_seq, x_len), dtype=float)
-    x_des_seq[:, 0] = 0.0
+    x_des_seq[:, 0] = 1.0
     x_des_seq[:, 1] = np.pi
     x_init = np.zeros((x_len,), dtype=float)
     cost_func_obj = cost.cost_quad_x_and_u(Q, R, Qf, x_des_seq, u_des_seq)
@@ -69,7 +71,13 @@ if __name__ == "__main__":
         "jac": dir_col_config.dyn_colloc_diff,
     }
 
-    x_bnds = [(-np.inf, np.inf)] * (len_seq * x_len)
+    # x_bnds = [(-np.inf, np.inf)] * (len_seq * x_len)
+    x_bnds = [
+        (rail_lower_bound, rail_upper_bound),  # x bounds [m]
+        (-np.pi * 2, np.pi * 2),  # th bounds [rad]
+        (-30.0, 30.0),  # xdot bounds [m/s]
+        (-np.inf, np.inf),  # thdot bounds [rad/s]
+    ] * len_seq
     u_bnds = [(ctrl_lower_bound, ctrl_upper_bound)] * ((len_seq - 1) * u_len)
     bnds = x_bnds + u_bnds
 

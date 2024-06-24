@@ -122,6 +122,6 @@ if __name__ == "__main__":
     # ------- plot simulation and controller outputs ------#
 
     analyze.plot_ilqr_iter_sim_ctrl_cost(
-        ilqr_config, controller_output, x_des_seq, x_sim_seq, u_sim_seq
+        controller_output, x_des_seq, x_sim_seq, u_sim_seq
     )
     plt.show()

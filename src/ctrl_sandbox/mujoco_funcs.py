@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 def create_mujoco_model(mjcf_model: str, time_step):
     model = mujoco.MjModel.from_xml_string(mjcf_model)  # type:ignore
     model.opt.timestep = time_step
-    renderer = mujoco.Renderer(model, 480, 480)
+    renderer = mujoco.Renderer(model)
     data = mujoco.MjData(model)  # type:ignore
     return model, renderer, data
 

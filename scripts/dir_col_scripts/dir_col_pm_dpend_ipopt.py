@@ -24,12 +24,12 @@ if __name__ == "__main__":
     os.makedirs(ani_save_location, exist_ok=True)
 
     x_len = 4
-    time_step = 0.04
+    time_step = 0.05
     len_seq = 100
-    shoulder_act = True
+    shoulder_act = False
     elbow_act = True
-    ctrl_upper_bound = 5
-    ctrl_lower_bound = -5
+    ctrl_upper_bound = 10
+    ctrl_lower_bound = -10
     m = 1.0
     g = 9.81
     b = 0.1

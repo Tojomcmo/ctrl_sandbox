@@ -22,7 +22,8 @@ if __name__ == "__main__":
     save_ani_bool = True
     sim_with_mj = False
     ani_save_location = "media_output/"
-    ani_save_name = "acrobot"
+    ani_save_name = "acrobot_ilqr"
+    fig_title = "iLQR: acrobot"
     os.makedirs(ani_save_location, exist_ok=True)
     time_step = 0.01
     len_seq = 500
@@ -138,6 +139,7 @@ if __name__ == "__main__":
     # ------- plot simulation and controller outputs ------#
     print("animating simulation output...")
     fig = plt.figure(figsize=(16, 8))
+    fig.suptitle(fig_title)
     gs = gridspec.GridSpec(2, 2)
     ax1 = fig.add_subplot(gs[:, 0])  # row 0, col 0
     ax2 = fig.add_subplot(gs[0, 1])  # row 0, col 1
