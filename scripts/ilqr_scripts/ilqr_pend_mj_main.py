@@ -121,7 +121,7 @@ if __name__ == "__main__":
         ani = animate.ArtistAnimation(fig1, img_set, interval=int(1 / framerate * 1000))
     # ------- plot simulation and controller outputs ------#
 
-    analyze.plot_ilqr_iter_sim_ctrl_cost(
-        controller_output, x_des_seq, x_sim_seq, u_sim_seq
-    )
+    # analyze.plot_ilqr_iter_sim_ctrl_cost(
+    #     controller_output, x_des_seq, x_sim_seq, u_sim_seq
+    # )
     plt.show()
