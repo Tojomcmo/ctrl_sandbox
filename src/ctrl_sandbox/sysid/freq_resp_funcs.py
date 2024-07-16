@@ -94,33 +94,34 @@ def calc_freq_resp(
 
     """
     # calculate auto power spectral density of input using welch's method
-    freqs, ipsd = welch(in_sig_vec, fs, nperseg=nperseg)
+    # freqs, ipsd = welch(in_sig_vec, fs, nperseg=nperseg)
     # calculate cross power spectral density of input and output using welch's method
+    freqs, ipsd = csd(in_sig_vec, in_sig_vec, fs, nperseg=nperseg)
     _, cpsd = csd(in_sig_vec, out_sig_vec, fs, nperseg=nperseg)
     # divide cpsd by apsd to calculate frequency response
     return freqs, (cpsd / ipsd)
 
 
 def sine_sweep_up_down(
-    freq_0: float, freq_1: float, duration: float, ts: float
+    freq_0: float, freq_1: float, amplitude: float, duration: float, ts: float
 ) -> gt.npArr64:
-    t = np.linspace(0, duration, int(duration / ts), endpoint=False)
     half_duration = duration / 2
+    t = np.linspace(0, half_duration, int(half_duration / ts), endpoint=False)
     sweep_up = chirp(
-        t[: int(len(t) / 2)],
+        t,
         f0=freq_0,
         f1=freq_1,
         t1=half_duration,
         method="linear",
         phi=-90.0,  # type:ignore #TODO post error in scipy about chirp typechecking
     )
-    sweep_down = chirp(
-        t[: int(len(t) / 2)],
-        f0=freq_1,
-        f1=freq_0,
-        t1=half_duration,
-        method="linear",
-        phi=90.0,  # type:ignore #TODO post error in scipy about chirp typechecking
-    )
+    sweep_down = np.flip(-sweep_up)
     sweep = np.concatenate((sweep_up, sweep_down))
-    return sweep
+    return amplitude * sweep
+
+
+def calculate_mag_and_phase_from_complex(
+    fr_complex: gt.npArr64,
+) -> Tuple[gt.npArr64, gt.npArr64]:
+
+    return (20 * np.log10(np.abs(fr_complex)), np.angle(fr_complex))

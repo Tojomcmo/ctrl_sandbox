@@ -9,7 +9,7 @@ class single_pm_pend_dyn:
         self.b = b
         self.l = l
 
-    def cont_dyn_func(self, x_vec: jnp.ndarray, u_vec: jnp.ndarray) -> jnp.ndarray:
+    def cont_dyn_func(self, x_vec: jnp.ndarray, u: jnp.ndarray) -> jnp.ndarray:
         """
         continuous time dynamic equation for simple pendulum
         time[in]       - time component, necessary prarmeter for ode integration
@@ -22,14 +22,12 @@ class single_pm_pend_dyn:
                             l: pend length[m], b: damping[Ns/m]
         state_dot[out] - vector of state derivatives, [0]: theta dot, [1]: theta ddot
         """
-        x_jax = jnp.array(x_vec)
-        u_jax = jnp.array(u_vec)
         state_dot = jnp.array(
             [
                 x_vec[1],
-                -(self.b / self.l) * x_jax[1]
-                - (jnp.sin(x_jax[0]) * self.g / self.l)
-                + u_jax[0],
+                -(self.b / self.l) * x_vec[1]
+                - (jnp.sin(x_vec[0]) * self.g / self.l)
+                + u,
             ]
         )
         return state_dot
