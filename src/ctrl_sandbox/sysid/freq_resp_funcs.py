@@ -112,7 +112,7 @@ def sine_sweep_up_down(
         f0=freq_0,
         f1=freq_1,
         t1=half_duration,
-        method="linear",
+        method="quadratic",
         phi=-90.0,  # type:ignore #TODO post error in scipy about chirp typechecking
     )
     sweep_down = np.flip(-sweep_up)

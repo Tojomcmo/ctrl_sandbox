@@ -22,7 +22,7 @@ if __name__ == "__main__":
     nperseg = int(fs_hz / freq_res)
     num_segs = int(sweep_duration_s / ts_s / nperseg)
 
-    pend_dyn_obj = dyn.single_pm_pend_dyn(g=9.8, b=0.1, l=1.0)
+    pend_dyn_obj = dyn.single_pm_pend_dyn(g=9.8, b=1.0, l=1.0)
     disc_dyn_func = lambda k, x, u: integrate.step_rk4(
         pend_dyn_obj.cont_dyn_func, ts_s, x, u
     )
