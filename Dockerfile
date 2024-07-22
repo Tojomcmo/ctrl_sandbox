@@ -63,5 +63,12 @@ RUN apt install -y qtcreator qtbase5-dev qt5-qmake cmake && \
 # Clean up
 RUN rm -rf ThirdParty-ASL ThirdParty-Mumps Ipopt
 
+# Copy the entrypoint script into the container
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set the script as the entrypoint
+# ENTRYPOINT ["entrypoint.sh"]
+
 # Set the default command to bash
 CMD ["bash"]

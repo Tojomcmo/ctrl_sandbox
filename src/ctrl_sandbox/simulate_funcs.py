@@ -78,6 +78,10 @@ def direct_pass(int, vec: jnp.ndarray) -> jnp.ndarray:
 def prep_disturb_noise_WGN_for_sim(
     process_cov_mat: jnp.ndarray, noise_cov_mat: jnp.ndarray
 ) -> Tuple[gt.IndexJax2JaxFuncType, gt.IndexJax2JaxFuncType]:
+    """
+    Create white gaussian noise functions for process and measurments
+    """
+
     def disturb_func(k: int, x_k: jnp.ndarray) -> jnp.ndarray:
         return gen_ctrl.apply_cov_noise_to_vec(x_k, process_cov_mat)
 
@@ -92,5 +96,12 @@ def prep_ff_fb_u_for_sim(
 ) -> gt.IndexJax2JaxFuncType:
     def control_func(k: int, x_k: jnp.ndarray) -> jnp.ndarray:
         return gen_ctrl.calculate_ff_fb_u(k_fb_seq[k], u_ff_seq[k], x_des_seq[k], x_k)
+
+    return control_func
+
+
+def prep_ff_u_for_sim(u_ff_seq: jnp.ndarray) -> gt.IndexJax2JaxFuncType:
+    def control_func(k: int, x_k: jnp.ndarray) -> jnp.ndarray:
+        return u_ff_seq[k]
 
     return control_func
