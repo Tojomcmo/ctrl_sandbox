@@ -22,12 +22,7 @@ RUN apt-get update && \
     liblapack-dev \
     libmetis-dev \
     make \
-    python3-dev \
-    xvfb \
-    libglfw3 \
-    libglfw3-dev \
-    libgl1-mesa-dev \
-    libgl1-mesa-glx
+    python3-dev
 
 
 # Install poetry using pipx
