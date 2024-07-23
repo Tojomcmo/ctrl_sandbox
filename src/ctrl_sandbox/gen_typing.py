@@ -1,9 +1,11 @@
 from jax.numpy import ndarray
-from numpy import float64
+from numpy import float64, complex128, complex64
 import numpy.typing as npt
 from typing import Callable, Tuple, Union
 
 npArr64 = npt.NDArray[float64]
+npCpx128 = npt.NDArray[complex128]
+npCpx64 = npt.NDArray[complex64]
 
 JaxArrayTuple2 = Tuple[ndarray, ndarray]
 JaxArrayTuple3 = Tuple[ndarray, ndarray, ndarray]

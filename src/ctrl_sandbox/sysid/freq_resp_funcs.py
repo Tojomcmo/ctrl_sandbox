@@ -9,8 +9,9 @@ Created on Mon Apr 25 21:43:15 2022
 import numpy as np
 from scipy.signal import welch, csd, chirp, get_window
 from scipy.fft import fft, fftfreq
+from scipy.optimize import least_squares, minimize
 import math
-from typing import Tuple
+from typing import Tuple, Callable
 import numpy.typing as npt
 
 import ctrl_sandbox.gen_typing as gt
@@ -121,7 +122,155 @@ def sine_sweep_up_down(
 
 
 def calculate_mag_and_phase_from_complex(
-    fr_complex: gt.npArr64,
+    fr_complex: gt.npCpx128,
 ) -> Tuple[gt.npArr64, gt.npArr64]:
 
     return (20 * np.log10(np.abs(fr_complex)), np.angle(fr_complex))
+
+
+def fit_lin_tf_to_fr_data_least_squares(
+    ts: float,
+    freqs: gt.npArr64,
+    freq_resp: gt.npArr64,
+    num_order: int,
+    den_order: int,
+    params_inital: gt.npArr64,
+) -> Tuple[gt.npArr64, gt.npArr64]:
+    """
+    **Fit a transfer function of type num_order / den_order to supplied
+    frequency response data.** \n
+
+    - [in] freqs       : Array dim(k,) of frequencies matched with frequency response
+    values in Hz TODO check this
+    - [in] freq_resp   : Array dim(k,) of frequency response, complex values
+    - [in] num_order   : int order of fitted transfer function numerator, must be
+    positive or zero
+    - [in] den_order   : int order of fitted transfer function denominator, must be
+    positive or zero
+    - [out] num_coeffs : coefficient values of numerator, array dim(num_order, )
+    - [out] den_coeffs : coefficient values of denominator, array dim(den_order, ) \n
+
+    algorithm: Levy Method\n
+
+    - uses least squares fitting to match response data to transfer function response
+    at each frequency
+        - N(s) = (a0 + a1s + a2s^2 ... + ans^n)
+        - D(s) = (1  + b1s + b2s^2 ... + bms^m)
+        - e(s) = FR(s) - N(s)/D(s)
+        - e(s)D(s) = FR(s)D(s) - N(s) -> 0 as fit improves
+        - form as Ax=b system for k data samples
+            - Ak = [1 sk ... sk^n -skF(sk) ... -sk^mF(sk)]
+            - x  = [a0 a1 ... an b1 b2 ... bm].T
+            - b  = [F(s1) ... F(sk)].T
+        - least squares solution using pseudo inverse
+            - x = (A.T @ A).inv @ A.T b
+
+    """
+    # freqs_complex = create_z_transform_for_freqs(freqs, ts)
+    freqs_complex = freqs * 1j
+    tf_for_fit = create_tf_for_fit(num_order, den_order)
+    err_func = create_err_func_for_least_squares(tf_for_fit)
+    result = minimize(
+        err_func, params_inital, args=(freqs_complex, freq_resp), bounds=(0.0, np.inf)
+    )
+    x = result.x
+    return x[: num_order + 1], x[num_order + 1 :]
+
+
+def create_z_transform_for_freqs(freqs, ts):
+    return np.exp(freqs * 1j * ts)
+
+
+def create_tf_for_fit(
+    num_order: int, den_order: int
+) -> Callable[[gt.npArr64, gt.npCpx128], gt.npCpx128]:
+    if num_order > den_order:
+        exp_order = num_order
+    else:
+        exp_order = den_order
+
+    def tf_for_fit(params: gt.npArr64, z: gt.npCpx128) -> gt.npCpx128:
+        num_coeffs = params[: num_order + 1]
+        den_coeffs = params[num_order + 1 :]
+        z_exp_array = create_z_exp_array(exp_order, z)
+        num_transfer = z_exp_array[:, : num_order + 1] * num_coeffs
+        den_transfer = z_exp_array[:, 1 : den_order + 1] * den_coeffs
+        H = np.sum(num_transfer, axis=1) / np.sum(den_transfer, axis=1)
+        return H
+
+    return tf_for_fit
+
+
+def create_err_func_for_least_squares(
+    tf: Callable[[gt.npArr64, gt.npCpx128], gt.npCpx128]
+) -> Callable[[gt.npArr64, gt.npCpx128, gt.npCpx128], float]:
+    def err_func(
+        params: gt.npArr64, freqs: gt.npCpx128, freq_resp: gt.npCpx128
+    ) -> float:
+        H_model = tf(params, freqs)
+        error = np.abs(H_model - freq_resp)
+        error_squared = np.square(error)
+        sum_squared_error = np.sum(error_squared)
+        return sum_squared_error
+
+    return err_func
+
+
+def create_z_exp_array(exp_order: int, z: gt.npCpx128) -> gt.npCpx128:
+    return z[:, np.newaxis] ** np.arange(exp_order + 1)
+
+
+def fit_lin_tf_to_fr_data_levy(
+    freqs: gt.npArr64, freq_resp: gt.npArr64, num_order: int, den_order: int
+) -> Tuple[gt.npArr64, gt.npArr64]:
+    """
+    **Fit a transfer function of type num_order / den_order to supplied
+    frequency response data.** \n
+
+    - [in] freqs       : Array dim(k,) of frequencies matched with frequency response
+    values in Hz TODO check this
+    - [in] freq_resp   : Array dim(k,) of frequency response, complex values
+    - [in] num_order   : int order of fitted transfer function numerator, must be
+    positive or zero
+    - [in] den_order   : int order of fitted transfer function denominator, must be
+    positive or zero
+    - [out] num_coeffs : coefficient values of numerator, array dim(num_order, )
+    - [out] den_coeffs : coefficient values of denominator, array dim(den_order, ) \n
+
+    algorithm: Levy Method\n
+
+    - uses least squares fitting to match response data to transfer function response
+    at each frequency
+        - N(s) = (a0 + a1s + a2s^2 ... + ans^n)
+        - D(s) = (1  + b1s + b2s^2 ... + bms^m)
+        - e(s) = FR(s) - N(s)/D(s)
+        - e(s)D(s) = FR(s)D(s) - N(s) -> 0 as fit improves
+        - form as Ax=b system for k data samples
+            - Ak = [1 sk ... sk^n -skF(sk) ... -sk^mF(sk)]
+            - x  = [a0 a1 ... an b1 b2 ... bm].T
+            - b  = [F(s1) ... F(sk)].T
+        - least squares solution using pseudo inverse
+            - x = (A.T @ A).inv @ A.T b
+
+    """
+    freqs_complex = freqs * 1j
+    freq_resp_vec = freq_resp[:, np.newaxis]
+    A = form_A_mat_levy(freqs_complex, freq_resp_vec, num_order, den_order)
+    x = np.linalg.inv(A.T @ A) @ A.T @ freq_resp_vec
+    return x[: num_order + 1], x[num_order + 1 :]
+
+
+def form_A_mat_levy(
+    freqs: gt.npArr64, freq_resp_vec: gt.npArr64, num_order: int, den_order: int
+) -> gt.npArr64:
+    if num_order > den_order:
+        n = num_order
+    else:
+        n = den_order
+    column_indices = np.arange(n)
+    freq_powers_mat = freqs[:, np.newaxis] ** column_indices
+    A_1 = np.ones((len(freqs), 1))
+    A_2 = freq_powers_mat[:, :num_order]
+    A_3 = -(freq_powers_mat[:, :den_order] * freq_resp_vec)
+    A = np.concatenate((A_1, A_2, A_3), axis=1)
+    return A
