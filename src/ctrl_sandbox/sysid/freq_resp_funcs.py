@@ -11,8 +11,9 @@ from scipy.signal import welch, csd, chirp, get_window
 from scipy.fft import fft, fftfreq
 from scipy.optimize import least_squares, minimize
 import math
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Union
 import numpy.typing as npt
+from functools import partial
 
 import ctrl_sandbox.gen_typing as gt
 
@@ -74,7 +75,7 @@ def calc_freq_resp(
     out_sig_vec: gt.npArr64,
     fs: float,
     nperseg: int,
-) -> Tuple[gt.npArr64, gt.npArr64]:
+) -> Tuple[gt.npArr64, gt.npCpx128]:
     """
     **Calculate frequency response from input signal to output signal** \n
     This function uses welch's method of windowing and segmentation to reduce noise
@@ -104,7 +105,12 @@ def calc_freq_resp(
 
 
 def sine_sweep_up_down(
-    freq_0: float, freq_1: float, amplitude: float, duration: float, ts: float
+    freq_0: float,
+    freq_1: float,
+    amplitude: float,
+    duration: float,
+    ts: float,
+    type: str,
 ) -> gt.npArr64:
     half_duration = duration / 2
     t = np.linspace(0, half_duration, int(half_duration / ts), endpoint=False)
@@ -113,7 +119,7 @@ def sine_sweep_up_down(
         f0=freq_0,
         f1=freq_1,
         t1=half_duration,
-        method="quadratic",
+        method=type,
         phi=-90.0,  # type:ignore #TODO post error in scipy about chirp typechecking
     )
     sweep_down = np.flip(-sweep_up)
@@ -128,13 +134,12 @@ def calculate_mag_and_phase_from_complex(
     return (20 * np.log10(np.abs(fr_complex)), np.angle(fr_complex))
 
 
-def fit_lin_tf_to_fr_data_least_squares(
-    ts: float,
+def fit_lin_tf_to_fr_data(
     freqs: gt.npArr64,
-    freq_resp: gt.npArr64,
+    freq_resp: gt.npCpx128,
     num_order: int,
     den_order: int,
-    params_inital: gt.npArr64,
+    params_init: gt.npArr64,
 ) -> Tuple[gt.npArr64, gt.npArr64]:
     """
     **Fit a transfer function of type num_order / den_order to supplied
@@ -142,11 +147,12 @@ def fit_lin_tf_to_fr_data_least_squares(
 
     - [in] freqs       : Array dim(k,) of frequencies matched with frequency response
     values in Hz TODO check this
-    - [in] freq_resp   : Array dim(k,) of frequency response, complex values
+    - [in] freq_resp   : Array dim(k,) of corresponding frequency response, complex values
     - [in] num_order   : int order of fitted transfer function numerator, must be
     positive or zero
     - [in] den_order   : int order of fitted transfer function denominator, must be
     positive or zero
+    - [in] params_init : initial list of tf parameter guesses
     - [out] num_coeffs : coefficient values of numerator, array dim(num_order, )
     - [out] den_coeffs : coefficient values of denominator, array dim(den_order, ) \n
 
@@ -166,54 +172,74 @@ def fit_lin_tf_to_fr_data_least_squares(
             - x = (A.T @ A).inv @ A.T b
 
     """
-    # freqs_complex = create_z_transform_for_freqs(freqs, ts)
-    freqs_complex = freqs * 1j
-    tf_for_fit = create_tf_for_fit(num_order, den_order)
-    err_func = create_err_func_for_least_squares(tf_for_fit)
-    result = minimize(
-        err_func, params_inital, args=(freqs_complex, freq_resp), bounds=(0.0, np.inf)
-    )
-    x = result.x
-    return x[: num_order + 1], x[num_order + 1 :]
+    freqs_complex: gt.npCpx128 = convert_hz_to_complex_rad_s(freqs)
+    err_func = create_err_func_for_tfest(num_order, den_order, freqs_complex, freq_resp)
+    bounds = np.tile([0, np.inf], (len(params_init), 1))
+    result = minimize(err_func, params_init, bounds=bounds)
+    x: gt.npArr64 = result.x
+    return split_params_to_num_den(x, num_order)
 
 
 def create_z_transform_for_freqs(freqs, ts):
     return np.exp(freqs * 1j * ts)
 
 
-def create_tf_for_fit(
-    num_order: int, den_order: int
-) -> Callable[[gt.npArr64, gt.npCpx128], gt.npCpx128]:
-    if num_order > den_order:
-        exp_order = num_order
-    else:
-        exp_order = den_order
-
-    def tf_for_fit(params: gt.npArr64, z: gt.npCpx128) -> gt.npCpx128:
-        num_coeffs = params[: num_order + 1]
-        den_coeffs = params[num_order + 1 :]
-        z_exp_array = create_z_exp_array(exp_order, z)
-        num_transfer = z_exp_array[:, : num_order + 1] * num_coeffs
-        den_transfer = z_exp_array[:, 1 : den_order + 1] * den_coeffs
-        H = np.sum(num_transfer, axis=1) / np.sum(den_transfer, axis=1)
-        return H
-
-    return tf_for_fit
+def convert_hz_to_complex_rad_s(
+    freq: Union[np.float64, gt.npArr64]
+) -> Union[np.complex128, gt.npCpx128]:
+    return 2 * np.pi * freq * 1j
 
 
-def create_err_func_for_least_squares(
-    tf: Callable[[gt.npArr64, gt.npCpx128], gt.npCpx128]
-) -> Callable[[gt.npArr64, gt.npCpx128, gt.npCpx128], float]:
-    def err_func(
-        params: gt.npArr64, freqs: gt.npCpx128, freq_resp: gt.npCpx128
-    ) -> float:
-        H_model = tf(params, freqs)
-        error = np.abs(H_model - freq_resp)
-        error_squared = np.square(error)
-        sum_squared_error = np.sum(error_squared)
+def transfer_function_model(
+    num_coeffs: gt.npArr64, den_coeffs: gt.npArr64, s: np.complex128
+) -> np.complex128:
+    num = np.complex128(np.polyval(num_coeffs[::-1], s))
+    den = np.complex128(np.polyval(den_coeffs[::-1], s))
+    return num / den
+
+
+def split_params_to_num_den(
+    params: gt.npArr64, num_order: int
+) -> Tuple[gt.npArr64, gt.npArr64]:
+    """
+    params order as 1D vecto:
+        - numerator coefficients: low to high
+        - denominator coefficients: low to high [excluding highest of coefficient 1]
+    output:
+        - numerator coefficients as 1D vector: low to high
+        - denominator coefficients as 1D vector: low to high including highest 1)
+    """
+    return params[: num_order + 1], np.append(params[num_order + 1 :], [1])
+
+
+def create_err_func_for_tfest(
+    num_order: int,
+    den_order: int,
+    freqs: gt.npCpx128,
+    freq_resp: gt.npCpx128,
+) -> Callable[[gt.npArr64], np.float64]:
+
+    def err_func(params: gt.npArr64) -> np.float64:
+        num_coeffs, den_coeffs = split_params_to_num_den(params, num_order)
+        tf_curried = lambda params: transfer_function_model(
+            num_coeffs, den_coeffs, params
+        )
+
+        H_model: gt.npCpx128 = np.array(list(map(tf_curried, freqs)))
+        error: gt.npArr64 = np.abs(H_model - freq_resp)
+        error_squared: gt.npArr64 = np.square(error)
+        sum_squared_error: np.float64 = np.sum(error_squared)
         return sum_squared_error
 
     return err_func
+
+
+def compute_tf_at_freqs_hz(tf, freqs):
+    freqs_complex_rad_s = convert_hz_to_complex_rad_s(freqs)
+    return np.array(list(map(tf, freqs_complex_rad_s)))
+
+
+#######################################
 
 
 def create_z_exp_array(exp_order: int, z: gt.npCpx128) -> gt.npCpx128:
@@ -274,3 +300,23 @@ def form_A_mat_levy(
     A_3 = -(freq_powers_mat[:, :den_order] * freq_resp_vec)
     A = np.concatenate((A_1, A_2, A_3), axis=1)
     return A
+
+
+def create_tf_for_fit(
+    num_order: int, den_order: int
+) -> Callable[[gt.npArr64, gt.npCpx128], gt.npCpx128]:
+    if num_order > den_order:
+        exp_order = num_order
+    else:
+        exp_order = den_order
+
+    def tf_for_fit(params: gt.npArr64, z: gt.npCpx128) -> gt.npCpx128:
+        num_coeffs = params[: num_order + 1]
+        den_coeffs = params[num_order + 1 :]
+        z_exp_array = create_z_exp_array(exp_order, z)
+        num_transfer = z_exp_array[:, : num_order + 1] * num_coeffs
+        den_transfer = z_exp_array[:, 1 : den_order + 1] * den_coeffs
+        H = np.sum(num_transfer, axis=1) / np.sum(den_transfer, axis=1)
+        return H
+
+    return tf_for_fit

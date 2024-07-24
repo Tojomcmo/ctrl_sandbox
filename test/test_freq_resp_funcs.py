@@ -67,13 +67,22 @@ def test_create_tf_for_fit_generates_valid_tf():
     nptest.assert_array_equal(H_expect, H_out)
 
 
+def test_convert_hz_to_complex_rad_s_generates_valid_output():
+    freqs = np.array([1, 2, 3])
+    freqs_complex = freq.convert_hz_to_complex_rad_s(freqs)
+    freqs_complex_expected = freqs * 2 * np.pi * 1j
+    nptest.assert_array_equal(freqs_complex_expected, freqs_complex)
+
+
 def test_create_err_func_for_least_squares_generate_valid_err_func():
     num_order = 1
     den_order = 2
     params = np.array([1.0, 2.0, 3.0, 4.0])
-    freqs = np.array([1j, 2j, 3j])
+    freqs = np.array([1, 2, 3])
+    freqs_complex = freq.convert_hz_to_complex_rad_s(freqs)
     freq_resp = np.sin(freqs)
-    tf_for_fit = freq.create_tf_for_fit(num_order, den_order)
-    err_func = freq.create_err_func_for_least_squares(tf_for_fit)
-    H_out = err_func(params, freqs, freq_resp)
+    err_func = freq.create_err_func_for_tfest(
+        num_order, den_order, freqs_complex, freq_resp
+    )
+    err_float = err_func(params)
     assert True == True
