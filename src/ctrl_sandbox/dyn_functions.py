@@ -1,6 +1,7 @@
 from jax import numpy as jnp
 
 import ctrl_sandbox.statespace_funcs as ss_funcs
+import ctrl_sandbox.gen_typing as gt
 
 
 class single_pm_pend_dyn:
@@ -727,3 +728,102 @@ class cart_pole_pm_dyn:
     def get_animate_value_dict(self) -> dict:
         animate_vals = {"l": self.l}
         return animate_vals
+
+
+class qc_model_dyn:
+    """
+    Double pendulum object with relative angle definitions
+    - https://github.com/Tojomcmo/ctrl_sandbox.wiki.git
+    - https://github.com/Tojomcmo/ctrl_sandbox/wiki/
+        2024%E2%80%9005%E2%80%9001-double-pendulum-with-MoI-EoM-derivation
+    """
+
+    def __init__(
+        self,
+        ms: float,
+        ks: float,
+        bs: float,
+        mu: float,
+        kt: float,
+    ):
+        self.ms = ms
+        self.ks = ks
+        self.bs = bs
+        self.mu = mu
+        self.kt = kt
+        self._create_cont_state_space_mats()
+
+    def validate_inputs(self):
+        # TODO fill in validation criteria
+        pass
+
+    def _create_cont_state_space_mats(self):
+        ks = self.ks
+        ms = self.ms
+        bs = self.bs
+        kt = self.kt
+        mu = self.mu
+        self.A = jnp.array(
+            [
+                [0, 1, 0, 0],
+                [-(ks / ms), -(bs / ms), (ks / ms), (bs / ms)],
+                [0, 0, 0, 1],
+                [(ks / mu), (bs / mu), -((ks + kt) / mu), -(bs / mu)],
+            ]
+        )
+
+        self.B = jnp.array([[0], [(1 / ms)], [0], [-(1 / mu)]])
+
+        self.C = jnp.array(
+            [
+                [-(ks / ms), -(bs / ms), (ks / ms), (bs / ms)],
+                [(ks / mu), (bs / mu), -((ks + kt) / mu), -(bs / mu)],
+                [1, 0, -1, 0],
+            ]
+        )
+
+        self.D = jnp.array([[0], [0], [0]])
+
+        self.Bd = jnp.array([[0], [0], [0], [(kt / mu)]])
+
+        self.Dd = jnp.array([[0], [(kt / mu)], [0]])
+        self.cont_control_sys = ss_funcs.stateSpace(self.A, self.B, self.C, self.D)
+        self.cont_disturb_sys = ss_funcs.stateSpace(self.A, self.Bd, self.C, self.Dd)
+
+    def discretize_state_space_mats(self, ts):
+        self.disc_control_sys = ss_funcs.discretize_continuous_state_space(
+            self.cont_control_sys, ts, c2d_method="zohCombined"
+        )
+        self.disc_disturb_sys = ss_funcs.discretize_continuous_state_space(
+            self.cont_disturb_sys, ts, c2d_method="zohCombined"
+        )
+        return
+
+    def cont_dyn_func(self, x_vec: jnp.ndarray, u_vec: jnp.ndarray) -> jnp.ndarray:
+        """
+        The state vector has form x = [th1, th2, thdot1, thdot2]'
+        The control vector has form u = [tq1, tq2]'
+
+        """
+        x_dot = (
+            self.cont_control_sys.a @ x_vec.reshape(-1, 1)
+            + self.cont_control_sys.b * u_vec[0]
+            + self.cont_disturb_sys.b * u_vec[1]
+        )
+        return x_dot.reshape(-1)
+
+    def disc_dyn_func(self, x_vec: jnp.ndarray, u_vec: jnp.ndarray) -> jnp.ndarray:
+        x_kp1 = (
+            self.disc_control_sys.a @ x_vec.reshape(-1, 1)
+            + self.disc_control_sys.b @ (u_vec.reshape(-1, 1))[0]
+            + self.disc_disturb_sys.b @ (u_vec.reshape(-1, 1))[1]
+        )
+        return x_kp1.reshape(-1)
+
+    def measure_func(self, x_vec: jnp.ndarray, u_vec: jnp.ndarray) -> jnp.ndarray:
+        y = (
+            self.cont_control_sys.c @ x_vec.reshape(-1, 1)
+            + self.cont_control_sys.d @ (u_vec.reshape(-1, 1))[0]
+            + self.cont_disturb_sys.d @ (u_vec.reshape(-1, 1))[1]
+        )
+        return y.reshape(-1)

@@ -11,7 +11,7 @@ from scipy.signal import welch, csd, chirp, get_window
 from scipy.fft import fft, fftfreq
 from scipy.optimize import least_squares, minimize
 import math
-from typing import Tuple, Callable, Union
+from typing import Tuple, Callable, Union, Optional
 import numpy.typing as npt
 from functools import partial
 
@@ -140,6 +140,7 @@ def fit_lin_tf_to_fr_data(
     num_order: int,
     den_order: int,
     params_init: gt.npArr64,
+    bounds: Optional[gt.npArr64] = None,
 ) -> Tuple[gt.npArr64, gt.npArr64]:
     """
     **Fit a transfer function of type num_order / den_order to supplied
@@ -174,7 +175,8 @@ def fit_lin_tf_to_fr_data(
     """
     freqs_complex: gt.npCpx128 = convert_hz_to_complex_rad_s(freqs)
     err_func = create_err_func_for_tfest(num_order, den_order, freqs_complex, freq_resp)
-    bounds = np.tile([0, np.inf], (len(params_init), 1))
+    if not bounds:
+        bounds = np.tile([0, np.inf], (len(params_init), 1))
     result = minimize(err_func, params_init, bounds=bounds)
     x: gt.npArr64 = result.x
     return split_params_to_num_den(x, num_order)
@@ -234,7 +236,7 @@ def create_err_func_for_tfest(
     return err_func
 
 
-def compute_tf_at_freqs_hz(tf, freqs):
+def compute_tf_response_at_freqs_hz(tf, freqs):
     freqs_complex_rad_s = convert_hz_to_complex_rad_s(freqs)
     return np.array(list(map(tf, freqs_complex_rad_s)))
 

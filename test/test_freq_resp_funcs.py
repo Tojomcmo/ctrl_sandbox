@@ -86,3 +86,17 @@ def test_create_err_func_for_least_squares_generate_valid_err_func():
     )
     err_float = err_func(params)
     assert True == True
+
+
+def test_create_err_func_for_least_squares_generate_valid_err_func_2():
+    num_order = 1
+    den_order = 4
+    params = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    freqs = np.array([1, 2, 3])
+    freqs_complex = freq.convert_hz_to_complex_rad_s(freqs)
+    freq_resp = np.sin(freqs)
+    err_func = freq.create_err_func_for_tfest(
+        num_order, den_order, freqs_complex, freq_resp
+    )
+    err_float = err_func(params)
+    assert True == True

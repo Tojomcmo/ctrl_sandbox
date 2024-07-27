@@ -12,31 +12,37 @@ import ctrl_sandbox.gen_graphing_funcs as gen_graph
 
 if __name__ == "__main__":
     ts_s = 0.005
-    freq_0_hz = 0.001
-    freq_1_hz = 10.0
-    amplitude = 0.01
-    sweep_duration_s = 700.0
+    freq_0_hz = 0.01
+    freq_1_hz = 25.0
+    amplitude = 1
+    sweep_duration_s = 500.0
     type = "logarithmic"
     freq_res = 0.025
 
     g = 9.81
-    b = 0.5
-    l = 3.0
+    ms = 400
+    mu = 50
+    ks = 35000
+    bs = 1000
+    kt = 190000
 
     fs_hz = 1 / ts_s
     nperseg = int(fs_hz / freq_res)
     num_segs = int(sweep_duration_s / ts_s / nperseg)
 
-    pend_dyn_obj = dyn.single_pm_pend_dyn(g=g, b=b, l=l)
+    qcar_dyn_obj = dyn.qc_model_dyn(ms=ms, mu=mu, ks=ks, kt=kt, bs=bs)
     disc_dyn_func = lambda k, x, u: integrate.step_rk4(
-        pend_dyn_obj.cont_dyn_func, ts_s, x, u
+        qcar_dyn_obj.cont_dyn_func, ts_s, x, u
     )
 
-    u_sweep_seq = freq.sine_sweep_up_down(
+    road_profile = freq.sine_sweep_up_down(
         freq_0_hz, freq_1_hz, amplitude, duration=sweep_duration_s, ts=ts_s, type=type
     )
 
-    x_init = jnp.array([0.0, 0.0], dtype=float)
+    u_sweep_seq = np.zeros((len(road_profile), 2))
+    u_sweep_seq[:, 1] = road_profile
+
+    x_init = jnp.array([0.0, 0.0, 0.0, 0.0], dtype=float)
 
     control_func = sim.prep_ff_u_for_sim(jnp.array(u_sweep_seq, dtype=float))
     measure_func = sim.direct_pass
@@ -52,24 +58,33 @@ if __name__ == "__main__":
         len(u_sweep_seq) + 1,
     )
 
+    input_sig = u_sweep_seq[:, 1]
     t = jnp.linspace(0, sweep_duration_s, int(sweep_duration_s / ts_s), endpoint=True)
 
     freqs, frequency_response = freq.calc_freq_resp(
-        np.array(u_sweep_seq), np.array(x_sweep_seq[:, 0]), fs=fs_hz, nperseg=nperseg
+        np.array(input_sig), np.array(x_sweep_seq[:, 0]), fs=fs_hz, nperseg=nperseg
     )
     freq_resp_mag, freq_resp_phase = freq.calculate_mag_and_phase_from_complex(
         frequency_response
     )
 
+    print("frequency response data collected. analyzing...")
     ############### calculate actual transfer function #############
-    # Transfer function coefficients
-    num = [1]
-    den = [1, b / l, g / l]
+    # Transfer function coefficients (high to low)
+
+    num = [kt * bs / (mu * ms), ks * kt / (mu * ms)]
+    den = [
+        1,
+        ((mu + ms) * bs) / (mu * ms),
+        (ms * ks + ms * kt + mu * ks - bs**2) / (mu * ms),
+        (bs * kt - bs * ks) / (mu * ms),
+        (ks * kt) / (mu * ms),
+    ]
 
     # Create the transfer function
     system = TransferFunction(num, den)
     # Generate frequency range
-    w = np.logspace(-2, 2, 1000)  # Frequency range from 0.01 to 100 rad/s
+    w = np.logspace(-2, 2, 100)
 
     # Compute Bode plot
     w, mag, phase = bode(system, w)
@@ -77,11 +92,13 @@ if __name__ == "__main__":
 
     ############## calculate transfer function fit from fr data ##############
 
-    # set tf order for fit and initial parameter guess
-    num_order = 0
-    den_order = 2
-    num_coeff_guess = np.array([1.0])
-    den_coeff_guess = np.array([1.0, 1.0])
+    # set tf order for fit and initial parameter guess (low to high)
+    num_order = 1
+    den_order = 4
+    num_coeff_guess = np.array([num[1], num[0]]) * 1.0
+    den_coeff_guess = np.array([den[3], den[2], den[1], den[0]]) * 1.0
+    # num_coeff_guess = np.array([1.0, 1.0])
+    # den_coeff_guess = np.array([1.0, 1.0, 1.0, 1.0])
 
     # run tf estimation function
     params_initial = np.concatenate((num_coeff_guess, den_coeff_guess))
@@ -98,11 +115,11 @@ if __name__ == "__main__":
     ########### plot system outputs ##################
     fig1, (ax1, ax2) = plt.subplots(2)
     fig1.suptitle("Pendulum time series")
-    ax1.plot(t, u_sweep_seq)
+    ax1.plot(t, input_sig)
     ax2.plot(t, x_sweep_seq[:-1, 0])
     plt.savefig("media_output/sweep_pend_time.png")
 
-    x_lim = (0.01, 10)
+    x_lim = (0.01, 100)
     y_lim = gen_graph.set_lim_based_on_defined_lim(
         x_lim, freqs, freq_resp_mag, border=0.1
     )
